@@ -110,11 +110,16 @@
       stat("인구", c.pop.toLocaleString()) + stat("치안", c.order) +
       stat("농업", `${c.farm}/${c.farmMax}`) + stat("상업", `${c.trade}/${c.tradeMax}`) +
       stat("성벽", `${c.wall}/${c.wallMax}`) +
-      (own ? stat("월 수지", `<span class="${S.income(c) - S.upkeep(c) >= 0 ? "good" : "bad"}">${S.income(c) - S.upkeep(c) >= 0 ? "+" : ""}${S.income(c) - S.upkeep(c)}</span>`) : "") +
+      (own ? stat("월 수지", signed(S.balance(c))) : "") +
       `</div>`;
     if (own) {
+      html += `<h3>월 수지 내역</h3><div class="stats">` +
+        stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) +
+        stat("관리 봉급", "-" + S.salaries(c)) + `</div>`;
+    }
+    if (own) html += postsTable(c);
+    if (own) {
       html += `<h3>명령</h3><div class="cmds">` +
-        cmdButton("farm", "개간") + cmdButton("trade", "상업") + cmdButton("wall", "축성") + cmdButton("order", "순찰") +
         cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("recruit", "등용") +
         cmdButton("move", "이동") + cmdButton("attack", "출진") + cmdButton("reward", "포상", true) +
         `</div>`;
@@ -122,7 +127,10 @@
     const servants = S.serving(state, c.id);
     html += `<h3>무장 (${servants.length})</h3>` + officerTable(servants, {
       loyalty: true, showDone: own,
-      status: own ? (o) => (o.done ? "완료" : "대기") : null,
+      status: own ? (o) => {
+        const k = S.postOf(state, o);
+        return k ? `${S.POSTS[k].label} 담당` : o.done ? "완료" : "대기";
+      } : null,
     });
     const free = S.visibleFree(state, c.id);
     if (free.length) html += `<h3>재야 인재</h3>` + officerTable(free, {});
@@ -139,6 +147,28 @@
       return `<button data-action="select" data-city="${n}" style="border-left:4px solid ${forceColor(nc.owner)}">${nc.name} ${fmt(nc.troops)}</button>`;
     }).join("")}</div>`;
     p.innerHTML = html;
+  }
+
+  function signed(n) {
+    return `<span class="${n >= 0 ? "good" : "bad"}">${n >= 0 ? "+" : ""}${n}</span>`;
+  }
+
+  function holderName(c, kind) {
+    const p = c.posts[kind];
+    if (!p) return `<span class="bad">공석</span>`;
+    if (p.type === "clerk") return `${S.CLERKS[p.tier].name}`;
+    return `<b>${state.officers[p.id].name}</b>`;
+  }
+
+  function postsTable(c) {
+    const rows = S.POST_KEYS.map((k) => {
+      const max = k === "order" ? 100 : c[k + "Max"];
+      return `<tr><td>${S.POSTS[k].label}</td><td>${c[k]}/${max}</td><td>${holderName(c, k)}</td>` +
+        `<td>${signed(S.postDelta(state, c, k))}</td>` +
+        `<td><button data-action="post" data-kind="${k}">변경</button></td></tr>`;
+    }).join("");
+    return `<h3>내정 담당</h3><table><tr><th>분야</th><th>수치</th><th>담당</th><th>월 변화</th><th></th></tr>${rows}</table>` +
+      `<p class="hint">담당관은 매달 자동으로 내정을 발전시킵니다. 공석이면 수치가 깎입니다. 담당 무장은 다른 명령을 할 수 없습니다.</p>`;
   }
 
   function cmdButton(cmd, label, free) {
@@ -183,10 +213,6 @@
 
   // ---------- commands ----------
   const SIMPLE = {
-    farm: { title: "개간", stat: "pol", run: (o, c) => S.develop(state, o, c, "farm"), preview: (o) => `농업 +${S.preview.farm(o)} (금 ${S.COST.develop})` },
-    trade: { title: "상업", stat: "pol", run: (o, c) => S.develop(state, o, c, "trade"), preview: (o) => `상업 +${S.preview.trade(o)} (금 ${S.COST.develop})` },
-    wall: { title: "축성", stat: "lead", run: (o, c) => S.develop(state, o, c, "wall"), preview: (o) => `성벽 +${S.preview.wall(o)} (금 ${S.COST.develop})` },
-    order: { title: "순찰", stat: "war", run: (o, c) => S.patrol(state, o, c), preview: (o) => `치안 +${S.preview.order(o)}` },
     draft: {
       title: "징병", stat: "lead", run: (o, c) => S.draft(state, o, c),
       preview: (o, c) => { const n = S.preview.draft(c, o); return `병사 +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`; },
@@ -218,6 +244,32 @@
       if (!targets.length) { toast("이 도시에는 등용할 인재가 없습니다. 「탐색」으로 재야 인재를 찾아보세요."); return; }
       openModal(`<h2>등용</h2><p class="hint">설득할 대상을 고르세요.</p>` +
         officerTable(targets, { pick: "recruitTarget", extraHead: "신분", extra: (o) => (o.status === "free" ? "재야" : "포로") }) +
+        `<div class="footer"><button data-action="close">취소</button></div>`);
+    },
+    post(kind) {
+      const c = state.cities[selected];
+      const def = S.POSTS[kind];
+      const cur = c.posts[kind];
+      const officers = S.serving(state, c.id)
+        .filter((o) => !o.done || (cur && cur.type === "officer" && cur.id === o.id))
+        .sort((a, b) => def.stat(b) - def.stat(a));
+      const officerRows = officers.map((o) => {
+        const k = S.postOf(state, o);
+        const note = k === kind ? "현재 담당" : k ? `${S.POSTS[k].label} 담당 중` : "";
+        return `<tr class="pick" data-action="doPost" data-kind="${kind}" data-oid="${o.id}"><td>${o.name}</td>` +
+          `<td>${def.stat(o)}</td><td>${signed(S.postGain(kind, def.stat(o)))}</td><td>-</td><td>${note}</td></tr>`;
+      }).join("");
+      const clerkRows = S.CLERKS.map((cl, i) =>
+        `<tr class="pick" data-action="doPost" data-kind="${kind}" data-tier="${i}"><td>${cl.name}</td>` +
+        `<td>${cl.ability}</td><td>${signed(S.postGain(kind, cl.ability))}</td><td>금 ${cl.salary}/월</td>` +
+        `<td>${cur && cur.type === "clerk" && cur.tier === i ? "현재 담당" : ""}</td></tr>`).join("");
+      openModal(`<h2>${def.label} 담당 임명</h2>` +
+        `<p class="hint">현재 ${def.label} ${c[kind]}. 무장은 봉급이 없지만 담당하는 동안 다른 명령을 할 수 없습니다. ` +
+        `관리는 매달 봉급이 나갑니다. 능력 기준은 ${def.statLabel}입니다.</p>` +
+        `<table><tr><th>담당</th><th>능력</th><th>월 변화</th><th>봉급</th><th></th></tr>` +
+        clerkRows + officerRows +
+        `<tr class="pick" data-action="doPost" data-kind="${kind}" data-empty="1"><td>공석으로 두기</td><td>-</td>` +
+        `<td>${signed(S.postPenalty(c, kind))}</td><td>-</td><td>${!cur ? "현재" : ""}</td></tr></table>` +
         `<div class="footer"><button data-action="close">취소</button></div>`);
     },
     reward() {
@@ -362,13 +414,20 @@
     endTurn: () => state && !state.over && endTurn(),
     start: (d) => start(d.force),
     continue: () => {
-      state = loadSaved();
+      state = S.migrate(loadSaved());
       selected = S.citiesOf(state, state.playerForce)[0].id;
       closeModal();
       renderAll();
     },
     select: (d) => { selected = d.city; renderAll(); },
     cmd: (d) => (commands[d.cmd] ? commands[d.cmd]() : commands.simple(d.cmd)),
+    post: (d) => commands.post(d.kind),
+    doPost: (d) => {
+      const spec = d.empty ? null : d.oid ? { type: "officer", id: d.oid } : { type: "clerk", tier: +d.tier };
+      const r = S.assignPost(state, selected, d.kind, spec);
+      if (r.ok) closeModal();
+      result(r);
+    },
     doSimple: (d) => {
       const r = SIMPLE[pending.cmd].run(d.oid, selected);
       closeModal();

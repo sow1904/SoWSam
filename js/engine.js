@@ -3,7 +3,7 @@
   const STAT_NAMES = { lead: "통솔", war: "무력", int: "지력", pol: "정치" };
   S.STAT_NAMES = STAT_NAMES;
 
-  S.COST = { develop: 50, reward: 100, draftPerTroop: 0.1 };
+  S.COST = { reward: 100, draftPerTroop: 0.1 };
   S.MAX_SORTIE_OFFICERS = 3;
   S.MIN_SORTIE_TROOPS = 500;
 
@@ -54,6 +54,7 @@
         trade: 80 + size * 60, tradeMax: 200 + size * 160,
         wall: 150 + size * 80, wallMax: 300 + size * 180,
         order: 50,
+        posts: S.emptyPosts(),
       };
     }
     let n = 0;
@@ -81,6 +82,8 @@
         c.gold = 600 + c.size * 150;
         c.food = troops * 2 + 5000;
         c.order = 60;
+        // Existing administration: low-grade clerks in every post.
+        for (const k of S.POST_KEYS) c.posts[k] = { type: "clerk", tier: 0 };
       }
     }
     for (const line of scenario.free) addOfficer(line, null, 0);
@@ -109,7 +112,7 @@
   S.officersIn = (state, cid, filter) =>
     Object.values(state.officers).filter((o) => o.city === cid && (!filter || filter(o)));
   S.serving = (state, cid) => S.officersIn(state, cid, (o) => o.status === "serving");
-  S.idle = (state, cid) => S.serving(state, cid).filter((o) => !o.done);
+  S.idle = (state, cid) => S.serving(state, cid).filter((o) => !o.done && !S.postOf(state, o));
   S.visibleFree = (state, cid) => S.officersIn(state, cid, (o) => o.status === "free" && !o.hidden);
   S.captivesIn = (state, cid, force) =>
     S.officersIn(state, cid, (o) => o.status === "captive" && o.captor === force);
@@ -119,7 +122,97 @@
   S.forceName = (state, fid) => (fid && state.forces[fid] ? state.forces[fid].name + "군" : "공백지");
   S.best = (list, key) => list.reduce((a, b) => (b[key] > a[key] ? b : a), list[0]);
 
-  // ---------- domestic commands ----------
+  // ---------- domestic posts ----------
+  // Each city has four posts. An officer or a hired clerk develops the post
+  // every month; an empty post makes it decline.
+  S.POSTS = {
+    farm: { label: "농업", statLabel: "정치", stat: (o) => o.pol },
+    trade: { label: "상업", statLabel: "정치", stat: (o) => o.pol },
+    wall: { label: "성벽", statLabel: "통솔", stat: (o) => o.lead },
+    order: { label: "치안", statLabel: "무력·통솔", stat: (o) => Math.round((o.war + o.lead) / 2) },
+  };
+  S.POST_KEYS = Object.keys(S.POSTS);
+  S.CLERKS = [
+    { name: "하급 관리", ability: 35, salary: 10 },
+    { name: "중급 관리", ability: 50, salary: 25 },
+    { name: "상급 관리", ability: 65, salary: 50 },
+  ];
+  S.emptyPosts = () => ({ farm: null, trade: null, wall: null, order: null });
+
+  const postMax = (c, kind) => (kind === "order" ? 100 : c[kind + "Max"]);
+
+  // Monthly change a holder with the given ability would bring.
+  S.postGain = (kind, ability) => (kind === "order" ? 1 + Math.round(ability / 25) : 2 + Math.round(ability / 8));
+  S.postPenalty = (c, kind) => {
+    if (kind === "order") return -3;
+    if (kind === "wall") return -Math.max(3, Math.round(c.wallMax * 0.01));
+    return -Math.max(5, Math.round(c[kind + "Max"] * 0.02));
+  };
+  S.postAbility = function (state, post, kind) {
+    if (!post) return null;
+    if (post.type === "clerk") return S.CLERKS[post.tier].ability;
+    return S.POSTS[kind].stat(state.officers[post.id]);
+  };
+  S.postDelta = function (state, c, kind) {
+    const ab = S.postAbility(state, c.posts[kind], kind);
+    return ab == null ? S.postPenalty(c, kind) : S.postGain(kind, ab);
+  };
+  S.postOf = function (state, o) {
+    const c = state.cities[o.city];
+    if (!c || !c.posts) return null;
+    return S.POST_KEYS.find((k) => c.posts[k] && c.posts[k].type === "officer" && c.posts[k].id === o.id) || null;
+  };
+  S.salaries = (c) => S.POST_KEYS.reduce((sum, k) => sum + (c.posts[k] && c.posts[k].type === "clerk" ? S.CLERKS[c.posts[k].tier].salary : 0), 0);
+  S.balance = (c) => S.income(c) - S.upkeep(c) - S.salaries(c);
+
+  // spec: {type:"officer", id} | {type:"clerk", tier} | null (leave empty)
+  S.assignPost = function (state, cid, kind, spec) {
+    const c = state.cities[cid];
+    if (!c || !S.POSTS[kind]) return fail("잘못된 담당입니다.");
+    const label = S.POSTS[kind].label;
+    const old = c.posts[kind];
+    if (spec && spec.type === "officer") {
+      const o = state.officers[spec.id];
+      if (!o || o.status !== "serving" || o.city !== cid || o.force !== c.owner) return fail("이 도시의 무장이 아닙니다.");
+      if (o.done) return fail(`${o.name}은(는) 이번 달 이미 행동해 임명할 수 없습니다.`);
+      const prev = S.postOf(state, o);
+      if (prev === kind) return fail("이미 이 담당입니다.");
+      if (prev) c.posts[prev] = null;
+      c.posts[kind] = { type: "officer", id: o.id };
+    } else if (spec && spec.type === "clerk") {
+      if (!S.CLERKS[spec.tier]) return fail("잘못된 관리 등급입니다.");
+      c.posts[kind] = { type: "clerk", tier: spec.tier };
+    } else {
+      c.posts[kind] = null;
+    }
+    // An officer taken off a post spends the month handing over the work.
+    if (old && old.type === "officer" && !(spec && spec.type === "officer" && spec.id === old.id)) {
+      const o = state.officers[old.id];
+      if (o) o.done = true;
+    }
+    const who = !spec ? "공석" : spec.type === "clerk" ? S.CLERKS[spec.tier].name : state.officers[spec.id].name;
+    return { ok: true, msg: `${c.name}의 ${label} 담당을 ${who}(으)로 정했습니다.` };
+  };
+
+  // Drop posts whose officer is no longer serving in the city.
+  function validatePosts(state, c) {
+    for (const k of S.POST_KEYS) {
+      const p = c.posts[k];
+      if (p && p.type === "officer") {
+        const o = state.officers[p.id];
+        if (!o || o.status !== "serving" || o.city !== c.id || o.force !== c.owner) c.posts[k] = null;
+      }
+    }
+  }
+
+  function runPosts(state, c) {
+    validatePosts(state, c);
+    for (const k of S.POST_KEYS) {
+      c[k] = clamp(c[k] + S.postDelta(state, c, k), 0, postMax(c, k));
+    }
+  }
+
+  // ---------- officer commands ----------
   // Each returns {ok, msg}. On success the officer has used their action this month.
   function act(state, oid, cid) {
     const o = state.officers[oid];
@@ -127,41 +220,14 @@
     if (!o || !c) return [null, null, "잘못된 대상입니다."];
     if (o.status !== "serving" || o.city !== cid || o.force !== c.owner) return [null, null, "이 도시의 무장이 아닙니다."];
     if (o.done) return [null, null, `${o.name}은(는) 이번 달 이미 행동했습니다.`];
+    if (S.postOf(state, o)) return [null, null, `${o.name}은(는) 담당 업무 중입니다.`];
     return [o, c, null];
   }
   const fail = (msg) => ({ ok: false, msg });
 
   S.preview = {
-    farm: (o) => 10 + Math.round(o.pol / 4),
-    trade: (o) => 10 + Math.round(o.pol / 4),
-    wall: (o) => 12 + Math.round(o.lead / 4),
-    order: (o) => 4 + Math.round((o.war + o.lead) / 25),
     train: (o) => 5 + Math.round(o.lead / 8),
     draft: (c, o) => Math.round(Math.min(c.pop * 0.02, 1500 + o.lead * 15) * (0.6 + c.order / 250)),
-  };
-
-  S.develop = function (state, oid, cid, kind) {
-    const [o, c, err] = act(state, oid, cid);
-    if (err) return fail(err);
-    const max = c[kind + "Max"];
-    if (c[kind] >= max) return fail("이미 최대치입니다.");
-    if (c.gold < S.COST.develop) return fail("금이 부족합니다.");
-    c.gold -= S.COST.develop;
-    const gain = Math.min(max - c[kind], S.preview[kind](o));
-    c[kind] += gain;
-    o.done = true;
-    const label = { farm: "농업", trade: "상업", wall: "성벽" }[kind];
-    return { ok: true, msg: `${o.name}이(가) ${c.name}의 ${label}을(를) ${gain} 올렸습니다.` };
-  };
-
-  S.patrol = function (state, oid, cid) {
-    const [o, c, err] = act(state, oid, cid);
-    if (err) return fail(err);
-    if (c.order >= 100) return fail("치안이 이미 최대입니다.");
-    const gain = Math.min(100 - c.order, S.preview.order(o));
-    c.order += gain;
-    o.done = true;
-    return { ok: true, msg: `${o.name}이(가) ${c.name}을(를) 순찰해 치안이 ${gain} 올랐습니다.` };
   };
 
   S.draft = function (state, oid, cid) {
@@ -414,6 +480,7 @@
       }
       const remainingD = Math.max(0, D);
       t.owner = atkForce;
+      t.posts = S.emptyPosts();
       t.troops = survivors + Math.floor(remainingD * 0.3);
       t.train = c.train;
       t.gold = Math.floor(t.gold / 2);
@@ -476,8 +543,13 @@
     for (const c of Object.values(state.cities)) {
       const eff = 0.5 + c.order / 200;
       if (c.owner) {
-        c.gold += S.income(c) - S.upkeep(c);
+        runPosts(state, c);
+        c.gold += S.balance(c);
         if (c.gold < 0) {
+          // Clerks quit first when wages cannot be paid, then soldiers desert.
+          const quit = S.POST_KEYS.filter((k) => c.posts[k] && c.posts[k].type === "clerk");
+          quit.forEach((k) => (c.posts[k] = null));
+          if (quit.length && c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 관리 ${quit.length}명이 그만두었습니다.`, "warn");
           c.gold = 0;
           const lost = Math.ceil(c.troops * 0.05);
           c.troops -= lost;
@@ -493,7 +565,6 @@
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
         if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + (c.order - 30) / 4000));
-        if (c.order > 40) c.order -= 1;
       } else {
         // Vacant cities slowly rebuild local militia.
         const cap = 1000 + c.size * 600;
@@ -526,6 +597,13 @@
     if (state.month > 12) { state.month = 1; state.year++; }
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
     S.checkOver(state);
+  };
+
+  // Bring saves from older versions up to date.
+  S.migrate = function (state) {
+    for (const c of Object.values(state.cities)) if (!c.posts) c.posts = S.emptyPosts();
+    if (!state.start) state.start = { year: state.year, month: state.month };
+    return state;
   };
 
   S.checkOver = function (state) {

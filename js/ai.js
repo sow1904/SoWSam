@@ -92,7 +92,43 @@
     }
   }
 
+  // Put spare officers and hired clerks on the four domestic posts.
+  function staffPosts(state, c, frontier) {
+    const reserve = frontier ? 3 : 1;
+    const serving = S.serving(state, c.id);
+    const unposted = () => serving.filter((o) => !S.postOf(state, o));
+    // Free up posted officers when the city lacks commanders.
+    for (const o of serving.filter((x) => S.postOf(state, x)).sort((a, b) => b.lead + b.war - a.lead - a.war)) {
+      if (unposted().length >= reserve) break;
+      S.assignPost(state, c.id, S.postOf(state, o), null);
+    }
+    const spare = unposted().filter((o) => !o.done).sort((a, b) => b.lead + b.war - a.lead - a.war).slice(reserve);
+    for (const o of spare) {
+      let best = null;
+      for (const k of S.POST_KEYS) {
+        const cur = S.postAbility(state, c.posts[k], k);
+        const gain = S.POSTS[k].stat(o) - (cur == null ? -40 : cur);
+        if (gain > 5 && (!best || gain > best.gain)) best = { k, gain };
+      }
+      if (best) S.assignPost(state, c.id, best.k, { type: "officer", id: o.id });
+    }
+    for (const k of S.POST_KEYS) {
+      const p = c.posts[k];
+      const margin = S.balance(c);
+      if (!p) {
+        let tier = -1;
+        for (let t = S.CLERKS.length - 1; t >= 0; t--) {
+          if (S.CLERKS[t].salary <= Math.max(10, margin * 0.4) && c.gold > S.CLERKS[t].salary * 6) { tier = t; break; }
+        }
+        if (tier >= 0) S.assignPost(state, c.id, k, { type: "clerk", tier });
+      } else if (p.type === "clerk" && p.tier < S.CLERKS.length - 1 && margin > 60 && c.gold > 1500) {
+        S.assignPost(state, c.id, k, { type: "clerk", tier: p.tier + 1 });
+      }
+    }
+  }
+
   function domestic(state, c, fid) {
+    staffPosts(state, c, enemyNeighbors(state, c).length > 0);
     let idle = S.idle(state, c.id);
     const take = (sorter) => {
       if (!idle.length) return null;
@@ -133,23 +169,13 @@
     }
     // Frontier cities keep drafting while the treasury can pay the upkeep.
     const affordable = () => frontier
-      ? c.troops / 100 + 15 < S.income(c) + c.gold / 36
+      ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36
       : c.troops < 2500;
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
       let r = null;
-      if (c.order < 45) r = S.patrol(state, take((a, b) => b.war + b.lead - a.war - a.lead).id, c.id);
-      else if (affordable() && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("lead")).id, c.id);
+      if (affordable() && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("lead")).id, c.id);
       else if (c.train < 75 && c.troops > 1000) r = S.drill(state, take(byDesc("lead")).id, c.id);
-      else if (c.gold >= S.COST.develop + 50) {
-        const ratios = ["farm", "trade", "wall"].map((k) => [k, c[k] / c[k + "Max"]]);
-        if (foodMonths < 12) ratios[0][1] -= 0.3;
-        if (frontier) ratios[2][1] -= 0.15;
-        ratios.sort((a, b) => a[1] - b[1]);
-        const [kind, ratio] = ratios[0];
-        if (ratio >= 1) r = S.patrol(state, take((a, b) => b.war - a.war).id, c.id);
-        else r = S.develop(state, take(byDesc(kind === "wall" ? "lead" : "pol")).id, c.id, kind);
-      } else if (c.order < 100) r = S.patrol(state, take((a, b) => b.war - a.war).id, c.id);
       else break;
       if (r && !r.ok) break;
     }
