@@ -79,7 +79,9 @@
       const bonus = t.owner ? 0 : 0.2; // vacant cities are easy pickings
       if (!best || est.ratio + bonus > best.score) best = { t, score: est.ratio + bonus, est };
     }
-    if (!best || best.est.ratio < 1.3) return;
+    // A war-weary force needs a clearer edge before it marches again.
+    const w = state.forces[c.owner].weariness;
+    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40) return;
     if (!S.chance(state, 45)) return;
     const r = S.attack(state, c.id, best.t.id, ids, troops);
     if (r.ok) {
@@ -174,7 +176,7 @@
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
       let r = null;
-      if (affordable() && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("lead")).id, c.id);
+      if (affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("lead")).id, c.id);
       else if (c.train < 75 && c.troops > 1000) r = S.drill(state, take(byDesc("lead")).id, c.id);
       else break;
       if (r && !r.ok) break;

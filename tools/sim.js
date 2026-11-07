@@ -23,7 +23,7 @@ for (let g = 0; g < games; g++) {
     validate(state);
     if (g === 0 && state.month === 1 && (state.year - 190) % 5 === 0) {
       const alive = Object.values(state.forces).filter((f) => f.alive)
-        .map((f) => `${f.name}:${S.citiesOf(state, f.id).length}`).join(" ");
+        .map((f) => `${f.name}:${S.citiesOf(state, f.id).length}(${Math.round(f.weariness)})`).join(" ");
       console.log(`${state.year}: ${alive}`);
     }
   }
@@ -40,7 +40,7 @@ console.log("battles per game:", Math.round(battles / games));
 
 function validate(state) {
   for (const c of Object.values(state.cities)) {
-    for (const k of ["gold", "food", "troops", "pop"]) {
+    for (const k of ["gold", "food", "troops", "pop", "manpower"]) {
       if (!Number.isFinite(c[k]) || c[k] < 0) throw new Error(`${c.name}.${k} = ${c[k]}`);
     }
   }

@@ -56,6 +56,7 @@
         order: 50,
         posts: S.emptyPosts(),
       };
+      state.cities[id].manpower = Math.round(S.manpowerMax(state.cities[id]) * 0.6);
     }
     let n = 0;
     const addOfficer = (line, force, loyalty) => {
@@ -73,7 +74,7 @@
     };
     for (const f of scenario.forces) {
       const ids = f.officers.map((line, i) => addOfficer(line, f.id, i === 0 ? 100 : 80 + Math.floor(n % 5) * 4));
-      state.forces[f.id] = { id: f.id, name: f.name, color: f.color, ruler: ids[0], alive: true };
+      state.forces[f.id] = { id: f.id, name: f.name, color: f.color, ruler: ids[0], alive: true, weariness: 0 };
       for (const [cid, troops] of Object.entries(f.cities)) {
         const c = state.cities[cid];
         c.owner = f.id;
@@ -227,21 +228,28 @@
 
   S.preview = {
     train: (o) => 5 + Math.round(o.lead / 8),
-    draft: (c, o) => Math.round(Math.min(c.pop * 0.02, 1500 + o.lead * 15) * (0.6 + c.order / 250)),
+    // War-weary people answer the call less willingly.
+    draft: (state, c, o) => {
+      const w = c.owner ? state.forces[c.owner].weariness : 0;
+      const base = Math.min(c.pop * 0.02, 1500 + o.lead * 15) * (0.6 + c.order / 250) * (1 - w / 200);
+      return Math.max(0, Math.round(Math.min(base, c.manpower)));
+    },
   };
 
   S.draft = function (state, oid, cid) {
     const [o, c, err] = act(state, oid, cid);
     if (err) return fail(err);
-    const amount = S.preview.draft(c, o);
+    const amount = S.preview.draft(state, c, o);
     const cost = Math.ceil(amount * S.COST.draftPerTroop);
-    if (amount < 100) return fail("징병할 인구가 부족합니다.");
+    if (amount < 100) return fail("동원할 수 있는 장정이 없습니다. 병역 인구가 회복되기를 기다려야 합니다.");
     if (c.gold < cost) return fail(`금이 부족합니다. (필요 ${cost})`);
     c.gold -= cost;
     c.train = Math.round((c.train * c.troops + 10 * amount) / (c.troops + amount));
     c.troops += amount;
     c.pop -= amount;
+    c.manpower -= amount;
     c.order = Math.max(0, c.order - 4);
+    S.addWeariness(state, c.owner, (amount / forcePop(state, c.owner)) * 400);
     o.done = true;
     return { ok: true, msg: `${o.name}이(가) ${c.name}에서 병사 ${amount}명을 모았습니다.` };
   };
@@ -373,6 +381,23 @@
     return { ok: true, msg: `${names.map((o) => o.name).join(", ")}이(가) ${t.name}(으)로 이동했습니다.${cargo ? " (" + cargo + ")" : ""}` };
   };
 
+  // ---------- manpower and war weariness ----------
+  // Men of fighting age who can still be called up. Soldiers who die are gone
+  // for good; the pool refills slowly from the population.
+  S.manpowerMax = (c) => Math.round(c.pop * 0.12);
+  S.manpowerRegen = (c) => Math.round(c.pop * 0.001 * (0.5 + c.order / 200));
+  function returnManpower(c, n) {
+    c.manpower = Math.min(S.manpowerMax(c), c.manpower + Math.round(n));
+  }
+  function forcePop(state, fid) {
+    return Math.max(50000, S.citiesOf(state, fid).reduce((s, c) => s + c.pop, 0));
+  }
+  S.addWeariness = function (state, fid, amount) {
+    const f = fid && state.forces[fid];
+    if (f) f.weariness = clamp(f.weariness + amount, 0, 100);
+  };
+  S.wearinessLabel = (w) => (w < 20 ? "안정" : w < 40 ? "피로" : w < 60 ? "염전" : "한계");
+
   // ---------- battle ----------
   function sideStats(officers, fallback) {
     if (!officers.length) return { lead: fallback, war: fallback, int: fallback };
@@ -458,6 +483,14 @@
     if (!report.attackerWon && D > 0 && A > 0 && D < A * 0.25) report.attackerWon = true;
 
     const survivors = Math.max(0, A);
+    // Casualties: about a third were wounded or scattered and drift back home;
+    // the rest are lost to the manpower pool for good.
+    const killedA = A0 - survivors;
+    const killedD = t.troops - Math.max(0, D);
+    returnManpower(c, killedA * 0.3);
+    returnManpower(t, killedD * 0.3);
+    S.addWeariness(state, atkForce, (killedA / forcePop(state, atkForce)) * 1500 + (report.attackerWon ? -2 : 3));
+    if (defForce) S.addWeariness(state, defForce, (killedD / forcePop(state, defForce)) * 1500 + (report.attackerWon ? 5 : -1));
     if (report.attackerWon) {
       say(`${t.name} 함락! ${S.forceName(state, atkForce)}이(가) 성을 차지했습니다.`);
       // Defending officers escape to an adjacent friendly city or are captured.
@@ -565,12 +598,14 @@
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
         if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + (c.order - 30) / 4000));
+        wearinessEffects(state, c);
       } else {
         // Vacant cities slowly rebuild local militia.
         const cap = 1000 + c.size * 600;
         if (c.troops < cap) c.troops = Math.min(cap, c.troops + 60);
       }
     }
+    for (const c of Object.values(state.cities)) returnManpower(c, S.manpowerRegen(c));
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;
@@ -582,7 +617,7 @@
         o.force = null;
         o.hidden = false;
         S.addLog(state, `${o.name}이(가) ${S.forceName(state, f)}을(를) 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
-      } else if (S.chance(state, 10)) {
+      } else if (S.chance(state, 10 + Math.max(0, state.forces[o.force].weariness - 50) / 2)) {
         o.loyalty = Math.max(0, o.loyalty - 1);
       }
     }
@@ -593,15 +628,39 @@
         S.addLog(state, `포로 ${o.name}이(가) 탈출했습니다.`, "info");
       }
     }
+    // Weariness fades in peacetime.
+    for (const f of Object.values(state.forces)) {
+      const before = f.weariness;
+      f.weariness = Math.max(0, f.weariness - (1 + f.weariness * 0.03));
+      if (f.id === state.playerForce && before >= 40 && f.weariness < 40) S.addLog(state, "백성들의 전쟁 피로가 조금 가라앉았습니다.", "sys");
+    }
     state.month++;
     if (state.month > 12) { state.month = 1; state.year++; }
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
     S.checkOver(state);
   };
 
+  // A weary realm loses public order, and unrest can break out.
+  function wearinessEffects(state, c) {
+    const w = state.forces[c.owner].weariness;
+    if (w <= 30) return;
+    c.order = Math.max(0, c.order - Math.round((w - 30) / 25));
+    if (w > 60 && c.order < 25 && S.chance(state, w / 10)) {
+      const lost = Math.ceil(c.troops * 0.15);
+      c.troops -= lost;
+      c.pop = Math.round(c.pop * 0.98);
+      c.order = Math.max(0, c.order - 5);
+      S.addLog(state, `전쟁에 지친 ${c.name} 백성들이 들고일어났습니다. 병사 ${lost}명이 흩어졌습니다.`, c.owner === state.playerForce ? "warn" : "info");
+    }
+  }
+
   // Bring saves from older versions up to date.
   S.migrate = function (state) {
-    for (const c of Object.values(state.cities)) if (!c.posts) c.posts = S.emptyPosts();
+    for (const c of Object.values(state.cities)) {
+      if (!c.posts) c.posts = S.emptyPosts();
+      if (c.manpower == null) c.manpower = Math.round(S.manpowerMax(c) * 0.6);
+    }
+    for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.start) state.start = { year: state.year, month: state.month };
     return state;
   };
@@ -626,6 +685,7 @@
       troops: cs.reduce((s, c) => s + c.troops, 0),
       gold: cs.reduce((s, c) => s + c.gold, 0),
       food: cs.reduce((s, c) => s + c.food, 0),
+      manpower: cs.reduce((s, c) => s + c.manpower, 0),
     };
   };
 })(globalThis.SAM = globalThis.SAM || {});

@@ -44,7 +44,8 @@
       `<span><b>${state.year}년 ${state.month}월</b></span>` +
       `<span style="color:${f.color}">■</span><span><b>${f.name}군</b> (군주 ${ruler.name})</span>` +
       `<span>도시 <b>${t.cities}</b></span><span>무장 <b>${t.officers}</b></span>` +
-      `<span>병력 <b>${fmt(t.troops)}</b></span><span>금 <b>${fmt(t.gold)}</b></span><span>군량 <b>${fmt(t.food)}</b></span>`;
+      `<span>병력 <b>${fmt(t.troops)}</b></span><span>병역 인구 <b>${fmt(t.manpower)}</b></span>` +
+      `<span>전쟁 피로 <b class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} (${S.wearinessLabel(f.weariness)})</b></span><span>금 <b>${fmt(t.gold)}</b></span><span>군량 <b>${fmt(t.food)}</b></span>`;
   }
 
   const LAND = "M40,110 L150,60 L330,40 L560,18 L700,12 L830,18 L905,90 L880,170 L862,250 L905,330 L940,420 L925,525 L885,625 L760,665 L600,695 L450,695 L330,650 L200,628 L90,595 L55,470 L85,360 L28,250 Z";
@@ -108,6 +109,7 @@
       stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
       stat("인구", c.pop.toLocaleString()) + stat("치안", c.order) +
+      stat("병역 인구", `${fmt(c.manpower)}/${fmt(S.manpowerMax(c))}`) + stat("월 회복", "+" + S.manpowerRegen(c)) +
       stat("농업", `${c.farm}/${c.farmMax}`) + stat("상업", `${c.trade}/${c.tradeMax}`) +
       stat("성벽", `${c.wall}/${c.wallMax}`) +
       (own ? stat("월 수지", signed(S.balance(c))) : "") +
@@ -215,7 +217,7 @@
   const SIMPLE = {
     draft: {
       title: "징병", stat: "lead", run: (o, c) => S.draft(state, o, c),
-      preview: (o, c) => { const n = S.preview.draft(c, o); return `병사 +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`; },
+      preview: (o, c) => { const n = S.preview.draft(state, c, o); return `병사 +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`; },
     },
     train: { title: "훈련", stat: "lead", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
     search: { title: "탐색", stat: "int", run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${Math.min(100, Math.round(25 + o.int / 2))}%` },
@@ -235,7 +237,7 @@
       const def = SIMPLE[cmd];
       const list = S.idle(state, c.id).sort((a, b) => b[def.stat] - a[def.stat]);
       pending = { cmd };
-      officerPicker(def.title, `실행할 무장을 고르세요. ${S.STAT_NAMES[def.stat]}이(가) 높을수록 효과가 큽니다.`, list, "doSimple",
+      officerPicker(def.title, `실행할 무장을 고르세요. ${S.STAT_NAMES[def.stat]} 능력이 높을수록 효과가 큽니다.`, list, "doSimple",
         (o) => def.preview(o, c));
     },
     recruit() {
@@ -374,8 +376,11 @@
       .map((f) => ({ f, t: S.totals(state, f.id) }))
       .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
       .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.id === state.playerForce ? " (나)" : ""}</td>` +
-        `<td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td></tr>`).join("");
-    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>도시</th><th>무장</th><th>병력</th><th>금</th><th>군량</th></tr>${rows}</table>` +
+        `<td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
+        `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td></tr>`).join("");
+    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th></tr>${rows}</table>` +
+      `<p class="hint">병역 인구는 징병할 수 있는 장정 수입니다. 전사자는 돌아오지 않고, 인구에서 조금씩 회복됩니다. ` +
+      `전쟁 피로는 전사자·패전·대규모 징병으로 오르고 평화로울 때 내려갑니다. 40을 넘으면 치안이 떨어지고, 60을 넘으면 민란이 일어날 수 있습니다.</p>` +
       `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`, true);
   }
 
