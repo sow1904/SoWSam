@@ -67,7 +67,8 @@
     const idle = S.idle(state, c.id);
     if (!idle.length) return;
     const garrison = Math.max(1500, Math.round(c.troops * 0.25));
-    const troops = c.troops - garrison;
+    // Gentry retainers stay home, so only state troops can march.
+    const troops = Math.min(c.troops - garrison, S.marchable(c));
     if (troops < 3000) return;
     const team = [...idle].sort((a, b) => b.lead + b.war - (a.lead + a.war)).slice(0, S.MAX_SORTIE_OFFICERS);
     // Keep at least one officer home when possible.
@@ -108,8 +109,11 @@
     for (const o of spare) {
       let best = null;
       for (const k of S.POST_KEYS) {
+        const policy = S.POSTS[k].policy;
+        if (policy && c.gentry < 45) continue;
         const cur = S.postAbility(state, c.posts[k], k);
-        const gain = S.POSTS[k].stat(o) - (cur == null ? -40 : cur);
+        // An empty development post loses value; an unused policy merely gains nothing.
+        const gain = S.POSTS[k].stat(o) - (cur == null ? (policy ? 20 : -40) : cur);
         if (gain > 5 && (!best || gain > best.gain)) best = { k, gain };
       }
       if (best) S.assignPost(state, c.id, best.k, { type: "officer", id: o.id });
@@ -118,6 +122,7 @@
       const p = c.posts[k];
       const margin = S.balance(c);
       if (!p) {
+        if (S.POSTS[k].policy && (c.gentry < 50 || margin < 60)) continue;
         let tier = -1;
         for (let t = S.CLERKS.length - 1; t >= 0; t--) {
           if (S.CLERKS[t].salary <= Math.max(10, margin * 0.4) && c.gold > S.CLERKS[t].salary * 6) { tier = t; break; }
@@ -152,9 +157,13 @@
       const o = take(byDesc("int"));
       S.search(state, o.id, c.id);
     }
+    // Win over the great families when they grow reluctant.
+    if (idle.length && c.gentry > 40 && c.consent < 45 && c.gold > 300) {
+      S.woo(state, take(byDesc("pol")).id, c.id);
+    }
     // Move surplus toward the campaign staging city, or from the interior to the front.
     const plan = state._plans && state._plans[fid];
-    const surplus = frontier ? c.troops - Math.max(3000, c.troops * 0.4) : c.troops - 2000;
+    const surplus = Math.min(S.marchable(c), frontier ? c.troops - Math.max(3000, c.troops * 0.4) : c.troops - 2000);
     if (plan && plan.stage !== c.id && idle.length && S.serving(state, c.id).length > 1 && surplus > 2000) {
       const to = stepToward(state, c.id, plan.stage);
       if (to) {
@@ -166,7 +175,7 @@
       if (to) {
         const o = take((a, b) => b.war - a.war);
         const keep = 2000;
-        S.move(state, c.id, to, [o.id], Math.max(0, c.troops - keep), Math.max(0, c.gold - 300), Math.max(0, c.food - 3000));
+        S.move(state, c.id, to, [o.id], Math.max(0, Math.min(S.marchable(c), c.troops - keep)), Math.max(0, c.gold - 300), Math.max(0, c.food - 3000));
       }
     }
     // Frontier cities keep drafting while the treasury can pay the upkeep.

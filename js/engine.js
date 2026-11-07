@@ -3,7 +3,7 @@
   const STAT_NAMES = { lead: "통솔", war: "무력", int: "지력", pol: "정치" };
   S.STAT_NAMES = STAT_NAMES;
 
-  S.COST = { reward: 100, draftPerTroop: 0.1 };
+  S.COST = { reward: 100, woo: 100, draftPerTroop: 0.1 };
   S.MAX_SORTIE_OFFICERS = 3;
   S.MIN_SORTIE_TROOPS = 500;
 
@@ -41,7 +41,7 @@
       log: [],
       over: null,
     };
-    for (const [id, [name, x, y, size]] of Object.entries(S.CITY_DEFS)) {
+    for (const [id, [name, x, y, size, gentry]] of Object.entries(S.CITY_DEFS)) {
       state.cities[id] = {
         id, name, x, y, size,
         owner: null,
@@ -55,6 +55,9 @@
         wall: 150 + size * 80, wallMax: 300 + size * 180,
         order: 50,
         posts: S.emptyPosts(),
+        gentry, gentryBase: gentry,
+        consent: 50,
+        retainers: 0,
       };
       state.cities[id].manpower = Math.round(S.manpowerMax(state.cities[id]) * 0.6);
     }
@@ -83,8 +86,10 @@
         c.gold = 600 + c.size * 150;
         c.food = troops * 2 + 5000;
         c.order = 60;
-        // Existing administration: low-grade clerks in every post.
-        for (const k of S.POST_KEYS) c.posts[k] = { type: "clerk", tier: 0 };
+        c.consent = 55;
+        c.retainers = Math.round(troops * (c.gentry / 100) * (1 - c.consent / 100));
+        // Existing administration: low-grade clerks in every development post.
+        for (const k of S.DEV_KEYS) c.posts[k] = { type: "clerk", tier: 0 };
       }
     }
     for (const line of scenario.free) addOfficer(line, null, 0);
@@ -124,27 +129,34 @@
   S.best = (list, key) => list.reduce((a, b) => (b[key] > a[key] ? b : a), list[0]);
 
   // ---------- domestic posts ----------
-  // Each city has four posts. An officer or a hired clerk develops the post
-  // every month; an empty post makes it decline.
+  // Each city has four development posts. An officer or a hired clerk develops
+  // the post every month; an empty post makes it decline. The fifth post,
+  // 둔전 (military farms), is an optional policy: it grows food and settles
+  // state-controlled households, slowly breaking the local gentry's hold.
   S.POSTS = {
     farm: { label: "농업", statLabel: "정치", stat: (o) => o.pol },
     trade: { label: "상업", statLabel: "정치", stat: (o) => o.pol },
     wall: { label: "성벽", statLabel: "통솔", stat: (o) => o.lead },
     order: { label: "치안", statLabel: "무력·통솔", stat: (o) => Math.round((o.war + o.lead) / 2) },
+    tuntian: { label: "둔전", statLabel: "정치", stat: (o) => o.pol, policy: true },
   };
   S.POST_KEYS = Object.keys(S.POSTS);
+  S.DEV_KEYS = ["farm", "trade", "wall", "order"];
+  // Monthly effect of a 둔전 holder: food, and gentry strength lost per month.
+  S.tuntianEffect = (ability) => ({ food: ability * 4, gentry: ability / 300 });
   S.CLERKS = [
     { name: "하급 관리", ability: 35, salary: 10 },
     { name: "중급 관리", ability: 50, salary: 25 },
     { name: "상급 관리", ability: 65, salary: 50 },
   ];
-  S.emptyPosts = () => ({ farm: null, trade: null, wall: null, order: null });
+  S.emptyPosts = () => ({ farm: null, trade: null, wall: null, order: null, tuntian: null });
 
   const postMax = (c, kind) => (kind === "order" ? 100 : c[kind + "Max"]);
 
   // Monthly change a holder with the given ability would bring.
   S.postGain = (kind, ability) => (kind === "order" ? 1 + Math.round(ability / 25) : 2 + Math.round(ability / 8));
   S.postPenalty = (c, kind) => {
+    if (kind === "tuntian") return 0;
     if (kind === "order") return -3;
     if (kind === "wall") return -Math.max(3, Math.round(c.wallMax * 0.01));
     return -Math.max(5, Math.round(c[kind + "Max"] * 0.02));
@@ -208,10 +220,58 @@
 
   function runPosts(state, c) {
     validatePosts(state, c);
-    for (const k of S.POST_KEYS) {
+    for (const k of S.DEV_KEYS) {
       c[k] = clamp(c[k] + S.postDelta(state, c, k), 0, postMax(c, k));
     }
+    const ab = S.postAbility(state, c.posts.tuntian, "tuntian");
+    if (ab != null) {
+      const e = S.tuntianEffect(ab);
+      c.food += Math.round(e.food);
+      c.gentry = Math.max(5, c.gentry - e.gentry);
+    } else if (c.gentry < c.gentryBase + 10) {
+      // Without state farms the great families slowly reclaim the land.
+      c.gentry = Math.min(c.gentryBase + 10, c.gentry + 0.1);
+    }
   }
+
+  // ---------- gentry ----------
+  // Part of a city's troops are retainers (부곡) of the local great families.
+  // They defend their home city in full but will not march away from it.
+  // New recruits in a gentry-heavy city partly become retainers, and over
+  // time the count drifts toward gentry strength x (1 - consent).
+  S.marchable = (c) => Math.max(0, c.troops - c.retainers);
+  S.retainerShare = (c) => (c.gentry / 100) * (1 - c.consent / 100);
+  S.consentTarget = function (state, c) {
+    const w = c.owner ? state.forces[c.owner].weariness : 0;
+    const tuntian = c.posts.tuntian ? 15 : 0;
+    return clamp(25 + c.order * 0.45 - w * 0.4 - tuntian, 0, 100);
+  };
+  // Remove soldiers from a city, retainers in proportion.
+  function loseTroops(c, n) {
+    n = Math.min(c.troops, Math.max(0, Math.round(n)));
+    if (c.troops > 0) c.retainers = Math.round(c.retainers * (1 - n / c.troops));
+    c.troops -= n;
+    return n;
+  }
+  function runGentry(state, c) {
+    c.consent = clamp(c.consent + (S.consentTarget(state, c) - c.consent) * 0.1, 0, 100);
+    // Retainers drift slowly toward what the families' power and goodwill imply.
+    const target = c.troops * S.retainerShare(c);
+    c.retainers = clamp(Math.round(c.retainers + (target - c.retainers) * 0.03), 0, c.troops);
+  }
+  // Defending gentry fight harder for a lord they support, less for one they do not.
+  const gentryDefense = (c) => (c.owner ? 1 + (c.gentry * (c.consent - 30)) / 30000 : 1);
+
+  // Pop-weighted gentry strength decides how a force raises its armies.
+  S.regime = function (state, fid) {
+    const cs = S.citiesOf(state, fid);
+    const pop = cs.reduce((s, c) => s + c.pop, 0) || 1;
+    const gentry = cs.reduce((s, c) => s + c.gentry * c.pop, 0) / pop;
+    const troops = cs.reduce((s, c) => s + c.troops, 0);
+    const retainers = cs.reduce((s, c) => s + c.retainers, 0);
+    const label = gentry >= 55 ? "호족연합형" : gentry <= 25 ? "중앙집권형" : "부곡형";
+    return { label, gentry: Math.round(gentry), retainerShare: troops ? retainers / troops : 0 };
+  };
 
   // ---------- officer commands ----------
   // Each returns {ok, msg}. On success the officer has used their action this month.
@@ -246,6 +306,7 @@
     c.gold -= cost;
     c.train = Math.round((c.train * c.troops + 10 * amount) / (c.troops + amount));
     c.troops += amount;
+    c.retainers += Math.round(amount * S.retainerShare(c));
     c.pop -= amount;
     c.manpower -= amount;
     c.order = Math.max(0, c.order - 4);
@@ -263,6 +324,19 @@
     c.train += gain;
     o.done = true;
     return { ok: true, msg: `${o.name}이(가) ${c.name}의 병사를 훈련해 훈련도가 ${gain} 올랐습니다.` };
+  };
+
+  S.wooPreview = (o) => 4 + Math.round(o.pol / 12);
+  S.woo = function (state, oid, cid) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    if (c.consent >= 100) return fail("호족 협력이 이미 최대입니다.");
+    if (c.gold < S.COST.woo) return fail("금이 부족합니다.");
+    c.gold -= S.COST.woo;
+    const gain = Math.min(100 - c.consent, S.wooPreview(o));
+    c.consent += gain;
+    o.done = true;
+    return { ok: true, msg: `${o.name}이(가) ${c.name}의 호족들을 찾아가 협력이 ${gain} 올랐습니다.` };
   };
 
   S.search = function (state, oid, cid) {
@@ -365,7 +439,9 @@
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
     }
-    troops = clamp(Math.floor(troops || 0), 0, c.troops);
+    troops = Math.floor(troops || 0);
+    if (troops > S.marchable(c)) return fail(`호족 사병은 고향을 떠나지 않습니다. 보낼 수 있는 병력은 ${S.marchable(c)}명입니다.`);
+    troops = clamp(troops, 0, c.troops);
     gold = clamp(Math.floor(gold || 0), 0, c.gold);
     food = clamp(Math.floor(food || 0), 0, c.food);
     if (troops) {
@@ -420,7 +496,7 @@
     const att = sideStats(oids.map((id) => state.officers[id]), 30);
     const def = sideStats(S.serving(state, targetCid).filter((o) => o.force === t.owner), t.owner ? 40 : 35);
     const a = power(troops, att, from.train, 1);
-    const d = power(t.troops, def, t.train, wallBonus(t));
+    const d = power(t.troops, def, t.train, wallBonus(t) * gentryDefense(t));
     return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
   };
 
@@ -435,7 +511,9 @@
       if (err) return fail(err);
     }
     troops = Math.floor(troops);
-    if (troops < S.MIN_SORTIE_TROOPS || troops > c.troops) return fail(`병사는 ${S.MIN_SORTIE_TROOPS}~${c.troops}명 사이여야 합니다.`);
+    if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
+      return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
+    }
     const foodNeed = Math.ceil(troops / 10);
     if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
 
@@ -468,7 +546,7 @@
       }
     }
 
-    const wb = wallBonus(t);
+    const wb = wallBonus(t) * gentryDefense(t);
     for (let round = 1; round <= 8 && A > 0 && D > 0; round++) {
       const aPow = power(A, att, c.train, 1) * aMorale;
       const dPow = power(D, def, t.train, wb) * dMorale;
@@ -515,6 +593,9 @@
       t.owner = atkForce;
       t.posts = S.emptyPosts();
       t.troops = survivors + Math.floor(remainingD * 0.3);
+      // Surrendered locals stay as retainers; the families distrust the new lord.
+      t.retainers = Math.floor(remainingD * 0.3);
+      t.consent = Math.min(t.consent, 30);
       t.train = c.train;
       t.gold = Math.floor(t.gold / 2);
       t.food = Math.floor(t.food / 2);
@@ -522,7 +603,7 @@
       attackers.forEach((o) => (o.city = targetCid));
       if (defForce) checkForce(state, defForce, report);
     } else {
-      t.troops = Math.max(0, D);
+      loseTroops(t, t.troops - Math.max(0, D));
       c.troops += survivors;
       say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${c.name}(으)로 물러났습니다.`);
     }
@@ -584,21 +665,20 @@
           quit.forEach((k) => (c.posts[k] = null));
           if (quit.length && c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 관리 ${quit.length}명이 그만두었습니다.`, "warn");
           c.gold = 0;
-          const lost = Math.ceil(c.troops * 0.05);
-          c.troops -= lost;
+          const lost = loseTroops(c, Math.ceil(c.troops * 0.05));
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
         }
         if (harvest) c.food += Math.round((c.farm * 10 + c.pop / 50) * eff);
         c.food -= Math.ceil(c.troops / 50);
         if (c.food < 0) {
           c.food = 0;
-          const lost = Math.ceil(c.troops * 0.1);
-          c.troops -= lost;
+          const lost = loseTroops(c, Math.ceil(c.troops * 0.1));
           c.order = Math.max(0, c.order - 10);
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
         if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + (c.order - 30) / 4000));
         wearinessEffects(state, c);
+        runGentry(state, c);
       } else {
         // Vacant cities slowly rebuild local militia.
         const cap = 1000 + c.size * 600;
@@ -646,8 +726,7 @@
     if (w <= 30) return;
     c.order = Math.max(0, c.order - Math.round((w - 30) / 25));
     if (w > 60 && c.order < 25 && S.chance(state, w / 10)) {
-      const lost = Math.ceil(c.troops * 0.15);
-      c.troops -= lost;
+      const lost = loseTroops(c, Math.ceil(c.troops * 0.15));
       c.pop = Math.round(c.pop * 0.98);
       c.order = Math.max(0, c.order - 5);
       S.addLog(state, `전쟁에 지친 ${c.name} 백성들이 들고일어났습니다. 병사 ${lost}명이 흩어졌습니다.`, c.owner === state.playerForce ? "warn" : "info");
@@ -659,6 +738,12 @@
     for (const c of Object.values(state.cities)) {
       if (!c.posts) c.posts = S.emptyPosts();
       if (c.manpower == null) c.manpower = Math.round(S.manpowerMax(c) * 0.6);
+      if (c.gentry == null) {
+        c.gentry = c.gentryBase = S.CITY_DEFS[c.id][4];
+        c.consent = 50;
+        c.retainers = 0;
+      }
+      if (!("tuntian" in c.posts)) c.posts.tuntian = null;
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.start) state.start = { year: state.year, month: state.month };

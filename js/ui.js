@@ -43,6 +43,7 @@
     $("#status").innerHTML =
       `<span><b>${state.year}년 ${state.month}월</b></span>` +
       `<span style="color:${f.color}">■</span><span><b>${f.name}군</b> (군주 ${ruler.name})</span>` +
+      `<span>체제 <b>${S.regime(state, state.playerForce).label}</b></span>` +
       `<span>도시 <b>${t.cities}</b></span><span>무장 <b>${t.officers}</b></span>` +
       `<span>병력 <b>${fmt(t.troops)}</b></span><span>병역 인구 <b>${fmt(t.manpower)}</b></span>` +
       `<span>전쟁 피로 <b class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} (${S.wearinessLabel(f.weariness)})</b></span><span>금 <b>${fmt(t.gold)}</b></span><span>군량 <b>${fmt(t.food)}</b></span>`;
@@ -113,7 +114,13 @@
       stat("농업", `${c.farm}/${c.farmMax}`) + stat("상업", `${c.trade}/${c.tradeMax}`) +
       stat("성벽", `${c.wall}/${c.wallMax}`) +
       (own ? stat("월 수지", signed(S.balance(c))) : "") +
-      `</div>`;
+      `</div>` +
+      `<h3>호족</h3><div class="stats">` +
+      stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
+      stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString()) +
+      `</div>` +
+      (own ? `<p class="hint">호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. ` +
+        `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.</p>` : "");
     if (own) {
       html += `<h3>월 수지 내역</h3><div class="stats">` +
         stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) +
@@ -123,7 +130,7 @@
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` +
         cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("recruit", "등용") +
-        cmdButton("move", "이동") + cmdButton("attack", "출진") + cmdButton("reward", "포상", true) +
+        cmdButton("move", "이동") + cmdButton("attack", "출진") + cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
         `</div>`;
     }
     const servants = S.serving(state, c.id);
@@ -163,14 +170,24 @@
   }
 
   function postsTable(c) {
-    const rows = S.POST_KEYS.map((k) => {
+    const rows = S.DEV_KEYS.map((k) => {
       const max = k === "order" ? 100 : c[k + "Max"];
       return `<tr><td>${S.POSTS[k].label}</td><td>${c[k]}/${max}</td><td>${holderName(c, k)}</td>` +
         `<td>${signed(S.postDelta(state, c, k))}</td>` +
         `<td><button data-action="post" data-kind="${k}">변경</button></td></tr>`;
     }).join("");
-    return `<h3>내정 담당</h3><table><tr><th>분야</th><th>수치</th><th>담당</th><th>월 변화</th><th></th></tr>${rows}</table>` +
-      `<p class="hint">담당관은 매달 자동으로 내정을 발전시킵니다. 공석이면 수치가 깎입니다. 담당 무장은 다른 명령을 할 수 없습니다.</p>`;
+    const tt = c.posts.tuntian;
+    const ttRow = `<tr><td>둔전</td><td>호족 ${Math.round(c.gentry)}</td><td>${tt ? holderName(c, "tuntian") : "미실시"}</td>` +
+      `<td>${tt ? tuntianText(S.postAbility(state, tt, "tuntian")) : "-"}</td>` +
+      `<td><button data-action="post" data-kind="tuntian">변경</button></td></tr>`;
+    return `<h3>내정 담당</h3><table><tr><th>분야</th><th>수치</th><th>담당</th><th>월 변화</th><th></th></tr>${rows}${ttRow}</table>` +
+      `<p class="hint">담당관은 매달 자동으로 내정을 발전시킵니다. 공석이면 수치가 깎입니다. 담당 무장은 다른 명령을 할 수 없습니다. ` +
+      `둔전은 선택 정책입니다. 군량을 생산하고 호족 세력을 줄이지만, 실시하는 동안 호족 협력이 떨어집니다.</p>`;
+  }
+
+  function tuntianText(ability) {
+    const e = S.tuntianEffect(ability);
+    return `<span class="good">군량 +${Math.round(e.food)}</span>, 호족 -${(e.gentry * 12).toFixed(1)}/년`;
   }
 
   function cmdButton(cmd, label, free) {
@@ -220,6 +237,10 @@
       preview: (o, c) => { const n = S.preview.draft(state, c, o); return `병사 +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`; },
     },
     train: { title: "훈련", stat: "lead", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
+    woo: {
+      title: "회유", stat: "pol", run: (o, c) => S.woo(state, o, c),
+      preview: (o) => `호족 협력 +${S.wooPreview(o)} (금 ${S.COST.woo})`,
+    },
     search: { title: "탐색", stat: "int", run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${Math.min(100, Math.round(25 + o.int / 2))}%` },
   };
 
@@ -255,23 +276,28 @@
       const officers = S.serving(state, c.id)
         .filter((o) => !o.done || (cur && cur.type === "officer" && cur.id === o.id))
         .sort((a, b) => def.stat(b) - def.stat(a));
+      const effect = (ab) => (def.policy ? tuntianText(ab) : signed(S.postGain(kind, ab)));
       const officerRows = officers.map((o) => {
         const k = S.postOf(state, o);
         const note = k === kind ? "현재 담당" : k ? `${S.POSTS[k].label} 담당 중` : "";
         return `<tr class="pick" data-action="doPost" data-kind="${kind}" data-oid="${o.id}"><td>${o.name}</td>` +
-          `<td>${def.stat(o)}</td><td>${signed(S.postGain(kind, def.stat(o)))}</td><td>-</td><td>${note}</td></tr>`;
+          `<td>${def.stat(o)}</td><td>${effect(def.stat(o))}</td><td>-</td><td>${note}</td></tr>`;
       }).join("");
       const clerkRows = S.CLERKS.map((cl, i) =>
         `<tr class="pick" data-action="doPost" data-kind="${kind}" data-tier="${i}"><td>${cl.name}</td>` +
-        `<td>${cl.ability}</td><td>${signed(S.postGain(kind, cl.ability))}</td><td>금 ${cl.salary}/월</td>` +
+        `<td>${cl.ability}</td><td>${effect(cl.ability)}</td><td>금 ${cl.salary}/월</td>` +
         `<td>${cur && cur.type === "clerk" && cur.tier === i ? "현재 담당" : ""}</td></tr>`).join("");
+      const intro = def.policy
+        ? `둔전을 실시하면 군량을 생산하고, 국가가 직접 관리하는 호구를 늘려 호족 세력을 줄입니다. ` +
+          `대신 땅을 잃는 호족들의 협력이 떨어집니다. 현재 호족 세력 ${Math.round(c.gentry)}.`
+        : `현재 ${def.label} ${c[kind]}.`;
       openModal(`<h2>${def.label} 담당 임명</h2>` +
-        `<p class="hint">현재 ${def.label} ${c[kind]}. 무장은 봉급이 없지만 담당하는 동안 다른 명령을 할 수 없습니다. ` +
+        `<p class="hint">${intro} 무장은 봉급이 없지만 담당하는 동안 다른 명령을 할 수 없습니다. ` +
         `관리는 매달 봉급이 나갑니다. 능력 기준은 ${def.statLabel}입니다.</p>` +
         `<table><tr><th>담당</th><th>능력</th><th>월 변화</th><th>봉급</th><th></th></tr>` +
         clerkRows + officerRows +
-        `<tr class="pick" data-action="doPost" data-kind="${kind}" data-empty="1"><td>공석으로 두기</td><td>-</td>` +
-        `<td>${signed(S.postPenalty(c, kind))}</td><td>-</td><td>${!cur ? "현재" : ""}</td></tr></table>` +
+        `<tr class="pick" data-action="doPost" data-kind="${kind}" data-empty="1"><td>${def.policy ? "실시하지 않기" : "공석으로 두기"}</td><td>-</td>` +
+        `<td>${def.policy ? "호족 세력이 서서히 회복" : signed(S.postPenalty(c, kind))}</td><td>-</td><td>${!cur ? "현재" : ""}</td></tr></table>` +
         `<div class="footer"><button data-action="close">취소</button></div>`);
     },
     reward() {
@@ -288,14 +314,15 @@
       openModal(`<h2>이동 · 수송</h2><p class="hint">무장과 함께 병사·금·군량을 인접한 아군 도시로 보냅니다.</p>` +
         `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${state.cities[d].name}</option>`).join("")}</select></div>` +
         checkList(S.idle(state, c.id)) +
-        rangeRow("mvTroops", "병사", c.troops) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
+        rangeRow("mvTroops", "병사", S.marchable(c)) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
+        (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 이동하지 않습니다.</p>` : "") +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doMove">이동</button></div>`);
     },
     attack() {
       const c = state.cities[selected];
       const targets = S.neighbors(c.id).filter((n) => state.cities[n].owner !== c.owner);
       if (!targets.length) { toast("인접한 적 도시가 없습니다."); return; }
-      if (c.troops < S.MIN_SORTIE_TROOPS) { toast(`병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 출진할 수 있습니다.`); return; }
+      if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.lead + b.war - a.lead - a.war);
       openModal(`<h2>출진</h2><p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 통솔·무력·지력이 가장 높은 무장의 능력이 전투에 반영됩니다. 군량은 병사 10명당 1이 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
@@ -303,7 +330,8 @@
           return `<option value="${d}">${t.name} (${S.forceName(state, t.owner)}, 병력 ${t.troops})</option>`;
         }).join("")}</select></div>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
-        rangeRow("atTroops", "병사", c.troops, Math.round(c.troops * 0.7)) +
+        rangeRow("atTroops", "병사", S.marchable(c), Math.round(S.marchable(c) * 0.7)) +
+        (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 출진하지 않고 성에 남습니다.</p>` : "") +
         `<div class="row"><label>전력</label><span id="atEst"></span></div>` +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doAttack">출진</button></div>`);
       modalOnInput = updateEstimate;
@@ -376,11 +404,12 @@
       .map((f) => ({ f, t: S.totals(state, f.id) }))
       .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
       .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.id === state.playerForce ? " (나)" : ""}</td>` +
-        `<td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
+        `<td>${S.regime(state, f.id).label}</td><td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
         `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td></tr>`).join("");
-    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th></tr>${rows}</table>` +
+    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th></tr>${rows}</table>` +
       `<p class="hint">병역 인구는 징병할 수 있는 장정 수입니다. 전사자는 돌아오지 않고, 인구에서 조금씩 회복됩니다. ` +
-      `전쟁 피로는 전사자·패전·대규모 징병으로 오르고 평화로울 때 내려갑니다. 40을 넘으면 치안이 떨어지고, 60을 넘으면 민란이 일어날 수 있습니다.</p>` +
+      `전쟁 피로는 전사자·패전·대규모 징병으로 오르고 평화로울 때 내려갑니다. 30을 넘으면 치안이 떨어지고, 60을 넘으면 민란이 일어날 수 있습니다. ` +
+      `체제는 영토의 호족 세력(인구 가중 평균)으로 정해집니다. 55 이상은 호족연합형, 25 이하는 중앙집권형, 그 사이는 부곡형입니다.</p>` +
       `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`, true);
   }
 
