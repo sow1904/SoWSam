@@ -1,0 +1,553 @@
+// Game rules. No DOM access here so the engine can also run headless in node.
+(function (S) {
+  const STAT_NAMES = { lead: "통솔", war: "무력", int: "지력", pol: "정치" };
+  S.STAT_NAMES = STAT_NAMES;
+
+  S.COST = { develop: 50, reward: 100, draftPerTroop: 0.1 };
+  S.MAX_SORTIE_OFFICERS = 3;
+  S.MIN_SORTIE_TROOPS = 500;
+
+  // ---------- random ----------
+  function rand(state) {
+    // mulberry32, state.seed is advanced on every call
+    let t = (state.seed = (state.seed + 0x6d2b79f5) | 0);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  S.rand = rand;
+  S.chance = (state, pct) => rand(state) * 100 < pct;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  S.clamp = clamp;
+
+  // ---------- setup ----------
+  function parseOfficer(line) {
+    const [name, lead, war, int, pol, at] = line.split(/\s+/);
+    return { name, lead: +lead, war: +war, int: +int, pol: +pol, city: at.slice(1) };
+  }
+
+  S.newGame = function (scenario, playerForce, seed) {
+    const state = {
+      version: 1,
+      scenario: scenario.id,
+      year: scenario.year,
+      month: scenario.month,
+      start: { year: scenario.year, month: scenario.month },
+      seed: seed == null ? (Date.now() & 0x7fffffff) : seed,
+      playerForce,
+      forces: {},
+      cities: {},
+      officers: {},
+      log: [],
+      over: null,
+    };
+    for (const [id, [name, x, y, size]] of Object.entries(S.CITY_DEFS)) {
+      state.cities[id] = {
+        id, name, x, y, size,
+        owner: null,
+        gold: 200 + size * 100,
+        food: 4000 + size * 2000,
+        pop: 40000 + size * 40000,
+        troops: 800 + size * 400,
+        train: 30,
+        farm: 80 + size * 60, farmMax: 200 + size * 160,
+        trade: 80 + size * 60, tradeMax: 200 + size * 160,
+        wall: 150 + size * 80, wallMax: 300 + size * 180,
+        order: 50,
+      };
+    }
+    let n = 0;
+    const addOfficer = (line, force, loyalty) => {
+      const o = parseOfficer(line);
+      if (!state.cities[o.city]) throw new Error("unknown city " + o.city + " for " + o.name);
+      const id = "o" + n++;
+      state.officers[id] = Object.assign(o, {
+        id, force, loyalty,
+        status: force ? "serving" : "free",
+        hidden: !force,
+        done: false,
+        captor: null,
+      });
+      return id;
+    };
+    for (const f of scenario.forces) {
+      const ids = f.officers.map((line, i) => addOfficer(line, f.id, i === 0 ? 100 : 80 + Math.floor(n % 5) * 4));
+      state.forces[f.id] = { id: f.id, name: f.name, color: f.color, ruler: ids[0], alive: true };
+      for (const [cid, troops] of Object.entries(f.cities)) {
+        const c = state.cities[cid];
+        c.owner = f.id;
+        c.troops = troops;
+        c.train = 55;
+        c.gold = 600 + c.size * 150;
+        c.food = troops * 2 + 5000;
+        c.order = 60;
+      }
+    }
+    for (const line of scenario.free) addOfficer(line, null, 0);
+    S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
+    return state;
+  };
+
+  // ---------- queries ----------
+  // The first year is a truce: the AI only expands into vacant cities.
+  S.TRUCE_MONTHS = 12;
+  S.monthsElapsed = (state) => (state.year - state.start.year) * 12 + state.month - state.start.month;
+  S.inTruce = (state) => S.monthsElapsed(state) < S.TRUCE_MONTHS;
+
+  S.addLog = function (state, text, kind) {
+    state.log.push({ y: state.year, m: state.month, text, kind: kind || "info" });
+    if (state.log.length > 300) state.log.splice(0, state.log.length - 300);
+  };
+
+  const ADJ = {};
+  for (const [a, b] of S.ROADS) {
+    (ADJ[a] = ADJ[a] || []).push(b);
+    (ADJ[b] = ADJ[b] || []).push(a);
+  }
+  S.neighbors = (cid) => ADJ[cid] || [];
+
+  S.officersIn = (state, cid, filter) =>
+    Object.values(state.officers).filter((o) => o.city === cid && (!filter || filter(o)));
+  S.serving = (state, cid) => S.officersIn(state, cid, (o) => o.status === "serving");
+  S.idle = (state, cid) => S.serving(state, cid).filter((o) => !o.done);
+  S.visibleFree = (state, cid) => S.officersIn(state, cid, (o) => o.status === "free" && !o.hidden);
+  S.captivesIn = (state, cid, force) =>
+    S.officersIn(state, cid, (o) => o.status === "captive" && o.captor === force);
+  S.citiesOf = (state, fid) => Object.values(state.cities).filter((c) => c.owner === fid);
+  S.officersOf = (state, fid) => Object.values(state.officers).filter((o) => o.force === fid && o.status === "serving");
+  S.isRuler = (state, o) => o.force && state.forces[o.force] && state.forces[o.force].ruler === o.id;
+  S.forceName = (state, fid) => (fid && state.forces[fid] ? state.forces[fid].name + "군" : "공백지");
+  S.best = (list, key) => list.reduce((a, b) => (b[key] > a[key] ? b : a), list[0]);
+
+  // ---------- domestic commands ----------
+  // Each returns {ok, msg}. On success the officer has used their action this month.
+  function act(state, oid, cid) {
+    const o = state.officers[oid];
+    const c = state.cities[cid];
+    if (!o || !c) return [null, null, "잘못된 대상입니다."];
+    if (o.status !== "serving" || o.city !== cid || o.force !== c.owner) return [null, null, "이 도시의 무장이 아닙니다."];
+    if (o.done) return [null, null, `${o.name}은(는) 이번 달 이미 행동했습니다.`];
+    return [o, c, null];
+  }
+  const fail = (msg) => ({ ok: false, msg });
+
+  S.preview = {
+    farm: (o) => 10 + Math.round(o.pol / 4),
+    trade: (o) => 10 + Math.round(o.pol / 4),
+    wall: (o) => 12 + Math.round(o.lead / 4),
+    order: (o) => 4 + Math.round((o.war + o.lead) / 25),
+    train: (o) => 5 + Math.round(o.lead / 8),
+    draft: (c, o) => Math.round(Math.min(c.pop * 0.02, 1500 + o.lead * 15) * (0.6 + c.order / 250)),
+  };
+
+  S.develop = function (state, oid, cid, kind) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    const max = c[kind + "Max"];
+    if (c[kind] >= max) return fail("이미 최대치입니다.");
+    if (c.gold < S.COST.develop) return fail("금이 부족합니다.");
+    c.gold -= S.COST.develop;
+    const gain = Math.min(max - c[kind], S.preview[kind](o));
+    c[kind] += gain;
+    o.done = true;
+    const label = { farm: "농업", trade: "상업", wall: "성벽" }[kind];
+    return { ok: true, msg: `${o.name}이(가) ${c.name}의 ${label}을(를) ${gain} 올렸습니다.` };
+  };
+
+  S.patrol = function (state, oid, cid) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    if (c.order >= 100) return fail("치안이 이미 최대입니다.");
+    const gain = Math.min(100 - c.order, S.preview.order(o));
+    c.order += gain;
+    o.done = true;
+    return { ok: true, msg: `${o.name}이(가) ${c.name}을(를) 순찰해 치안이 ${gain} 올랐습니다.` };
+  };
+
+  S.draft = function (state, oid, cid) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    const amount = S.preview.draft(c, o);
+    const cost = Math.ceil(amount * S.COST.draftPerTroop);
+    if (amount < 100) return fail("징병할 인구가 부족합니다.");
+    if (c.gold < cost) return fail(`금이 부족합니다. (필요 ${cost})`);
+    c.gold -= cost;
+    c.train = Math.round((c.train * c.troops + 10 * amount) / (c.troops + amount));
+    c.troops += amount;
+    c.pop -= amount;
+    c.order = Math.max(0, c.order - 4);
+    o.done = true;
+    return { ok: true, msg: `${o.name}이(가) ${c.name}에서 병사 ${amount}명을 모았습니다.` };
+  };
+
+  S.drill = function (state, oid, cid) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    if (c.troops <= 0) return fail("훈련할 병사가 없습니다.");
+    if (c.train >= 100) return fail("훈련도가 이미 최대입니다.");
+    const gain = Math.min(100 - c.train, S.preview.train(o));
+    c.train += gain;
+    o.done = true;
+    return { ok: true, msg: `${o.name}이(가) ${c.name}의 병사를 훈련해 훈련도가 ${gain} 올랐습니다.` };
+  };
+
+  S.search = function (state, oid, cid) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    o.done = true;
+    const hidden = S.officersIn(state, cid, (x) => x.status === "free" && x.hidden);
+    for (const h of hidden) {
+      if (S.chance(state, 25 + o.int / 2)) {
+        h.hidden = false;
+        return { ok: true, found: h.id, msg: `${o.name}이(가) 재야의 인재 ${h.name}을(를) 찾아냈습니다!` };
+      }
+    }
+    if (S.chance(state, 40)) {
+      const g = 30 + Math.floor(rand(state) * 120);
+      c.gold += g;
+      return { ok: true, msg: `${o.name}이(가) 탐색 중 금 ${g}을(를) 얻었습니다.` };
+    }
+    return { ok: true, msg: `${o.name}이(가) ${c.name}을(를) 탐색했지만 아무것도 찾지 못했습니다.` };
+  };
+
+  S.recruitChance = function (state, recruiter, target) {
+    if (target.status === "free") return clamp(Math.round(35 + recruiter.int / 2), 5, 95);
+    if (target.status === "captive") {
+      if (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id) return 0;
+      return clamp(Math.round(30 + recruiter.int / 3 - (target.loyalty - 50) * 0.6), 3, 90);
+    }
+    return 0;
+  };
+
+  S.recruit = function (state, oid, cid, targetId) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return fail(err);
+    const t = state.officers[targetId];
+    if (!t || t.city !== cid) return fail("대상이 이 도시에 없습니다.");
+    const valid = (t.status === "free" && !t.hidden) || (t.status === "captive" && t.captor === c.owner);
+    if (!valid) return fail("등용할 수 없는 대상입니다.");
+    const pct = S.recruitChance(state, o, t);
+    if (pct <= 0) return fail(`${t.name}은(는) 등용할 수 없습니다.`);
+    o.done = true;
+    if (S.chance(state, pct)) {
+      const old = t.force;
+      t.loyalty = t.status === "free" ? 75 : 65;
+      t.force = c.owner;
+      t.status = "serving";
+      t.hidden = false;
+      t.captor = null;
+      t.done = true;
+      const from = old && old !== c.owner ? ` (${S.forceName(state, old)} 출신)` : "";
+      return { ok: true, joined: true, msg: `${o.name}의 설득으로 ${t.name}이(가) ${S.forceName(state, c.owner)}에 합류했습니다!${from}` };
+    }
+    return { ok: true, joined: false, msg: `${o.name}이(가) ${t.name}을(를) 설득했지만 거절당했습니다.` };
+  };
+
+  S.reward = function (state, cid, targetId) {
+    const c = state.cities[cid];
+    const t = state.officers[targetId];
+    if (!t || t.status !== "serving" || t.city !== cid || t.force !== c.owner) return fail("포상할 수 없는 대상입니다.");
+    if (S.isRuler(state, t)) return fail("군주에게는 포상할 수 없습니다.");
+    if (t.loyalty >= 100) return fail("충성이 이미 최대입니다.");
+    if (t.rewarded) return fail("이번 달에 이미 포상했습니다.");
+    if (c.gold < S.COST.reward) return fail("금이 부족합니다.");
+    c.gold -= S.COST.reward;
+    const gain = Math.min(100 - t.loyalty, 6 + Math.floor(rand(state) * 6));
+    t.loyalty += gain;
+    t.rewarded = true;
+    return { ok: true, msg: `${t.name}에게 금 ${S.COST.reward}을(를) 하사해 충성이 ${gain} 올랐습니다.` };
+  };
+
+  S.release = function (state, cid, targetId) {
+    const t = state.officers[targetId];
+    const c = state.cities[cid];
+    if (!t || t.status !== "captive" || t.city !== cid || t.captor !== c.owner) return fail("석방할 수 없는 대상입니다.");
+    freeCaptive(state, t);
+    return { ok: true, msg: `${t.name}을(를) 석방했습니다.` };
+  };
+
+  // Send a released/escaped captive back to their own force if it still exists.
+  function freeCaptive(state, t) {
+    t.captor = null;
+    const home = t.force && state.forces[t.force] && state.forces[t.force].alive ? S.citiesOf(state, t.force) : [];
+    if (home.length) {
+      t.status = "serving";
+      t.city = home[Math.floor(rand(state) * home.length)].id;
+    } else {
+      t.status = "free";
+      t.force = null;
+      t.hidden = false;
+    }
+  }
+
+  // Move officers and optionally troops/gold/food to an adjacent own city.
+  S.move = function (state, cid, targetCid, oids, troops, gold, food) {
+    const c = state.cities[cid];
+    const t = state.cities[targetCid];
+    if (!t || !S.neighbors(cid).includes(targetCid)) return fail("인접한 도시가 아닙니다.");
+    if (t.owner !== c.owner) return fail("자기 세력 도시로만 이동할 수 있습니다.");
+    if (!oids.length) return fail("이동할 무장을 골라 주세요.");
+    for (const id of oids) {
+      const [, , err] = act(state, id, cid);
+      if (err) return fail(err);
+    }
+    troops = clamp(Math.floor(troops || 0), 0, c.troops);
+    gold = clamp(Math.floor(gold || 0), 0, c.gold);
+    food = clamp(Math.floor(food || 0), 0, c.food);
+    if (troops) {
+      t.train = Math.round((t.train * t.troops + c.train * troops) / (t.troops + troops));
+      t.troops += troops;
+      c.troops -= troops;
+    }
+    c.gold -= gold; t.gold += gold;
+    c.food -= food; t.food += food;
+    const names = oids.map((id) => state.officers[id]);
+    for (const o of names) { o.city = targetCid; o.done = true; }
+    const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`].filter(Boolean).join(", ");
+    return { ok: true, msg: `${names.map((o) => o.name).join(", ")}이(가) ${t.name}(으)로 이동했습니다.${cargo ? " (" + cargo + ")" : ""}` };
+  };
+
+  // ---------- battle ----------
+  function sideStats(officers, fallback) {
+    if (!officers.length) return { lead: fallback, war: fallback, int: fallback };
+    return {
+      lead: S.best(officers, "lead").lead,
+      war: S.best(officers, "war").war,
+      int: S.best(officers, "int").int,
+    };
+  }
+
+  function power(troops, st, train, wallBonus) {
+    return troops * (0.6 + st.lead / 250) * (0.6 + train / 250) * (0.9 + st.war / 1000 + st.int / 1000) * wallBonus;
+  }
+  const wallBonus = (c) => 1 + c.wall / 2000;
+
+  // Rough strength comparison used by the UI and the AI.
+  S.estimate = function (state, fromCid, targetCid, oids, troops) {
+    const from = state.cities[fromCid];
+    const t = state.cities[targetCid];
+    const att = sideStats(oids.map((id) => state.officers[id]), 30);
+    const def = sideStats(S.serving(state, targetCid).filter((o) => o.force === t.owner), t.owner ? 40 : 35);
+    const a = power(troops, att, from.train, 1);
+    const d = power(t.troops, def, t.train, wallBonus(t));
+    return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
+  };
+
+  S.attack = function (state, cid, targetCid, oids, troops) {
+    const c = state.cities[cid];
+    const t = state.cities[targetCid];
+    if (!t || !S.neighbors(cid).includes(targetCid)) return fail("인접한 도시만 공격할 수 있습니다.");
+    if (t.owner === c.owner) return fail("자기 세력 도시는 공격할 수 없습니다.");
+    if (!oids.length || oids.length > S.MAX_SORTIE_OFFICERS) return fail(`무장을 1~${S.MAX_SORTIE_OFFICERS}명 골라 주세요.`);
+    for (const id of oids) {
+      const [, , err] = act(state, id, cid);
+      if (err) return fail(err);
+    }
+    troops = Math.floor(troops);
+    if (troops < S.MIN_SORTIE_TROOPS || troops > c.troops) return fail(`병사는 ${S.MIN_SORTIE_TROOPS}~${c.troops}명 사이여야 합니다.`);
+    const foodNeed = Math.ceil(troops / 10);
+    if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
+
+    const attackers = oids.map((id) => state.officers[id]);
+    const defenders = S.serving(state, targetCid).filter((o) => o.force === t.owner);
+    attackers.forEach((o) => (o.done = true));
+    c.troops -= troops;
+    c.food -= foodNeed;
+
+    const atkForce = c.owner;
+    const defForce = t.owner;
+    const report = { lines: [], attackerWon: false, from: c.name, to: t.name, captured: [], attacker: atkForce, defender: defForce };
+    const say = (s) => report.lines.push(s);
+    const att = sideStats(attackers, 30);
+    const def = sideStats(defenders, defForce ? 40 : 35);
+    let A = troops, D = t.troops;
+    const A0 = A, D0 = Math.max(D, 1);
+    let aMorale = 1, dMorale = 1;
+    say(`${S.forceName(state, atkForce)} ${A}명이 ${t.name}(${S.forceName(state, defForce)}, 수비 ${D}명)을(를) 공격합니다.`);
+
+    // Duel between the strongest warriors, when both sides have one.
+    if (defenders.length && S.chance(state, 30)) {
+      const a = S.best(attackers, "war");
+      const d = S.best(defenders, "war");
+      if (a.war >= 70 || d.war >= 70) {
+        const roll = (a.war - d.war) / 2 + (rand(state) - 0.5) * 40;
+        if (Math.abs(roll) < 4) say(`일기토! ${a.name}과(와) ${d.name}이(가) 맞붙었으나 승부가 나지 않았습니다.`);
+        else if (roll > 0) { dMorale = 0.85; say(`일기토! ${a.name}이(가) ${d.name}을(를) 물리쳤습니다. 수비군의 사기가 떨어집니다.`); }
+        else { aMorale = 0.85; say(`일기토! ${d.name}이(가) ${a.name}을(를) 물리쳤습니다. 공격군의 사기가 떨어집니다.`); }
+      }
+    }
+
+    const wb = wallBonus(t);
+    for (let round = 1; round <= 8 && A > 0 && D > 0; round++) {
+      const aPow = power(A, att, c.train, 1) * aMorale;
+      const dPow = power(D, def, t.train, wb) * dMorale;
+      const lossD = Math.min(D, Math.round(aPow * 0.09 * (0.85 + rand(state) * 0.3)));
+      const lossA = Math.min(A, Math.round(dPow * 0.09 * (0.85 + rand(state) * 0.3)));
+      D -= lossD; A -= lossA;
+      t.wall = Math.max(0, t.wall - Math.round(lossD * 0.02));
+      say(`${round}차 교전: 공격군 -${lossA} (${A}), 수비군 -${lossD} (${D})`);
+      if (D <= 0 || D < D0 * 0.2) { report.attackerWon = true; break; }
+      if (A < A0 * 0.3) break;
+    }
+    if (!report.attackerWon && D > 0 && A > 0 && D < A * 0.25) report.attackerWon = true;
+
+    const survivors = Math.max(0, A);
+    if (report.attackerWon) {
+      say(`${t.name} 함락! ${S.forceName(state, atkForce)}이(가) 성을 차지했습니다.`);
+      // Defending officers escape to an adjacent friendly city or are captured.
+      const escapes = defForce ? S.neighbors(targetCid).filter((n) => state.cities[n].owner === defForce) : [];
+      for (const d of defenders) {
+        if (escapes.length && S.chance(state, S.isRuler(state, d) ? 85 : 55)) {
+          d.city = escapes[Math.floor(rand(state) * escapes.length)];
+          say(`${d.name}은(는) ${state.cities[d.city].name}(으)로 달아났습니다.`);
+        } else {
+          d.status = "captive";
+          d.captor = atkForce;
+          report.captured.push(d.id);
+          say(`${d.name}을(를) 사로잡았습니다.`);
+        }
+      }
+      // Captives the defender held are freed.
+      for (const p of S.officersIn(state, targetCid, (x) => x.status === "captive" && x.captor === defForce)) {
+        if (p.force === atkForce) { p.status = "serving"; p.captor = null; say(`포로였던 ${p.name}이(가) 풀려나 합류했습니다.`); }
+        else freeCaptive(state, p);
+      }
+      const remainingD = Math.max(0, D);
+      t.owner = atkForce;
+      t.troops = survivors + Math.floor(remainingD * 0.3);
+      t.train = c.train;
+      t.gold = Math.floor(t.gold / 2);
+      t.food = Math.floor(t.food / 2);
+      t.order = Math.max(10, t.order - 20);
+      attackers.forEach((o) => (o.city = targetCid));
+      if (defForce) checkForce(state, defForce, report);
+    } else {
+      t.troops = Math.max(0, D);
+      c.troops += survivors;
+      say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${c.name}(으)로 물러났습니다.`);
+    }
+    const kind = report.attackerWon ? "war" : "warfail";
+    S.addLog(state, report.attackerWon
+      ? `${S.forceName(state, atkForce)}이(가) ${S.forceName(state, defForce)}의 ${t.name}을(를) 함락했습니다.`
+      : `${S.forceName(state, atkForce)}의 ${t.name} 공격이 실패했습니다.`, kind);
+    return { ok: true, report, msg: report.lines[report.lines.length - 1] };
+  };
+
+  // After losing a city: pick a new ruler if needed, or destroy the force.
+  function checkForce(state, fid, report) {
+    const f = state.forces[fid];
+    const cities = S.citiesOf(state, fid);
+    const ruler = state.officers[f.ruler];
+    if (!cities.length) {
+      f.alive = false;
+      for (const o of Object.values(state.officers)) {
+        if (o.force !== fid) continue;
+        if (o.status === "serving") { o.status = "free"; o.force = null; o.hidden = false; }
+      }
+      const msg = `${f.name}군이 멸망했습니다.`;
+      if (report) report.lines.push(msg);
+      S.addLog(state, msg, "fall");
+      return;
+    }
+    if (ruler.status !== "serving") {
+      const heirs = S.officersOf(state, fid);
+      if (!heirs.length) {
+        // No one left to lead; the cities fall vacant.
+        cities.forEach((c) => (c.owner = null));
+        return checkForce(state, fid, report);
+      }
+      const heir = heirs.reduce((a, b) => (b.lead + b.pol > a.lead + a.pol ? b : a));
+      f.ruler = heir.id;
+      heir.loyalty = 100;
+      f.name = heir.name;
+      const msg = `${ruler.name}이(가) 사로잡혀 ${heir.name}이(가) 세력을 이어받았습니다.`;
+      if (report) report.lines.push(msg);
+      S.addLog(state, msg, "fall");
+    }
+  }
+
+  // ---------- turn ----------
+  // Monthly gold income and troop upkeep (1 gold per 100 soldiers).
+  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200));
+  S.upkeep = (c) => Math.ceil(c.troops / 100);
+
+  S.endMonth = function (state) {
+    const harvest = state.month === 9;
+    for (const c of Object.values(state.cities)) {
+      const eff = 0.5 + c.order / 200;
+      if (c.owner) {
+        c.gold += S.income(c) - S.upkeep(c);
+        if (c.gold < 0) {
+          c.gold = 0;
+          const lost = Math.ceil(c.troops * 0.05);
+          c.troops -= lost;
+          if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
+        }
+        if (harvest) c.food += Math.round((c.farm * 10 + c.pop / 50) * eff);
+        c.food -= Math.ceil(c.troops / 50);
+        if (c.food < 0) {
+          c.food = 0;
+          const lost = Math.ceil(c.troops * 0.1);
+          c.troops -= lost;
+          c.order = Math.max(0, c.order - 10);
+          if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
+        }
+        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + (c.order - 30) / 4000));
+        if (c.order > 40) c.order -= 1;
+      } else {
+        // Vacant cities slowly rebuild local militia.
+        const cap = 1000 + c.size * 600;
+        if (c.troops < cap) c.troops = Math.min(cap, c.troops + 60);
+      }
+    }
+    // Loyalty and defection.
+    for (const o of Object.values(state.officers)) {
+      o.done = false;
+      o.rewarded = false;
+      if (o.status !== "serving" || S.isRuler(state, o)) continue;
+      if (o.loyalty < 40 && S.chance(state, (40 - o.loyalty) / 2)) {
+        const f = o.force;
+        o.status = "free";
+        o.force = null;
+        o.hidden = false;
+        S.addLog(state, `${o.name}이(가) ${S.forceName(state, f)}을(를) 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
+      } else if (S.chance(state, 10)) {
+        o.loyalty = Math.max(0, o.loyalty - 1);
+      }
+    }
+    // Captives occasionally escape.
+    for (const o of Object.values(state.officers)) {
+      if (o.status === "captive" && S.chance(state, 3)) {
+        freeCaptive(state, o);
+        S.addLog(state, `포로 ${o.name}이(가) 탈출했습니다.`, "info");
+      }
+    }
+    state.month++;
+    if (state.month > 12) { state.month = 1; state.year++; }
+    if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
+    S.checkOver(state);
+  };
+
+  S.checkOver = function (state) {
+    if (state.over) return state.over;
+    const alive = Object.values(state.forces).filter((f) => S.citiesOf(state, f.id).length > 0);
+    for (const f of Object.values(state.forces)) if (!alive.includes(f)) f.alive = false;
+    if (state.playerForce && !state.forces[state.playerForce].alive) state.over = { result: "lose" };
+    else {
+      const owners = new Set(Object.values(state.cities).map((c) => c.owner));
+      if (owners.size === 1 && !owners.has(null)) state.over = { result: "win", force: [...owners][0] };
+    }
+    return state.over;
+  };
+
+  S.totals = function (state, fid) {
+    const cs = S.citiesOf(state, fid);
+    return {
+      cities: cs.length,
+      officers: S.officersOf(state, fid).length,
+      troops: cs.reduce((s, c) => s + c.troops, 0),
+      gold: cs.reduce((s, c) => s + c.gold, 0),
+      food: cs.reduce((s, c) => s + c.food, 0),
+    };
+  };
+})(globalThis.SAM = globalThis.SAM || {});
