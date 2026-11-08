@@ -4,7 +4,7 @@
   const byDesc = (key) => (a, b) => b[key] - a[key];
 
   function enemyNeighbors(state, c) {
-    return S.neighbors(c.id).map((id) => state.cities[id]).filter((n) => n.owner !== c.owner);
+    return S.neighbors(c.id).map((id) => state.cities[id]).filter((n) => n.owner !== c.owner && !S.allied(state, c.owner, n.owner));
   }
   // Cities the AI is willing to attack right now.
   function attackable(state, c) {
@@ -211,7 +211,21 @@
     state._plans = state._plans || {};
     state._plans[fid] = planCampaign(state, fid);
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
+    seekAlly(state, fid);
   };
+
+  // Now and then a computer force sends an envoy to another computer force.
+  function seekAlly(state, fid) {
+    if (!S.chance(state, 3) || S.allies(state, fid).length >= 2) return;
+    // Only neighbours, or forces that share a neighbour with this one, are worth courting.
+    const near = (to) => S.touches(state, fid, to) || Object.keys(state.forces).some((x) =>
+      x !== fid && x !== to && state.forces[x].alive && S.touches(state, fid, x) && S.touches(state, to, x));
+    const others = Object.values(state.forces).filter((f) => f.alive && f.id !== fid && f.id !== state.playerForce &&
+      !S.allied(state, fid, f.id) && !S.pactCooldown(state, fid, f.id) && near(f.id));
+    if (!others.length) return;
+    const to = others[Math.floor(S.rand(state) * others.length)].id;
+    if (S.pactChance(state, fid, to) >= 40) S.proposePact(state, fid, to);
+  }
 
   // All non-player forces act, then the month advances.
   S.advanceTurn = function (state, onEvent) {

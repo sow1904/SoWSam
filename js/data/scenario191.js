@@ -17,6 +17,9 @@
     desc: "동탁이 낙양을 불태우고 장안으로 물러났다. 반동탁 연합은 흩어지고, 관동의 군웅은 서로의 땅을 노린다.",
     year: 191,
     month: 7,
+    // 손견 fought as 원술's general, and 유비 served under 공손찬 as 평원상.
+    // Both are kept as playable forces allied to their patrons.
+    alliances: [["sunjian", "yuanshu"], ["liubei", "gongsunzan"]],
     // Cities whose starting state differs from the defaults.
     cityState: {
       // 낙양 was burned and its people driven west to 장안 in 190.

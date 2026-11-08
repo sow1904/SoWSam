@@ -18,6 +18,12 @@
   S.rand = rand;
   S.chance = (state, pct) => rand(state) * 100 < pct;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // Korean particle that fits the last syllable: S.josa("조조군", "이", "가") -> "조조군이".
+  S.josa = function (word, withFinal, withoutFinal) {
+    const code = word.charCodeAt(word.length - 1) - 0xac00;
+    const hasFinal = code >= 0 && code <= 11171 && code % 28 !== 0;
+    return word + (hasFinal ? withFinal : withoutFinal);
+  };
   S.clamp = clamp;
 
   // ---------- setup ----------
@@ -26,19 +32,34 @@
     return { name, lead: +lead, war: +war, int: +int, pol: +pol, city: at.slice(1) };
   }
 
-  // Lifespan options. "history": everyone dies in the year the histories give.
-  // "natural": those who died by violence live out a natural lifespan instead.
+  // Lifespan options.
+  // "natural" (가상 수명): from the recorded death year, a natural death comes
+  // on a roll of 1 on a six-sided die each year. Those who died by violence are
+  // safe until 50, then roll a twelve-sided die each year instead.
+  // "history" (정사 수명): everyone dies in the year the histories give.
   S.LIFESPAN = { natural: "가상 수명", history: "정사 수명" };
+  S.VIOLENT_SAFE_AGE = 50;
 
-  // Decide when an officer dies in this game. The month is random.
-  function deathDate(state, life, lifespan) {
-    let year = life.died;
-    if (life.violent && lifespan !== "history") year = Math.max(life.died, life.born + 55 + Math.floor(rand(state) * 16));
-    let month = 1 + Math.floor(rand(state) * 12);
-    if (year === state.start.year && month < state.start.month) {
-      month = state.start.month + Math.floor(rand(state) * (13 - state.start.month));
+  // Schedule a death in the current year, in a month not yet past.
+  function deathThisYear(state, fromMonth) {
+    return { year: state.year, month: fromMonth + Math.floor(rand(state) * (13 - fromMonth)) };
+  }
+  function setupLife(state, o, life) {
+    o.born = life.born;
+    o.death = null;
+    if (state.lifespan === "history") {
+      o.death = { year: Math.max(life.died, state.year), month: 1 + Math.floor(rand(state) * 12) };
+      if (o.death.year === state.year && o.death.month < state.month) o.death = deathThisYear(state, state.month);
+    } else {
+      o.rollFrom = life.violent ? life.born + S.VIOLENT_SAFE_AGE : life.died;
+      o.die = life.violent ? 12 : 6;
+      rollDeath(state, o, state.month);
     }
-    return { year, month };
+  }
+  // The yearly roll: a 1 means this is the year.
+  function rollDeath(state, o, fromMonth) {
+    if (o.death || o.status === "dead" || state.year < o.rollFrom) return;
+    if (1 + Math.floor(rand(state) * o.die) === 1) o.death = deathThisYear(state, fromMonth);
   }
 
   S.age = (state, o) => state.year - o.born;
@@ -60,6 +81,7 @@
       log: [],
       over: null,
       map: scenario.map,
+      pacts: {},
     };
     S.useMap(scenario.map);
     for (const [id, [name, prov, seat, lat, lon, size, gentry]] of Object.entries(S.MAP.cities)) {
@@ -89,7 +111,7 @@
       if (!state.cities[o.city]) throw new Error("unknown city " + o.city + " for " + o.name);
       const life = S.PEOPLE[o.name];
       if (!life) throw new Error("no birth/death years for " + o.name);
-      if (life.died < state.year) throw new Error(o.name + " died before the scenario starts");
+      if (life.died < state.year && !life.violent) throw new Error(o.name + " died before the scenario starts");
       const id = "o" + n++;
       const young = state.year - life.born < S.ADULT_AGE;
       state.officers[id] = Object.assign(o, {
@@ -100,9 +122,8 @@
         hidden: !force || young,
         done: false,
         captor: null,
-        born: life.born,
-        death: deathDate(state, life, state.lifespan),
       });
+      setupLife(state, state.officers[id], life);
       return id;
     };
     for (const f of scenario.forces) {
@@ -124,6 +145,7 @@
       }
     }
     for (const line of scenario.free) addOfficer(line, null, 0);
+    for (const [a, b] of scenario.alliances || []) S.makePact(state, a, b);
     for (const [cid, over] of Object.entries(scenario.cityState || {})) {
       const c = state.cities[cid];
       Object.assign(c, over);
@@ -558,6 +580,7 @@
     const t = state.cities[targetCid];
     if (!t || !S.neighbors(cid).includes(targetCid)) return fail("인접한 도시만 공격할 수 있습니다.");
     if (t.owner === c.owner) return fail("자기 세력 도시는 공격할 수 없습니다.");
+    if (S.allied(state, c.owner, t.owner)) return fail(`${S.josa(S.forceName(state, t.owner), "과", "와")}는 동맹 중입니다. 먼저 동맹을 파기해야 합니다.`);
     if (!oids.length || oids.length > S.MAX_SORTIE_OFFICERS) return fail(`무장을 1~${S.MAX_SORTIE_OFFICERS}명 골라 주세요.`);
     for (const id of oids) {
       const [, , err] = act(state, id, cid);
@@ -703,7 +726,7 @@
       heir.loyalty = 100;
       f.name = heir.name;
       const how = ruler.status === "dead" ? "세상을 떠나" : "사로잡혀";
-      const msg = `${ruler.name}이(가) ${how} ${heir.name}이(가) 세력을 이어받았습니다.`;
+      const msg = `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(heir.name, "이", "가")} 세력을 이어받았습니다.`;
       if (report) report.lines.push(msg);
       S.addLog(state, msg, "fall");
     }
@@ -779,15 +802,109 @@
     runDeaths(state);
     state.month++;
     if (state.month > 12) { state.month = 1; state.year++; }
-    if (state.month === 1) runComingOfAge(state);
+    if (state.month === 1) {
+      runComingOfAge(state);
+      if (state.lifespan !== "history") for (const o of Object.values(state.officers)) rollDeath(state, o, 1);
+    }
+    runPacts(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
     S.checkOver(state);
   };
 
+  // ---------- diplomacy ----------
+  // An alliance means the two forces will not attack each other. It lasts until
+  // one side breaks it; a broken alliance cannot be renewed for a year.
+  const pactKey = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
+  S.PACT_COOLDOWN = 12;
+  S.PACT_COST = 200;
+  S.allied = (state, a, b) => {
+    if (!a || !b || a === b) return false;
+    const p = state.pacts[pactKey(a, b)];
+    return !!(p && p.active);
+  };
+  S.allies = (state, fid) => Object.keys(state.forces).filter((f) => S.allied(state, fid, f));
+  S.makePact = function (state, a, b) {
+    state.pacts[pactKey(a, b)] = { active: true, since: S.monthsElapsed(state) };
+  };
+  S.pactCooldown = function (state, a, b) {
+    const p = state.pacts[pactKey(a, b)];
+    if (!p || p.active || p.brokenAt == null) return 0;
+    return Math.max(0, p.brokenAt + S.PACT_COOLDOWN - S.monthsElapsed(state));
+  };
+  // Breaking faith costs the breaker public order everywhere.
+  S.breakPact = function (state, fid, other) {
+    if (!S.allied(state, fid, other)) return fail("동맹 관계가 아닙니다.");
+    const p = state.pacts[pactKey(fid, other)];
+    p.active = false;
+    p.brokenAt = S.monthsElapsed(state);
+    for (const c of S.citiesOf(state, fid)) c.order = Math.max(0, c.order - 5);
+    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} ${S.josa(S.forceName(state, other), "과", "와")}의 동맹을 파기했습니다.`;
+    S.addLog(state, msg, fid === state.playerForce || other === state.playerForce ? "warn" : "info");
+    return { ok: true, msg };
+  };
+  S.forcePower = (state, fid) => S.citiesOf(state, fid).reduce((s, c) => s + c.troops, 0);
+  const touches = S.touches = (state, a, b) => S.citiesOf(state, a).some((c) => S.neighbors(c.id).some((n) => state.cities[n].owner === b));
+  // How likely a computer force is to accept an alliance.
+  S.pactChance = function (state, from, to) {
+    if (!state.forces[to].alive || S.allied(state, from, to) || S.pactCooldown(state, from, to)) return 0;
+    const envoys = S.officersOf(state, from);
+    const envoy = envoys.length ? S.best(envoys, "pol") : null;
+    const mine = S.forcePower(state, from);
+    const theirs = S.forcePower(state, to) || 1;
+    let p = 15 + (envoy ? envoy.pol / 3 : 0);
+    if (mine >= theirs) p += 15; // a strong friend is worth having
+    if (state.forces[to].weariness > 30) p += 10;
+    if (touches(state, from, to) && theirs > mine * 1.5) p -= 25; // they would rather conquer
+    // A common threat: a third force on their border that outmatches them.
+    const threat = Object.keys(state.forces).some((f) => f !== from && f !== to && state.forces[f].alive &&
+      !S.allied(state, to, f) && touches(state, to, f) && S.forcePower(state, f) > theirs);
+    if (threat) p += 15;
+    return clamp(Math.round(p), 5, 85);
+  };
+  // The player sends an envoy with a gift from their richest city.
+  S.proposePact = function (state, from, to) {
+    state.pactTried = state.pactTried || {};
+    if (state.pactTried[to] === S.monthsElapsed(state)) return fail("이번 달에는 이미 사신을 보냈습니다.");
+    const cd = S.pactCooldown(state, from, to);
+    if (cd) return fail(`동맹이 깨진 지 얼마 되지 않았습니다. ${cd}개월 뒤에 다시 제의할 수 있습니다.`);
+    if (S.allied(state, from, to)) return fail("이미 동맹 중입니다.");
+    const purse = S.citiesOf(state, from).reduce((a, b) => (b.gold > a.gold ? b : a));
+    if (purse.gold < S.PACT_COST) return fail(`예물로 보낼 금 ${S.PACT_COST}이 있는 도시가 없습니다.`);
+    const chance = S.pactChance(state, from, to);
+    purse.gold -= S.PACT_COST;
+    state.pactTried[to] = S.monthsElapsed(state);
+    if (S.chance(state, chance)) {
+      S.makePact(state, from, to);
+      S.addLog(state, `${S.josa(S.forceName(state, from), "과", "와")} ${S.josa(S.forceName(state, to), "이", "가")} 동맹을 맺었습니다.`,
+        from === state.playerForce ? "sys" : "info");
+      return { ok: true, msg: `${S.josa(S.forceName(state, to), "이", "가")} 동맹을 받아들였습니다.` };
+    }
+    return { ok: true, msg: `${S.josa(S.forceName(state, to), "이", "가")} 동맹 제의를 거절했습니다. (예물 금 ${S.PACT_COST})` };
+  };
+  // A computer force drops an alliance once the ally is all that stands between
+  // it and further conquest, and now and then turns on a far weaker ally.
+  function runPacts(state) {
+    for (const [key, p] of Object.entries(state.pacts)) {
+      if (!p.active) continue;
+      const [a, b] = key.split("|");
+      if (!state.forces[a].alive || !state.forces[b].alive) { p.active = false; continue; }
+      for (const [me, other] of [[a, b], [b, a]]) {
+        if (me === state.playerForce || !S.allied(state, me, other) || !touches(state, me, other)) continue;
+        const otherFront = S.citiesOf(state, me).some((c) => S.neighbors(c.id).some((n) => {
+          const o = state.cities[n].owner;
+          return o !== me && !S.allied(state, me, o);
+        }));
+        const weak = S.citiesOf(state, me).length >= 3 * S.citiesOf(state, other).length &&
+          S.forcePower(state, me) > 3 * S.forcePower(state, other);
+        if ((!otherFront && S.chance(state, 10)) || (weak && S.chance(state, 2))) S.breakPact(state, me, other);
+      }
+    }
+  }
+
   // ---------- lifespans ----------
   function runDeaths(state) {
     for (const o of Object.values(state.officers)) {
-      if (o.status === "dead" || o.death.year !== state.year || o.death.month !== state.month) continue;
+      if (o.status === "dead" || !o.death || o.death.year !== state.year || o.death.month !== state.month) continue;
       const wasRuler = S.isRuler(state, o) && o.status === "serving";
       const fid = o.force;
       const prev = o.status;
@@ -796,7 +913,7 @@
       if (prev === "young") continue;
       const mine = fid && fid === state.playerForce;
       const where = prev === "serving" ? `${S.forceName(state, fid)}의 ` : prev === "captive" ? "포로 " : "재야의 ";
-      if (!wasRuler) S.addLog(state, `${where}${o.name}이(가) ${S.age(state, o)}세로 세상을 떠났습니다.`, mine ? "warn" : "info");
+      if (!wasRuler) S.addLog(state, `${where}${S.josa(o.name, "이", "가")} ${S.age(state, o)}세로 세상을 떠났습니다.`, mine ? "warn" : "info");
       if (wasRuler) checkForce(state, fid, null);
     }
   }
@@ -813,7 +930,7 @@
         o.force = f.id;
         o.hidden = false;
         o.loyalty = 90;
-        S.addLog(state, `${o.name}이(가) 장성하여 ${S.forceName(state, f.id)}에 합류했습니다.`, f.id === state.playerForce ? "sys" : "info");
+        S.addLog(state, `${S.josa(o.name, "이", "가")} 장성하여 ${S.forceName(state, f.id)}에 합류했습니다.`, f.id === state.playerForce ? "sys" : "info");
       } else {
         o.status = "free";
         o.force = null;
@@ -850,6 +967,7 @@
       if (!("tuntian" in c.posts)) c.posts.tuntian = null;
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
+    if (!state.pacts) state.pacts = {};
     if (!state.start) state.start = { year: state.year, month: state.month };
     return state;
   };

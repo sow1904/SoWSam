@@ -170,7 +170,8 @@
     }
     const c = state.cities[selected];
     const own = mine(c);
-    let html = `<h2>${c.name}<span class="badge" style="background:${forceColor(c.owner)}">${S.forceName(state, c.owner)}</span></h2>`;
+    const ally = S.allied(state, state.playerForce, c.owner) ? " · 동맹" : "";
+    let html = `<h2>${c.name}<span class="badge" style="background:${forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>`;
     const ph = c.owner ? S.provinceHold(state, c.prov, c.owner) : null;
     html += `<p class="hint">${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
       (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") + `</p>`;
@@ -388,7 +389,7 @@
     },
     attack() {
       const c = state.cities[selected];
-      const targets = S.neighbors(c.id).filter((n) => state.cities[n].owner !== c.owner);
+      const targets = S.neighbors(c.id).filter((n) => state.cities[n].owner !== c.owner && !S.allied(state, c.owner, state.cities[n].owner));
       if (!targets.length) { toast("인접한 적 도시가 없습니다."); return; }
       if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.lead + b.war - a.lead - a.war);
@@ -473,12 +474,25 @@
       .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
       .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.id === state.playerForce ? " (나)" : ""}</td>` +
         `<td>${S.regime(state, f.id).label}</td><td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
-        `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td></tr>`).join("");
-    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th></tr>${rows}</table>` +
+        `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td>` +
+        `<td>${S.allies(state, f.id).map((a) => state.forces[a].name).join(", ") || "-"}</td><td>${diplomacyCell(f.id)}</td></tr>`).join("");
+    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th><th>동맹</th><th>외교</th></tr>${rows}</table>` +
+      `<p class="hint">동맹을 맺은 세력끼리는 서로 공격하지 않습니다. 동맹 제의에는 예물로 금 ${S.PACT_COST}이 들고, 같은 세력에는 한 달에 한 번만 제의할 수 있습니다. ` +
+      `동맹을 파기하면 내 모든 도시의 치안이 5 떨어지고, ${S.PACT_COOLDOWN}개월 동안 다시 동맹을 맺을 수 없습니다. 컴퓨터 세력도 더 싸울 상대가 없거나 동맹이 훨씬 약해지면 동맹을 깰 수 있습니다.</p>` +
       `<p class="hint">병역 인구는 징병할 수 있는 장정 수입니다. 전사자는 돌아오지 않고, 인구에서 조금씩 회복됩니다. ` +
       `전쟁 피로는 전사자·패전·대규모 징병으로 오르고 평화로울 때 내려갑니다. 30을 넘으면 치안이 떨어지고, 60을 넘으면 민란이 일어날 수 있습니다. ` +
       `체제는 영토의 호족 세력(인구 가중 평균)으로 정해집니다. 55 이상은 호족연합형, 25 이하는 중앙집권형, 그 사이는 부곡형입니다.</p>` +
       `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`, true);
+  }
+
+  function diplomacyCell(fid) {
+    const me = state.playerForce;
+    if (fid === me || state.over) return "";
+    if (S.allied(state, me, fid)) return `<button data-action="breakPact" data-force="${fid}">동맹 파기</button>`;
+    const cd = S.pactCooldown(state, me, fid);
+    if (cd) return `<span class="hint">${cd}개월 후</span>`;
+    if (state.pactTried && state.pactTried[fid] === S.monthsElapsed(state)) return `<span class="hint">이번 달 제의함</span>`;
+    return `<button data-action="proposePact" data-force="${fid}">동맹 제의 (${S.pactChance(state, me, fid)}%)</button>`;
   }
 
   // ---------- title ----------
@@ -497,8 +511,8 @@
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +
       `<h3>수명</h3><div class="links">` +
       Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "natural" ? " checked" : ""}> ${v}</label>`).join(" ") +
-      `</div><p class="hint">무장은 16세가 되면 등장하고, 정사의 사망 연도에 세상을 떠납니다. ` +
-      `가상 수명에서는 전사·처형 등으로 죽은 인물이 그 대신 자연 수명을 누립니다. 정사 수명에서는 모두 정사의 연도에 세상을 떠납니다.</p>` +
+      `</div><p class="hint">무장은 16세가 되면 등장합니다. 가상 수명에서는 병으로 죽은 인물은 정사의 사망 연도부터 매년 6면체 주사위를, ` +
+      `전사·처형 등으로 죽은 인물은 50세부터 매년 12면체 주사위를 굴려 1이 나오면 그해에 세상을 떠납니다. 정사 수명에서는 모두 정사의 연도에 세상을 떠납니다.</p>` +
       `<h3>세력을 고르세요</h3><div class="forcegrid">${cards}</div>`, true);
   }
 
@@ -519,6 +533,11 @@
     close: closeModal,
     title: showTitle,
     forces: () => state && showForces(),
+    proposePact: (d) => { if (result(S.proposePact(state, state.playerForce, d.force))) showForces(); },
+    breakPact: (d) => {
+      if (!confirm(`${state.forces[d.force].name}군과의 동맹을 파기할까요? 내 모든 도시의 치안이 5 떨어집니다.`)) return;
+      if (result(S.breakPact(state, state.playerForce, d.force))) showForces();
+    },
     save: () => state && saveGame(),
     endTurn: () => state && !state.over && endTurn(),
     start: (d) => start(d.force),
