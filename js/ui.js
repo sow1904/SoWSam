@@ -510,15 +510,16 @@
     openModal(`<div class="title-hero"><h1>SoWSam 삼국지</h1><p>${S.SCENARIO_191.title} — ${S.SCENARIO_191.desc}</p></div>` +
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +
       `<h3>수명</h3><div class="links">` +
-      Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "natural" ? " checked" : ""}> ${v}</label>`).join(" ") +
-      `</div><p class="hint">무장은 16세가 되면 등장합니다. 가상 수명에서는 병으로 죽은 인물은 정사의 사망 연도 2년 전부터 매년 6면체 주사위를, ` +
-      `전사·처형 등으로 죽은 인물은 48세부터 매년 12면체 주사위를 굴려 1이 나오면 그해에 세상을 떠납니다. 정사 수명에서는 모두 정사의 연도에 세상을 떠납니다.</p>` +
+      Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "real" ? " checked" : ""}> ${v}</label>`).join(" ") +
+      `</div><p class="hint">무장은 16세가 되면 등장합니다. 사실 수명에서는 병으로 죽은 인물은 정사의 사망 연도 2년 전부터 매년 72면체 주사위를, ` +
+      `전사·처형 등으로 죽은 인물은 48세부터 매년 144면체 주사위를 굴립니다. 1~12가 나오면 그 달에 세상을 떠납니다. ` +
+      `가상 수명에서는 모두 99세까지 살고, 그 뒤 12면체 주사위로 세상을 떠나는 달을 정합니다.</p>` +
       `<h3>세력을 고르세요</h3><div class="forcegrid">${cards}</div>`, true);
   }
 
   function start(fid) {
     const pick = document.querySelector('input[name="lifespan"]:checked');
-    state = S.newGame(S.SCENARIO_191, fid, null, { lifespan: pick ? pick.value : "natural" });
+    state = S.newGame(S.SCENARIO_191, fid, null, { lifespan: pick ? pick.value : "real" });
     const home = S.citiesOf(state, fid)[0];
     selected = home.id;
     closeModal();

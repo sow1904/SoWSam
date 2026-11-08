@@ -32,35 +32,28 @@
     return { name, lead: +lead, war: +war, int: +int, pol: +pol, city: at.slice(1) };
   }
 
-  // Lifespan options.
-  // "natural" (가상 수명): from two years before the recorded death year, a
-  // natural death comes on a roll of 1 on a six-sided die each year. Those who
-  // died by violence are safe until 48, then roll a twelve-sided die each year.
-  // "history" (정사 수명): everyone dies in the year the histories give.
-  S.LIFESPAN = { natural: "가상 수명", history: "정사 수명" };
+  // Lifespan options. Each January (and once at the start) an officer old
+  // enough rolls a die; 1-12 means death in that month, anything else means
+  // another year. A month already past at the start of a game is survived.
+  // "real" (사실 수명): natural deaths roll a d72 from two years before the
+  // recorded death year; those who died by violence are safe until 48, then
+  // roll a d144.
+  // "virtual" (가상 수명): everyone lives to 99, then rolls a d12.
+  S.LIFESPAN = { real: "사실 수명", virtual: "가상 수명" };
   S.VIOLENT_SAFE_AGE = 48;
   S.NATURAL_EARLY_YEARS = 2;
+  S.VIRTUAL_AGE = 99;
 
-  // Schedule a death in the current year, in a month not yet past.
-  function deathThisYear(state, fromMonth) {
-    return { year: state.year, month: fromMonth + Math.floor(rand(state) * (13 - fromMonth)) };
-  }
-  function setupLife(state, o, life) {
+  function lifeDice(state, o, life) {
     o.born = life.born;
-    o.death = null;
-    if (state.lifespan === "history") {
-      o.death = { year: Math.max(life.died, state.year), month: 1 + Math.floor(rand(state) * 12) };
-      if (o.death.year === state.year && o.death.month < state.month) o.death = deathThisYear(state, state.month);
-    } else {
-      o.rollFrom = life.violent ? life.born + S.VIOLENT_SAFE_AGE : life.died - S.NATURAL_EARLY_YEARS;
-      o.die = life.violent ? 12 : 6;
-      rollDeath(state, o, state.month);
-    }
+    if (state.lifespan === "virtual") [o.rollFrom, o.die] = [life.born + S.VIRTUAL_AGE, 12];
+    else if (life.violent) [o.rollFrom, o.die] = [life.born + S.VIOLENT_SAFE_AGE, 144];
+    else [o.rollFrom, o.die] = [life.died - S.NATURAL_EARLY_YEARS, 72];
   }
-  // The yearly roll: a 1 means this is the year.
-  function rollDeath(state, o, fromMonth) {
+  function rollDeath(state, o) {
     if (o.death || o.status === "dead" || state.year < o.rollFrom) return;
-    if (1 + Math.floor(rand(state) * o.die) === 1) o.death = deathThisYear(state, fromMonth);
+    const month = 1 + Math.floor(rand(state) * o.die);
+    if (month >= state.month && month <= 12) o.death = { year: state.year, month };
   }
 
   S.age = (state, o) => state.year - o.born;
@@ -69,7 +62,7 @@
     opts = opts || {};
     const state = {
       version: 1,
-      lifespan: opts.lifespan || "natural",
+      lifespan: opts.lifespan || "real",
       scenario: scenario.id,
       year: scenario.year,
       month: scenario.month,
@@ -124,7 +117,8 @@
         done: false,
         captor: null,
       });
-      setupLife(state, state.officers[id], life);
+      lifeDice(state, state.officers[id], life);
+      rollDeath(state, state.officers[id]);
       return id;
     };
     for (const f of scenario.forces) {
@@ -805,7 +799,7 @@
     if (state.month > 12) { state.month = 1; state.year++; }
     if (state.month === 1) {
       runComingOfAge(state);
-      if (state.lifespan !== "history") for (const o of Object.values(state.officers)) rollDeath(state, o, 1);
+      for (const o of Object.values(state.officers)) rollDeath(state, o);
     }
     runPacts(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
@@ -969,6 +963,16 @@
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.pacts) state.pacts = {};
+    // Older saves: lifespan mode "natural" used d6/d12 and "history" fixed years.
+    if (state.lifespan !== "real" && state.lifespan !== "virtual") {
+      state.lifespan = "real";
+      for (const o of Object.values(state.officers)) {
+        const life = S.PEOPLE[o.name];
+        if (!life) continue;
+        if (o.status !== "dead" && o.death && o.death.year > state.year) o.death = null;
+        lifeDice(state, o, life);
+      }
+    }
     if (!state.start) state.start = { year: state.year, month: state.month };
     return state;
   };

@@ -17,7 +17,7 @@ const endYears = [];
 let battles = 0;
 
 for (let g = 0; g < games; g++) {
-  const state = S.newGame(S.SCENARIO_191, null, 1000 + g, { lifespan: process.env.LIFESPAN || "natural" });
+  const state = S.newGame(S.SCENARIO_191, null, 1000 + g, { lifespan: process.env.LIFESPAN || "real" });
   for (let m = 0; m < years * 12 && !state.over; m++) {
     S.advanceTurn(state, () => battles++);
     validate(state);
