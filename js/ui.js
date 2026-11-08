@@ -1,7 +1,7 @@
 // Browser UI: map, side panel, command dialogs, turn flow, save/load.
 (function (S) {
   // v2: commandery map. Saves from the 32-city prototype are not carried over.
-  const SAVE_KEY = "sowsam.save.v2";
+  const SAVE_KEY = "sowsam.save.v3";
   const $ = (sel) => document.querySelector(sel);
   let state = null;
   let selected = null;
@@ -149,12 +149,12 @@
       const cls = [o.done && opts.showDone ? "done" : "", opts.pick ? "pick" : ""].join(" ");
       const attrs = opts.pick ? ` data-action="${opts.pick}" data-oid="${o.id}"` : "";
       const crown = S.isRuler(state, o) && o.status === "serving" ? "♛ " : "";
-      return `<tr class="${cls}"${attrs}><td>${crown}${o.name}</td><td>${o.lead}</td><td>${o.war}</td><td>${o.int}</td><td>${o.pol}</td>` +
+      return `<tr class="${cls}"${attrs}><td>${crown}${o.name}</td><td>${S.age(state, o)}</td><td>${o.lead}</td><td>${o.war}</td><td>${o.int}</td><td>${o.pol}</td>` +
         (opts.loyalty ? `<td>${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +
         (opts.extra ? `<td>${opts.extra(o)}</td>` : "") +
         (opts.status ? `<td>${status}</td>` : "") + `</tr>`;
     }).join("");
-    return `<table><tr><th>이름</th><th>통솔</th><th>무력</th><th>지력</th><th>정치</th>` +
+    return `<table><tr><th>이름</th><th>나이</th><th>통솔</th><th>무력</th><th>지력</th><th>정치</th>` +
       (opts.loyalty ? `<th>충성</th>` : "") + (opts.extraHead ? `<th>${opts.extraHead}</th>` : "") +
       (opts.status ? `<th>상태</th>` : "") + `</tr>${rows}</table>`;
   }
@@ -484,7 +484,7 @@
   // ---------- title ----------
   function showTitle() {
     const saved = loadSaved();
-    const preview = S.newGame(S.SCENARIO_190, null, 1);
+    const preview = S.newGame(S.SCENARIO_191, null, 1);
     const cards = Object.values(preview.forces).map((f) => {
       const t = S.totals(preview, f.id);
       const r = preview.officers[f.ruler];
@@ -493,13 +493,18 @@
         `<div>${S.citiesOf(preview, f.id).map((c) => c.name).join(", ")}</div>` +
         `<div>통${r.lead} 무${r.war} 지${r.int} 정${r.pol}</div></button>`;
     }).join("");
-    openModal(`<div class="title-hero"><h1>SoWSam 삼국지</h1><p>${S.SCENARIO_190.title} — ${S.SCENARIO_190.desc}</p></div>` +
+    openModal(`<div class="title-hero"><h1>SoWSam 삼국지</h1><p>${S.SCENARIO_191.title} — ${S.SCENARIO_191.desc}</p></div>` +
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +
+      `<h3>수명</h3><div class="links">` +
+      Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "natural" ? " checked" : ""}> ${v}</label>`).join(" ") +
+      `</div><p class="hint">무장은 16세가 되면 등장하고, 정사의 사망 연도에 세상을 떠납니다. ` +
+      `가상 수명에서는 전사·처형 등으로 죽은 인물이 그 대신 자연 수명을 누립니다. 정사 수명에서는 모두 정사의 연도에 세상을 떠납니다.</p>` +
       `<h3>세력을 고르세요</h3><div class="forcegrid">${cards}</div>`, true);
   }
 
   function start(fid) {
-    state = S.newGame(S.SCENARIO_190, fid);
+    const pick = document.querySelector('input[name="lifespan"]:checked');
+    state = S.newGame(S.SCENARIO_191, fid, null, { lifespan: pick ? pick.value : "natural" });
     const home = S.citiesOf(state, fid)[0];
     selected = home.id;
     closeModal();

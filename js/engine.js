@@ -26,9 +26,28 @@
     return { name, lead: +lead, war: +war, int: +int, pol: +pol, city: at.slice(1) };
   }
 
-  S.newGame = function (scenario, playerForce, seed) {
+  // Lifespan options. "history": everyone dies in the year the histories give.
+  // "natural": those who died by violence live out a natural lifespan instead.
+  S.LIFESPAN = { natural: "가상 수명", history: "정사 수명" };
+
+  // Decide when an officer dies in this game. The month is random.
+  function deathDate(state, life, lifespan) {
+    let year = life.died;
+    if (life.violent && lifespan !== "history") year = Math.max(life.died, life.born + 55 + Math.floor(rand(state) * 16));
+    let month = 1 + Math.floor(rand(state) * 12);
+    if (year === state.start.year && month < state.start.month) {
+      month = state.start.month + Math.floor(rand(state) * (13 - state.start.month));
+    }
+    return { year, month };
+  }
+
+  S.age = (state, o) => state.year - o.born;
+
+  S.newGame = function (scenario, playerForce, seed, opts) {
+    opts = opts || {};
     const state = {
       version: 1,
+      lifespan: opts.lifespan || "natural",
       scenario: scenario.id,
       year: scenario.year,
       month: scenario.month,
@@ -68,18 +87,27 @@
     const addOfficer = (line, force, loyalty) => {
       const o = parseOfficer(line);
       if (!state.cities[o.city]) throw new Error("unknown city " + o.city + " for " + o.name);
+      const life = S.PEOPLE[o.name];
+      if (!life) throw new Error("no birth/death years for " + o.name);
+      if (life.died < state.year) throw new Error(o.name + " died before the scenario starts");
       const id = "o" + n++;
+      const young = state.year - life.born < S.ADULT_AGE;
       state.officers[id] = Object.assign(o, {
-        id, force, loyalty,
-        status: force ? "serving" : "free",
-        hidden: !force,
+        id, loyalty,
+        force: young ? null : force,
+        joins: young ? force : null, // force a young officer joins on coming of age
+        status: young ? "young" : force ? "serving" : "free",
+        hidden: !force || young,
         done: false,
         captor: null,
+        born: life.born,
+        death: deathDate(state, life, state.lifespan),
       });
       return id;
     };
     for (const f of scenario.forces) {
       const ids = f.officers.map((line, i) => addOfficer(line, f.id, i === 0 ? 100 : 80 + Math.floor(n % 5) * 4));
+      if (state.officers[ids[0]].status !== "serving") throw new Error("ruler of " + f.id + " is too young");
       state.forces[f.id] = { id: f.id, name: f.name, color: f.color, ruler: ids[0], alive: true, weariness: 0 };
       for (const [cid, troops] of Object.entries(f.cities)) {
         const c = state.cities[cid];
@@ -96,6 +124,11 @@
       }
     }
     for (const line of scenario.free) addOfficer(line, null, 0);
+    for (const [cid, over] of Object.entries(scenario.cityState || {})) {
+      const c = state.cities[cid];
+      Object.assign(c, over);
+      c.manpower = Math.round(S.manpowerMax(c) * 0.6);
+    }
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
     return state;
   };
@@ -634,6 +667,14 @@
     return { ok: true, report, msg: report.lines[report.lines.length - 1] };
   };
 
+  // Family first, in order of succession; otherwise the most capable officer.
+  S.pickHeir = function (ruler, heirs) {
+    const k = S.CLAN[ruler.name];
+    const kin = k ? heirs.filter((o) => S.CLAN[o.name] && S.CLAN[o.name].clan === k.clan) : [];
+    if (kin.length) return kin.reduce((a, b) => (S.CLAN[b.name].rank < S.CLAN[a.name].rank ? b : a));
+    return heirs.reduce((a, b) => (b.lead + b.pol > a.lead + a.pol ? b : a));
+  };
+
   // After losing a city: pick a new ruler if needed, or destroy the force.
   function checkForce(state, fid, report) {
     const f = state.forces[fid];
@@ -657,11 +698,12 @@
         cities.forEach((c) => (c.owner = null));
         return checkForce(state, fid, report);
       }
-      const heir = heirs.reduce((a, b) => (b.lead + b.pol > a.lead + a.pol ? b : a));
+      const heir = S.pickHeir(ruler, heirs);
       f.ruler = heir.id;
       heir.loyalty = 100;
       f.name = heir.name;
-      const msg = `${ruler.name}이(가) 사로잡혀 ${heir.name}이(가) 세력을 이어받았습니다.`;
+      const how = ruler.status === "dead" ? "세상을 떠나" : "사로잡혀";
+      const msg = `${ruler.name}이(가) ${how} ${heir.name}이(가) 세력을 이어받았습니다.`;
       if (report) report.lines.push(msg);
       S.addLog(state, msg, "fall");
     }
@@ -734,11 +776,52 @@
       f.weariness = Math.max(0, f.weariness - (1 + f.weariness * 0.03));
       if (f.id === state.playerForce && before >= 40 && f.weariness < 40) S.addLog(state, "백성들의 전쟁 피로가 조금 가라앉았습니다.", "sys");
     }
+    runDeaths(state);
     state.month++;
     if (state.month > 12) { state.month = 1; state.year++; }
+    if (state.month === 1) runComingOfAge(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
     S.checkOver(state);
   };
+
+  // ---------- lifespans ----------
+  function runDeaths(state) {
+    for (const o of Object.values(state.officers)) {
+      if (o.status === "dead" || o.death.year !== state.year || o.death.month !== state.month) continue;
+      const wasRuler = S.isRuler(state, o) && o.status === "serving";
+      const fid = o.force;
+      const prev = o.status;
+      o.status = "dead";
+      o.hidden = true;
+      if (prev === "young") continue;
+      const mine = fid && fid === state.playerForce;
+      const where = prev === "serving" ? `${S.forceName(state, fid)}의 ` : prev === "captive" ? "포로 " : "재야의 ";
+      if (!wasRuler) S.addLog(state, `${where}${o.name}이(가) ${S.age(state, o)}세로 세상을 떠났습니다.`, mine ? "warn" : "info");
+      if (wasRuler) checkForce(state, fid, null);
+    }
+  }
+
+  function runComingOfAge(state) {
+    for (const o of Object.values(state.officers)) {
+      if (o.status !== "young" || S.age(state, o) < S.ADULT_AGE) continue;
+      const f = o.joins && state.forces[o.joins];
+      if (f && f.alive) {
+        // Join the family force: at home if it holds the city, else beside the ruler.
+        const home = state.cities[o.city];
+        if (!home || home.owner !== f.id) o.city = state.officers[f.ruler].city;
+        o.status = "serving";
+        o.force = f.id;
+        o.hidden = false;
+        o.loyalty = 90;
+        S.addLog(state, `${o.name}이(가) 장성하여 ${S.forceName(state, f.id)}에 합류했습니다.`, f.id === state.playerForce ? "sys" : "info");
+      } else {
+        o.status = "free";
+        o.force = null;
+        o.hidden = true;
+      }
+      o.joins = null;
+    }
+  }
 
   // A weary realm loses public order, and unrest can break out.
   function wearinessEffects(state, c) {

@@ -5,7 +5,7 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.join(__dirname, "..", "js");
-for (const f of ["data/map190.js", "data/scenario190.js", "engine.js", "ai.js"]) {
+for (const f of ["data/map190.js", "data/people.js", "data/scenario191.js", "engine.js", "ai.js"]) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;
@@ -17,11 +17,11 @@ const endYears = [];
 let battles = 0;
 
 for (let g = 0; g < games; g++) {
-  const state = S.newGame(S.SCENARIO_190, null, 1000 + g);
+  const state = S.newGame(S.SCENARIO_191, null, 1000 + g, { lifespan: process.env.LIFESPAN || "natural" });
   for (let m = 0; m < years * 12 && !state.over; m++) {
     S.advanceTurn(state, () => battles++);
     validate(state);
-    if (g === 0 && state.month === 1 && (state.year - 190) % 5 === 0) {
+    if (g === 0 && state.month === 1 && (state.year - 191) % 5 === 0) {
       const alive = Object.values(state.forces).filter((f) => f.alive)
         .map((f) => `${f.name}:${S.citiesOf(state, f.id).length}(${Math.round(f.weariness)})`).join(" ");
       console.log(`${state.year}: ${alive}`);
