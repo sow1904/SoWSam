@@ -40,10 +40,13 @@
       officers: {},
       log: [],
       over: null,
+      map: scenario.map,
     };
-    for (const [id, [name, x, y, size, gentry]] of Object.entries(S.CITY_DEFS)) {
+    S.useMap(scenario.map);
+    for (const [id, [name, prov, seat, lat, lon, size, gentry]] of Object.entries(S.MAP.cities)) {
+      const [x, y] = S.project(lat, lon);
       state.cities[id] = {
-        id, name, x, y, size,
+        id, name, prov, seat, x, y, size,
         owner: null,
         gold: 200 + size * 100,
         food: 4000 + size * 2000,
@@ -108,12 +111,29 @@
     if (state.log.length > 300) state.log.splice(0, state.log.length - 300);
   };
 
-  const ADJ = {};
-  for (const [a, b] of S.ROADS) {
-    (ADJ[a] = ADJ[a] || []).push(b);
-    (ADJ[b] = ADJ[b] || []).push(a);
-  }
+  // Each scenario has its own map (the set of commanderies changes over time).
+  // useMap makes one active; the engine works on a single game at a time.
+  let ADJ = {};
+  S.useMap = function (id) {
+    S.MAP = S.MAPS[id];
+    if (!S.MAP) throw new Error("unknown map " + id);
+    ADJ = {};
+    for (const [a, b] of S.MAP.roads) {
+      (ADJ[a] = ADJ[a] || []).push(b);
+      (ADJ[b] = ADJ[b] || []).push(a);
+    }
+  };
   S.neighbors = (cid) => ADJ[cid] || [];
+
+  // Provinces: which commanderies make up each, and who holds how many.
+  S.provinceCities = (state, prov) => Object.values(state.cities).filter((c) => c.prov === prov);
+  S.provinceHold = function (state, prov, fid) {
+    const cs = S.provinceCities(state, prov);
+    return { held: cs.filter((c) => c.owner === fid).length, total: cs.length };
+  };
+  // Provinces a force holds in full.
+  S.fullProvinces = (state, fid) =>
+    Object.keys(S.PROVINCES).filter((p) => { const h = S.provinceHold(state, p, fid); return h.total && h.held === h.total; });
 
   S.officersIn = (state, cid, filter) =>
     Object.values(state.officers).filter((o) => o.city === cid && (!filter || filter(o)));
@@ -735,11 +755,12 @@
 
   // Bring saves from older versions up to date.
   S.migrate = function (state) {
+    S.useMap(state.map);
     for (const c of Object.values(state.cities)) {
       if (!c.posts) c.posts = S.emptyPosts();
       if (c.manpower == null) c.manpower = Math.round(S.manpowerMax(c) * 0.6);
       if (c.gentry == null) {
-        c.gentry = c.gentryBase = S.CITY_DEFS[c.id][4];
+        c.gentry = c.gentryBase = S.MAP.cities[c.id][6];
         c.consent = 50;
         c.retainers = 0;
       }

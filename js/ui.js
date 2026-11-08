@@ -1,6 +1,7 @@
 // Browser UI: map, side panel, command dialogs, turn flow, save/load.
 (function (S) {
-  const SAVE_KEY = "sowsam.save.v1";
+  // v2: commandery map. Saves from the 32-city prototype are not carried over.
+  const SAVE_KEY = "sowsam.save.v2";
   const $ = (sel) => document.querySelector(sel);
   let state = null;
   let selected = null;
@@ -49,28 +50,92 @@
       `<span>전쟁 피로 <b class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} (${S.wearinessLabel(f.weariness)})</b></span><span>금 <b>${fmt(t.gold)}</b></span><span>군량 <b>${fmt(t.food)}</b></span>`;
   }
 
-  const LAND = "M40,110 L150,60 L330,40 L560,18 L700,12 L830,18 L905,90 L880,170 L862,250 L905,330 L940,420 L925,525 L885,625 L760,665 L600,695 L450,695 L330,650 L200,628 L90,595 L55,470 L85,360 L28,250 Z";
+  // ---------- map view (zoom and pan on the SVG viewBox) ----------
+  const view = { x: 0, y: 0, w: 1000, h: 700, zoom: 1 };
+  const pts = (list) => list.map((p) => p.join(",")).join(" ");
+
+  function applyView() {
+    const svg = $("#map");
+    const r = svg.getBoundingClientRect();
+    view.w = Math.max(200, r.width / view.zoom);
+    view.h = Math.max(200, r.height / view.zoom);
+    const W = S.MAP_SIZE.w, H = S.MAP_SIZE.h;
+    view.x = Math.min(Math.max(view.x, -view.w * 0.3), W - view.w * 0.7);
+    view.y = Math.min(Math.max(view.y, -view.h * 0.3), H - view.h * 0.7);
+    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+    svg.classList.toggle("far", view.zoom < 0.75);
+  }
+  function centerOn(c) {
+    const r = $("#map").getBoundingClientRect();
+    view.x = c.x - r.width / view.zoom / 2;
+    view.y = c.y - r.height / view.zoom / 2;
+    applyView();
+  }
+  function zoomAt(factor, cx, cy) {
+    const svg = $("#map"), r = svg.getBoundingClientRect();
+    const px = view.x + ((cx - r.left) / r.width) * view.w;
+    const py = view.y + ((cy - r.top) / r.height) * view.h;
+    view.zoom = Math.min(2.5, Math.max(0.35, view.zoom * factor));
+    view.x = px - ((cx - r.left) / r.width) * (r.width / view.zoom);
+    view.y = py - ((cy - r.top) / r.height) * (r.height / view.zoom);
+    applyView();
+  }
+  let drag = null;
+  let dragged = false;
+  function setupMapControls() {
+    const svg = $("#map");
+    svg.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      zoomAt(ev.deltaY < 0 ? 1.15 : 1 / 1.15, ev.clientX, ev.clientY);
+    }, { passive: false });
+    svg.addEventListener("pointerdown", (ev) => {
+      drag = { sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y, id: ev.pointerId };
+      dragged = false;
+    });
+    window.addEventListener("pointermove", (ev) => {
+      if (!drag || ev.pointerId !== drag.id) return;
+      const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
+      if (!dragged && Math.hypot(dx, dy) < 5) return;
+      dragged = true;
+      view.x = drag.vx - dx / view.zoom;
+      view.y = drag.vy - dy / view.zoom;
+      applyView();
+    });
+    window.addEventListener("pointerup", () => { drag = null; });
+    window.addEventListener("resize", () => state && applyView());
+  }
 
   function renderMap() {
     const sel = selected && state.cities[selected];
     const targets = new Set(sel && mine(sel) ? S.neighbors(sel.id) : []);
-    let svg = `<path class="land" d="${LAND}" stroke-linejoin="round"/>`;
-    for (const r of S.RIVERS) svg += `<polyline class="river" points="${r.map((p) => p.join(",")).join(" ")}"/>`;
-    for (const [a, b] of S.ROADS) {
+    const M = S.MAP;
+    let svg = `<rect class="sea" x="-2000" y="-2000" width="${S.MAP_SIZE.w + 4000}" height="${S.MAP_SIZE.h + 4000}"/>` +
+      `<polygon class="land" points="${pts(M.land)}"/>` +
+      M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
+      M.rivers.map((r) => `<polyline class="river" points="${pts(r)}"/>`).join("");
+    // Province names at the centre of their commanderies.
+    for (const [pid, pname] of Object.entries(S.PROVINCES)) {
+      const cs = S.provinceCities(state, pid);
+      if (!cs.length) continue;
+      const x = cs.reduce((s, c) => s + c.x, 0) / cs.length, y = cs.reduce((s, c) => s + c.y, 0) / cs.length;
+      svg += `<text class="prov" x="${Math.round(x)}" y="${Math.round(y)}">${pname}</text>`;
+    }
+    for (const [a, b] of M.roads) {
       const A = state.cities[a], B = state.cities[b];
       const hl = sel && (a === sel.id || b === sel.id) ? " hl" : "";
       svg += `<line class="road${hl}" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"/>`;
     }
     for (const c of Object.values(state.cities)) {
-      const r = 8 + c.size * 2;
+      const r = 6 + c.size * 1.5;
       const cls = ["city", c.id === selected ? "sel" : "", targets.has(c.id) ? "target" : "", mine(c) ? "mine" : ""].join(" ");
       svg += `<g class="${cls}" data-city="${c.id}">` +
-        `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 5}"/>` +
+        `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         `<circle class="node" cx="${c.x}" cy="${c.y}" r="${r}" fill="${forceColor(c.owner)}"/>` +
-        `<text class="name" x="${c.x}" y="${c.y + r + 16}">${c.name}</text>` +
-        `<text class="troops" x="${c.x}" y="${c.y + r + 29}">${fmt(c.troops)}</text></g>`;
+        `<text class="name" x="${c.x}" y="${c.y + r + 13}">${c.name}</text>` +
+        `<text class="troops" x="${c.x}" y="${c.y + r + 24}">${fmt(c.troops)}</text></g>`;
     }
     $("#map").innerHTML = svg;
+    applyView();
   }
 
   function stat(label, value) {
@@ -106,6 +171,9 @@
     const c = state.cities[selected];
     const own = mine(c);
     let html = `<h2>${c.name}<span class="badge" style="background:${forceColor(c.owner)}">${S.forceName(state, c.owner)}</span></h2>`;
+    const ph = c.owner ? S.provinceHold(state, c.prov, c.owner) : null;
+    html += `<p class="hint">${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
+      (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") + `</p>`;
     html += `<div class="stats">` +
       stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
@@ -435,7 +503,9 @@
     const home = S.citiesOf(state, fid)[0];
     selected = home.id;
     closeModal();
+    view.zoom = 1;
     renderAll();
+    centerOn(home);
     toast(`${state.forces[fid].name}군으로 천하통일을 시작합니다!`);
   }
 
@@ -451,7 +521,9 @@
       state = S.migrate(loadSaved());
       selected = S.citiesOf(state, state.playerForce)[0].id;
       closeModal();
+      view.zoom = 1;
       renderAll();
+      centerOn(state.cities[selected]);
     },
     select: (d) => { selected = d.city; renderAll(); },
     cmd: (d) => (commands[d.cmd] ? commands[d.cmd]() : commands.simple(d.cmd)),
@@ -499,6 +571,7 @@
     },
   };
 
+  setupMapControls();
   document.addEventListener("click", (ev) => {
     const el = ev.target.closest("[data-action], [data-city]");
     if (!el) return;
@@ -506,6 +579,7 @@
       const fn = actions[el.dataset.action];
       if (fn) fn(el.dataset);
     } else if (el.dataset.city && state) {
+      if (dragged) return;
       selected = el.dataset.city;
       renderAll();
     }
