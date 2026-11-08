@@ -511,8 +511,8 @@
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +
       `<h3>수명</h3><div class="links">` +
       Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "natural" ? " checked" : ""}> ${v}</label>`).join(" ") +
-      `</div><p class="hint">무장은 16세가 되면 등장합니다. 가상 수명에서는 병으로 죽은 인물은 정사의 사망 연도부터 매년 6면체 주사위를, ` +
-      `전사·처형 등으로 죽은 인물은 50세부터 매년 12면체 주사위를 굴려 1이 나오면 그해에 세상을 떠납니다. 정사 수명에서는 모두 정사의 연도에 세상을 떠납니다.</p>` +
+      `</div><p class="hint">무장은 16세가 되면 등장합니다. 가상 수명에서는 병으로 죽은 인물은 정사의 사망 연도 2년 전부터 매년 6면체 주사위를, ` +
+      `전사·처형 등으로 죽은 인물은 48세부터 매년 12면체 주사위를 굴려 1이 나오면 그해에 세상을 떠납니다. 정사 수명에서는 모두 정사의 연도에 세상을 떠납니다.</p>` +
       `<h3>세력을 고르세요</h3><div class="forcegrid">${cards}</div>`, true);
   }
 

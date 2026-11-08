@@ -33,12 +33,13 @@
   }
 
   // Lifespan options.
-  // "natural" (가상 수명): from the recorded death year, a natural death comes
-  // on a roll of 1 on a six-sided die each year. Those who died by violence are
-  // safe until 50, then roll a twelve-sided die each year instead.
+  // "natural" (가상 수명): from two years before the recorded death year, a
+  // natural death comes on a roll of 1 on a six-sided die each year. Those who
+  // died by violence are safe until 48, then roll a twelve-sided die each year.
   // "history" (정사 수명): everyone dies in the year the histories give.
   S.LIFESPAN = { natural: "가상 수명", history: "정사 수명" };
-  S.VIOLENT_SAFE_AGE = 50;
+  S.VIOLENT_SAFE_AGE = 48;
+  S.NATURAL_EARLY_YEARS = 2;
 
   // Schedule a death in the current year, in a month not yet past.
   function deathThisYear(state, fromMonth) {
@@ -51,7 +52,7 @@
       o.death = { year: Math.max(life.died, state.year), month: 1 + Math.floor(rand(state) * 12) };
       if (o.death.year === state.year && o.death.month < state.month) o.death = deathThisYear(state, state.month);
     } else {
-      o.rollFrom = life.violent ? life.born + S.VIOLENT_SAFE_AGE : life.died;
+      o.rollFrom = life.violent ? life.born + S.VIOLENT_SAFE_AGE : life.died - S.NATURAL_EARLY_YEARS;
       o.die = life.violent ? 12 : 6;
       rollDeath(state, o, state.month);
     }
