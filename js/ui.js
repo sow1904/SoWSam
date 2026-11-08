@@ -162,12 +162,13 @@
       const cls = [o.done && opts.showDone ? "done" : "", opts.pick ? "pick" : ""].join(" ");
       const attrs = opts.pick ? ` data-action="${opts.pick}" data-oid="${o.id}"` : "";
       const crown = S.isRuler(state, o) && o.status === "serving" ? "♛ " : "";
-      return `<tr class="${cls}"${attrs}><td>${crown}${o.name}</td><td>${S.age(state, o)}</td><td>${o.lead}</td><td>${o.war}</td><td>${o.int}</td><td>${o.pol}</td>` +
+      return `<tr class="${cls}"${attrs}><td>${crown}${o.name}</td><td>${S.age(state, o)}</td>${S.ABILITY_KEYS.map((k) => `<td>${o[k]}</td>`).join("")}` +
+        `<td class="han-${o.han}">${S.HAN_NAMES[o.han].slice(2)}</td>` +
         (opts.loyalty ? `<td>${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +
         (opts.extra ? `<td>${opts.extra(o)}</td>` : "") +
         (opts.status ? `<td>${status}</td>` : "") + `</tr>`;
     }).join("");
-    return `<table><tr><th>이름</th><th>나이</th><th>통솔</th><th>무력</th><th>지력</th><th>정치</th>` +
+    return `<table><tr><th>이름</th><th>나이</th>${S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("")}<th>한조</th>` +
       (opts.loyalty ? `<th>충성</th>` : "") + (opts.extraHead ? `<th>${opts.extraHead}</th>` : "") +
       (opts.status ? `<th>상태</th>` : "") + `</tr>${rows}</table>`;
   }
@@ -315,15 +316,15 @@
   // ---------- commands ----------
   const SIMPLE = {
     draft: {
-      title: "징병", stat: "lead", run: (o, c) => S.draft(state, o, c),
+      title: "징병", stat: "cmd", run: (o, c) => S.draft(state, o, c),
       preview: (o, c) => { const n = S.preview.draft(state, c, o); return `병사 +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`; },
     },
-    train: { title: "훈련", stat: "lead", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
+    train: { title: "훈련", stat: "cmd", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
     woo: {
-      title: "회유", stat: "pol", run: (o, c) => S.woo(state, o, c),
+      title: "회유", stat: "speech", run: (o, c) => S.woo(state, o, c),
       preview: (o) => `호족 협력 +${S.wooPreview(o)} (금 ${S.COST.woo})`,
     },
-    search: { title: "탐색", stat: "int", run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${Math.min(100, Math.round(25 + o.int / 2))}%` },
+    search: { title: "탐색", stat: "wit", run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${S.searchChance(o)}%` },
   };
 
   function officerPicker(title, desc, list, action, extra) {
@@ -405,8 +406,8 @@
       const targets = S.neighbors(c.id).filter((n) => state.cities[n].owner !== c.owner && !S.allied(state, c.owner, state.cities[n].owner));
       if (!targets.length) { toast("인접한 적 도시가 없습니다."); return; }
       if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
-      const idle = S.idle(state, c.id).sort((a, b) => b.lead + b.war - a.lead - a.war);
-      openModal(`<h2>출진</h2><p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 통솔·무력·지력이 가장 높은 무장의 능력이 전투에 반영됩니다. 군량은 병사 10명당 1이 듭니다.</p>` +
+      const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
+      openModal(`<h2>출진</h2><p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. 군량은 병사 10명당 1이 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
           const t = state.cities[d];
           return `<option value="${d}">${t.name} (${S.forceName(state, t.owner)}, 병력 ${t.troops})</option>`;
@@ -424,7 +425,7 @@
   function checkList(list, max) {
     return `<div class="row" style="align-items:flex-start"><label>무장</label><div>${list.map((o, i) =>
       `<label style="display:block"><input type="checkbox" class="pickOfficer" value="${o.id}"${max && i === 0 ? " checked" : ""}> ` +
-      `${o.name} <span class="hint">통${o.lead} 무${o.war} 지${o.int}</span></label>`).join("")}</div></div>`;
+      `${o.name} <span class="hint">무${o.war} 용${o.cmd} 군${o.strat}</span></label>`).join("")}</div></div>`;
   }
   function rangeRow(id, label, max, value) {
     return `<div class="row"><label>${label}</label><input type="range" id="${id}" min="0" max="${max}" step="1" value="${value || 0}">` +
@@ -518,7 +519,7 @@
       return `<button class="forcecard" style="border-left-color:${f.color}" data-action="start" data-force="${f.id}">` +
         `<b>${f.name}</b><div>도시 ${t.cities} · 무장 ${t.officers} · 병력 ${fmt(t.troops)}</div>` +
         `<div>${S.citiesOf(preview, f.id).map((c) => c.name).join(", ")}</div>` +
-        `<div>통${r.lead} 무${r.war} 지${r.int} 정${r.pol}</div></button>`;
+        `<div>${S.ABILITY_KEYS.map((k) => S.ABILITY_SHORT[k] + r[k]).join(" ")} · ${S.HAN_NAMES[r.han]}</div></button>`;
     }).join("");
     openModal(`<div class="title-hero"><h1>SoWSam 삼국지</h1><p>${S.SCENARIO_191.title} — ${S.SCENARIO_191.desc}</p></div>` +
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +
@@ -580,8 +581,8 @@
     recruitTarget: (d) => {
       const target = state.officers[d.oid];
       pending = { target: d.oid };
-      const list = S.idle(state, selected).sort((a, b) => b.int - a.int);
-      officerPicker(`${target.name} 등용`, "설득할 무장을 고르세요. 지력이 높을수록 성공률이 오릅니다.", list, "doRecruit",
+      const list = S.idle(state, selected).sort((a, b) => b.speech - a.speech);
+      officerPicker(`${target.name} 등용`, "설득할 무장을 고르세요. 언변이 높을수록 성공률이 오릅니다.", list, "doRecruit",
         (o) => `성공률 ${S.recruitChance(state, o, target)}%`);
     },
     doRecruit: (d) => {

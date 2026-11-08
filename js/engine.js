@@ -1,7 +1,6 @@
 // Game rules. No DOM access here so the engine can also run headless in node.
 (function (S) {
-  const STAT_NAMES = { lead: "통솔", war: "무력", int: "지력", pol: "정치" };
-  S.STAT_NAMES = STAT_NAMES;
+  S.STAT_NAMES = S.ABILITY_NAMES;
 
   S.COST = { reward: 100, woo: 100, draftPerTroop: 0.1 };
   S.MAX_SORTIE_OFFICERS = 3;
@@ -28,8 +27,10 @@
 
   // ---------- setup ----------
   function parseOfficer(line) {
-    const [name, lead, war, int, pol, at] = line.split(/\s+/);
-    return { name, lead: +lead, war: +war, int: +int, pol: +pol, city: at.slice(1) };
+    const [name, at] = line.split(/\s+/);
+    const a = S.ABILITIES[name];
+    if (!a) throw new Error("no abilities for " + name);
+    return Object.assign({ name, city: at.slice(1) }, a);
   }
 
   // Lifespan options. Each January (and once at the start) an officer old
@@ -207,8 +208,8 @@
   S.POSTS = {
     farm: { label: "농업", statLabel: "정치", stat: (o) => o.pol },
     trade: { label: "상업", statLabel: "정치", stat: (o) => o.pol },
-    wall: { label: "성벽", statLabel: "통솔", stat: (o) => o.lead },
-    order: { label: "치안", statLabel: "무력·통솔", stat: (o) => Math.round((o.war + o.lead) / 2) },
+    wall: { label: "성벽", statLabel: "용병", stat: (o) => o.cmd },
+    order: { label: "치안", statLabel: "무력·용병", stat: (o) => Math.round((o.war + o.cmd) / 2) },
     tuntian: { label: "둔전", statLabel: "정치", stat: (o) => o.pol, policy: true },
   };
   S.POST_KEYS = Object.keys(S.POSTS);
@@ -358,11 +359,11 @@
   const fail = (msg) => ({ ok: false, msg });
 
   S.preview = {
-    train: (o) => 5 + Math.round(o.lead / 8),
+    train: (o) => 5 + Math.round(o.cmd / 8),
     // War-weary people answer the call less willingly.
     draft: (state, c, o) => {
       const w = c.owner ? state.forces[c.owner].weariness : 0;
-      const base = Math.min(c.pop * 0.02, 1500 + o.lead * 15) * (0.6 + c.order / 250) * (1 - w / 200);
+      const base = Math.min(c.pop * 0.02, 1500 + o.cmd * 15) * (0.6 + c.order / 250) * (1 - w / 200);
       return Math.max(0, Math.round(Math.min(base, c.manpower)));
     },
   };
@@ -397,7 +398,7 @@
     return { ok: true, msg: `${o.name}이(가) ${c.name}의 병사를 훈련해 훈련도가 ${gain} 올랐습니다.` };
   };
 
-  S.wooPreview = (o) => 4 + Math.round(o.pol / 12);
+  S.wooPreview = (o) => 4 + Math.round(o.speech / 12);
   S.woo = function (state, oid, cid) {
     const [o, c, err] = act(state, oid, cid);
     if (err) return fail(err);
@@ -416,7 +417,7 @@
     o.done = true;
     const hidden = S.officersIn(state, cid, (x) => x.status === "free" && x.hidden);
     for (const h of hidden) {
-      if (S.chance(state, 25 + o.int / 2)) {
+      if (S.chance(state, S.searchChance(o))) {
         h.hidden = false;
         return { ok: true, found: h.id, msg: `${o.name}이(가) 재야의 인재 ${h.name}을(를) 찾아냈습니다!` };
       }
@@ -429,11 +430,13 @@
     return { ok: true, msg: `${o.name}이(가) ${c.name}을(를) 탐색했지만 아무것도 찾지 못했습니다.` };
   };
 
+  S.searchChance = (o) => Math.min(100, Math.round(25 + o.wit / 2));
+
   S.recruitChance = function (state, recruiter, target) {
-    if (target.status === "free") return clamp(Math.round(35 + recruiter.int / 2), 5, 95);
+    if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2), 5, 95);
     if (target.status === "captive") {
       if (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id) return 0;
-      return clamp(Math.round(30 + recruiter.int / 3 - (target.loyalty - 50) * 0.6), 3, 90);
+      return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6), 3, 90);
     }
     return 0;
   };
@@ -546,17 +549,19 @@
   S.wearinessLabel = (w) => (w < 20 ? "안정" : w < 40 ? "피로" : w < 60 ? "염전" : "한계");
 
   // ---------- battle ----------
+  // A side fights with its best 용병 leading the troops, its best 군략 as the
+  // commander's plan, and its best 무력 at the front.
   function sideStats(officers, fallback) {
-    if (!officers.length) return { lead: fallback, war: fallback, int: fallback };
+    if (!officers.length) return { cmd: fallback, war: fallback, strat: fallback };
     return {
-      lead: S.best(officers, "lead").lead,
+      cmd: S.best(officers, "cmd").cmd,
       war: S.best(officers, "war").war,
-      int: S.best(officers, "int").int,
+      strat: S.best(officers, "strat").strat,
     };
   }
 
   function power(troops, st, train, wallBonus) {
-    return troops * (0.6 + st.lead / 250) * (0.6 + train / 250) * (0.9 + st.war / 1000 + st.int / 1000) * wallBonus;
+    return troops * (0.6 + st.cmd / 250) * (0.6 + train / 250) * (0.9 + st.war / 1000 + st.strat / 1000) * wallBonus;
   }
   const wallBonus = (c) => 1 + c.wall / 2000;
 
@@ -691,7 +696,7 @@
     const k = S.CLAN[ruler.name];
     const kin = k ? heirs.filter((o) => S.CLAN[o.name] && S.CLAN[o.name].clan === k.clan) : [];
     if (kin.length) return kin.reduce((a, b) => (S.CLAN[b.name].rank < S.CLAN[a.name].rank ? b : a));
-    return heirs.reduce((a, b) => (b.lead + b.pol > a.lead + a.pol ? b : a));
+    return heirs.reduce((a, b) => (b.cmd + b.pol > a.cmd + a.pol ? b : a));
   };
 
   // After losing a city: pick a new ruler if needed, or destroy the force.
@@ -844,10 +849,10 @@
   S.pactChance = function (state, from, to) {
     if (!state.forces[to].alive || S.allied(state, from, to) || S.pactCooldown(state, from, to)) return 0;
     const envoys = S.officersOf(state, from);
-    const envoy = envoys.length ? S.best(envoys, "pol") : null;
+    const envoy = envoys.length ? S.best(envoys, "speech") : null;
     const mine = S.forcePower(state, from);
     const theirs = S.forcePower(state, to) || 1;
-    let p = 15 + (envoy ? envoy.pol / 3 : 0);
+    let p = 15 + (envoy ? envoy.speech / 3 : 0);
     if (mine >= theirs) p += 15; // a strong friend is worth having
     if (state.forces[to].weariness > 30) p += 10;
     if (touches(state, from, to) && theirs > mine * 1.5) p -= 25; // they would rather conquer
@@ -964,6 +969,13 @@
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.pacts) state.pacts = {};
+    // Older saves used 통솔/무력/지력/정치.
+    for (const o of Object.values(state.officers)) {
+      if (o.cmd != null || !S.ABILITIES[o.name]) continue;
+      Object.assign(o, S.ABILITIES[o.name]);
+      delete o.lead;
+      delete o.int;
+    }
     // Older saves: lifespan mode "natural" used d6/d12 and "history" fixed years.
     if (state.lifespan !== "real" && state.lifespan !== "virtual") {
       state.lifespan = "real";

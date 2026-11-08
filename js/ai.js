@@ -70,7 +70,7 @@
     // Gentry retainers stay home, so only state troops can march.
     const troops = Math.min(c.troops - garrison, S.marchable(c));
     if (troops < 3000) return;
-    const team = [...idle].sort((a, b) => b.lead + b.war - (a.lead + a.war)).slice(0, S.MAX_SORTIE_OFFICERS);
+    const team = [...idle].sort((a, b) => b.cmd + b.war - (a.cmd + a.war)).slice(0, S.MAX_SORTIE_OFFICERS);
     // Keep at least one officer home when possible.
     if (team.length === S.idle(state, c.id).length && S.serving(state, c.id).length > 1 && team.length > 1) team.pop();
     const ids = team.map((o) => o.id);
@@ -101,11 +101,11 @@
     const serving = S.serving(state, c.id);
     const unposted = () => serving.filter((o) => !S.postOf(state, o));
     // Free up posted officers when the city lacks commanders.
-    for (const o of serving.filter((x) => S.postOf(state, x)).sort((a, b) => b.lead + b.war - a.lead - a.war)) {
+    for (const o of serving.filter((x) => S.postOf(state, x)).sort((a, b) => b.cmd + b.war - a.cmd - a.war)) {
       if (unposted().length >= reserve) break;
       S.assignPost(state, c.id, S.postOf(state, o), null);
     }
-    const spare = unposted().filter((o) => !o.done).sort((a, b) => b.lead + b.war - a.lead - a.war).slice(reserve);
+    const spare = unposted().filter((o) => !o.done).sort((a, b) => b.cmd + b.war - a.cmd - a.war).slice(reserve);
     for (const o of spare) {
       let best = null;
       for (const k of S.POST_KEYS) {
@@ -147,19 +147,19 @@
     // Recruit visible free officers and captives first.
     const targets = S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, fid));
     for (const t of targets) {
-      const o = take(byDesc("int"));
+      const o = take(byDesc("speech"));
       if (!o) return;
       if (S.recruitChance(state, o, t) > 0) S.recruit(state, o.id, c.id, t.id);
       else { idle.unshift(o); if (t.status === "captive") S.release(state, c.id, t.id); }
     }
     // Look for hidden talent now and then.
     if (idle.length > 1 && S.chance(state, 25)) {
-      const o = take(byDesc("int"));
+      const o = take(byDesc("wit"));
       S.search(state, o.id, c.id);
     }
     // Win over the great families when they grow reluctant.
     if (idle.length && c.gentry > 40 && c.consent < 45 && c.gold > 300) {
-      S.woo(state, take(byDesc("pol")).id, c.id);
+      S.woo(state, take(byDesc("speech")).id, c.id);
     }
     // Move surplus toward the campaign staging city, or from the interior to the front.
     const plan = state._plans && state._plans[fid];
@@ -185,8 +185,8 @@
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
       let r = null;
-      if (affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("lead")).id, c.id);
-      else if (c.train < 75 && c.troops > 1000) r = S.drill(state, take(byDesc("lead")).id, c.id);
+      if (affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("cmd")).id, c.id);
+      else if (c.train < 75 && c.troops > 1000) r = S.drill(state, take(byDesc("cmd")).id, c.id);
       else break;
       if (r && !r.ok) break;
     }

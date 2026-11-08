@@ -5,7 +5,7 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.join(__dirname, "..", "js");
-for (const f of ["data/map190.js", "data/people.js", "data/scenario191.js", "engine.js", "ai.js"]) {
+for (const f of ["data/map190.js", "data/people.js", "data/abilities.js", "data/scenario191.js", "engine.js", "ai.js"]) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;
