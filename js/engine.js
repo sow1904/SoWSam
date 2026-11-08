@@ -75,6 +75,7 @@
       log: [],
       over: null,
       map: scenario.map,
+      emperor: scenario.emperor || null, // city where the Han emperor is held
       pacts: {},
     };
     S.useMap(scenario.map);

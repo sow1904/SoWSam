@@ -19,6 +19,8 @@
     month: 7,
     // 손견 fought as 원술's general, and 유비 served under 공손찬 as 평원상.
     // Both are kept as playable forces allied to their patrons.
+    // 헌제 was held at 장안 by 동탁.
+    emperor: "jingzhao",
     alliances: [["sunjian", "yuanshu"], ["liubei", "gongsunzan"]],
     // Cities whose starting state differs from the defaults.
     cityState: {

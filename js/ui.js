@@ -105,6 +105,16 @@
     window.addEventListener("resize", () => state && applyView());
   }
 
+  // City icons by size (1-5); the emperor's city shows the palace.
+  // Art: CroN (조조전 모드 클럽), see assets/CREDITS.md.
+  const CITY_ICONS = {
+    basic: [50, 58], town: [63, 70], city: [60, 68], metropolis: [71, 71], palace: [78, 73],
+  };
+  function cityIcon(c) {
+    if (c.id === state.emperor) return "palace";
+    return ["basic", "basic", "town", "city", "metropolis", "metropolis"][c.size] || "city";
+  }
+
   function renderMap() {
     const sel = selected && state.cities[selected];
     const targets = new Set(sel && mine(sel) ? S.neighbors(sel.id) : []);
@@ -127,10 +137,13 @@
     }
     for (const c of Object.values(state.cities)) {
       const r = 6 + c.size * 1.5;
+      const icon = cityIcon(c), [iw, ih] = CITY_ICONS[icon];
+      const w = 20 + c.size * 4 + (icon === "palace" ? 6 : 0), h = Math.round(w * ih / iw);
       const cls = ["city", c.id === selected ? "sel" : "", targets.has(c.id) ? "target" : "", mine(c) ? "mine" : ""].join(" ");
       svg += `<g class="${cls}" data-city="${c.id}">` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
-        `<circle class="node" cx="${c.x}" cy="${c.y}" r="${r}" fill="${forceColor(c.owner)}"/>` +
+        `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.3}" rx="${w * 0.64}" ry="${w * 0.3}" fill="${forceColor(c.owner)}"/>` +
+        `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.62}" width="${w}" height="${h}"/>` +
         `<text class="name" x="${c.x}" y="${c.y + r + 13}">${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + r + 24}">${fmt(c.troops)}</text></g>`;
     }

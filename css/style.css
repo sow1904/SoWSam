@@ -84,11 +84,11 @@ main { flex: 1; display: flex; min-height: 0; }
 .road { stroke: var(--road); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
 .road.hl { stroke: var(--accent); stroke-width: 3.5; stroke-dasharray: none; opacity: 1; }
 .city { cursor: pointer; }
-.city circle.node { stroke: #2a2014; stroke-width: 2; }
+.city .node { stroke: #2a2014; stroke-width: 1.5; }
 .city circle.ring { fill: none; stroke: transparent; stroke-width: 3; }
 .city.sel circle.ring { stroke: #b31b1b; }
 .city.target circle.ring { stroke: var(--accent); stroke-dasharray: 4 3; }
-.city:hover circle.node { stroke-width: 3; }
+.city:hover .node { stroke-width: 3; }
 .city text { font-size: 13px; font-weight: 700; fill: var(--label); text-anchor: middle; paint-order: stroke; stroke: var(--land); stroke-width: 3px; }
 .city text.troops { font-size: 10px; font-weight: 600; fill: #5c4a30; }
 .city.mine text.name { fill: #7a1010; }
