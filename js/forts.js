@@ -33,7 +33,7 @@
 
   function newFort(state, id, site) {
     const [name, kind, a, b, home, lat, lon, built] = site;
-    const [x, y] = S.project(lat, lon);
+    const [x, y] = S.placeXY(id, lat, lon);
     const st = S.FORT_STATS[kind];
     const owner = built ? state.cities[home].owner : null;
     return {

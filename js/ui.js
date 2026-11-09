@@ -119,10 +119,16 @@
     const sel = selected && S.place(state, selected);
     const targets = new Set(sel && mine(sel) ? S.attackTargets(state, sel.id).map((t) => t.id) : []);
     const M = S.MAP;
-    let svg = `<rect class="sea" x="-2000" y="-2000" width="${S.MAP_SIZE.w + 4000}" height="${S.MAP_SIZE.h + 4000}"/>` +
-      `<polygon class="land" points="${pts(M.land)}"/>` +
-      M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
-      M.rivers.map((r) => `<polyline class="river" points="${pts(r)}"/>`).join("");
+    // The painted terrain map when the map has one, else the drawn outline.
+    const T = M.terrain;
+    $("#map").classList.toggle("terrain", !!T);
+    let svg = T
+      ? `<rect class="sea" x="-2000" y="-2000" width="${T.w + 4000}" height="${T.h + 4000}"/>` +
+        `<image class="terrain-img" href="${T.image}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>`
+      : `<rect class="sea" x="-2000" y="-2000" width="${S.MAP_SIZE.w + 4000}" height="${S.MAP_SIZE.h + 4000}"/>` +
+        `<polygon class="land" points="${pts(M.land)}"/>` +
+        M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
+        M.rivers.map((r) => `<polyline class="river" points="${pts(r)}"/>`).join("");
     // Province names at the centre of their commanderies.
     for (const [pid, pname] of Object.entries(S.PROVINCES)) {
       const cs = S.provinceCities(state, pid);
@@ -142,17 +148,19 @@
       }
     }
     for (const f of Object.values(state.forts || {})) svg += fortGlyph(f, sel, targets);
+    // The terrain picture packs the north China plain tightly, so icons shrink there.
+    const k = T ? 0.72 : 1;
     for (const c of Object.values(state.cities)) {
-      const r = 6 + c.size * 1.5;
+      const r = (6 + c.size * 1.5) * k;
       const icon = cityIcon(c), [iw, ih] = CITY_ICONS[icon];
-      const w = 20 + c.size * 4 + (icon === "palace" ? 6 : 0), h = Math.round(w * ih / iw);
+      const w = (20 + c.size * 4 + (icon === "palace" ? 6 : 0)) * k, h = Math.round(w * ih / iw);
       const cls = ["city", c.id === selected ? "sel" : "", targets.has(c.id) ? "target" : "", mine(c) ? "mine" : ""].join(" ");
       svg += `<g class="${cls}" data-city="${c.id}">` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.3}" rx="${w * 0.64}" ry="${w * 0.3}" fill="${forceColor(c.owner)}"/>` +
         `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.62}" width="${w}" height="${h}"/>` +
-        `<text class="name" x="${c.x}" y="${c.y + r + 13}">${c.name}</text>` +
-        `<text class="troops" x="${c.x}" y="${c.y + r + 24}">${fmt(c.troops)}</text></g>`;
+        `<text class="name" x="${c.x}" y="${c.y + r + 13 * k}">${c.name}</text>` +
+        `<text class="troops" x="${c.x}" y="${c.y + r + 22 * k}">${fmt(c.troops)}</text></g>`;
     }
     svg += `<g id="marchLayer"></g>`;
     $("#map").innerHTML = svg;
@@ -162,7 +170,7 @@
 
   // A stronghold on the map: a gatehouse for a pass, a walled square for a
   // fort. Unbuilt sites are drawn faintly.
-  const FORT_ICONS = { pass: [36, 22], fort: [24, 27], site: [22, 25] }; // display sizes
+  const FORT_ICONS = { pass: [28, 17], fort: [19, 21], site: [17, 19] }; // display sizes
   function fortGlyph(f, sel, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === selected ? "sel" : "", targets.has(f.id) ? "target" : "", mine(f) ? "mine" : ""].join(" ");
     const icon = f.built ? f.kind : "site";
@@ -170,9 +178,9 @@
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.32}" rx="${iw * 0.55}" ry="${ih * 0.22}" fill="${forceColor(f.owner)}"/>` : "") +
       `<image class="ficon" href="assets/forts/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.62}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
-    return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="16"/>${shape}` +
-      `<text class="name" x="${f.x}" y="${f.y + 22}">${label}</text>` +
-      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 32}">${fmt(f.troops)}</text>` : "") + `</g>`;
+    return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
+      `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
+      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 25}">${fmt(f.troops)}</text>` : "") + `</g>`;
   }
 
   // Armies, convoys and travelling officers on the roads. Our own marches and

@@ -12,3 +12,7 @@
 - Same artist, source and terms as the city icons above (CroN, 조조전_맵 요소 서브.psd).
 - `pass.png`: the gatehouse cut from the middle of the 성문 layer.
 - `fort.png`: the 군사 요새 layer. `site.png`: the 반파 요새 layer, used for unbuilt sites.
+
+## Terrain map (`assets/map/terrain.jpg`)
+
+- Made by the game's author with ChatGPT and Gemini, for this game. Saved as JPEG (quality 85) from the original 2048 x 2048 PNG, which is kept out of the repository in `resources/`.

@@ -131,12 +131,61 @@
   };
 
   // Map projection. The far west and the far south are squeezed so the
-  // contested heartland gets most of the space.
+  // contested heartland gets most of the space. Used for the drawn outline;
+  // a map with a terrain picture is warped to fit the picture instead.
   S.MAP_SIZE = { w: 2060, h: 1840 };
-  S.project = function (lat, lon) {
+  S.projectPlain = function (lat, lon) {
     const lo = lon >= 103 ? lon : 103 - (103 - lon) * 0.45;
     const la = lat >= 25 ? lat : 25 - (25 - lat) * 0.5;
     return [Math.round((lo - 98.5) * 72 + 40), Math.round((42.8 - la) * 80 + 40)];
+  };
+  S.project = function (lat, lon) {
+    const t = S.MAP && S.MAP.terrain;
+    if (!t) return S.projectPlain(lat, lon);
+    if (!t.warp) t.warp = S.makeWarp(t.anchors);
+    return t.warp(lat, lon);
+  };
+  // Where a city or stronghold is drawn: set by hand, or projected.
+  S.placeXY = (id, lat, lon) => (S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon);
+
+  // A thin-plate spline through anchor points, from (lat, lon) to picture
+  // pixels. A little smoothing keeps a misplaced anchor from twisting the map.
+  S.makeWarp = function (anchors, smooth = 0.3) {
+    const pts = anchors.map((a) => [a[3], a[2]]);
+    const n = pts.length;
+    const U = (r2) => (r2 > 0 ? r2 * Math.log(r2) : 0);
+    const solve = (M, b) => {
+      const m = M.map((row, i) => [...row, b[i]]);
+      for (let c = 0; c < m.length; c++) {
+        let p = c;
+        for (let r = c + 1; r < m.length; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+        [m[c], m[p]] = [m[p], m[c]];
+        for (let r = 0; r < m.length; r++) {
+          if (r === c) continue;
+          const f = m[r][c] / m[c][c];
+          for (let k = c; k <= m.length; k++) m[r][k] -= f * m[c][k];
+        }
+      }
+      return m.map((row, i) => row[m.length] / row[i]);
+    };
+    const M = [];
+    for (let i = 0; i < n; i++) {
+      const row = [];
+      for (let j = 0; j < n; j++) {
+        const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+        row.push(U(dx * dx + dy * dy) + (i === j ? smooth : 0));
+      }
+      M.push([...row, 1, pts[i][0], pts[i][1]]);
+    }
+    for (let k = 0; k < 3; k++) M.push([...pts.map((p) => (k === 0 ? 1 : p[k - 1])), 0, 0, 0]);
+    const wx = solve(M, [...anchors.map((a) => a[0]), 0, 0, 0]);
+    const wy = solve(M, [...anchors.map((a) => a[1]), 0, 0, 0]);
+    const at = (w, u, v) => {
+      let s = w[n] + w[n + 1] * u + w[n + 2] * v;
+      for (let i = 0; i < n; i++) { const dx = u - pts[i][0], dy = v - pts[i][1]; s += w[i] * U(dx * dx + dy * dy); }
+      return s;
+    };
+    return (lat, lon) => [Math.round(at(wx, lon, lat)), Math.round(at(wy, lon, lat))];
   };
 
   // Rough land outline and islands, as [lat, lon] points.
@@ -208,6 +257,42 @@
     ["yulin", "hepu"], ["hepu", "jiaozhi"], ["jiaozhi", "jiuzhen"], ["jiuzhen", "rinan"],
   ];
 
+  // The painted terrain map (assets/map/terrain.jpg, 2048 x 2048). It is a
+  // picture, not a survey, so places are fitted to it: these anchors tie
+  // landmarks on the picture to their real latitude and longitude, and a
+  // smooth warp through them places everything else. [x, y, lat, lon]
+  const terrain = {
+    image: "assets/map/terrain.jpg", w: 2048, h: 2048,
+    anchors: [
+      [1110, 185, 40.2, 111.2], // 황하 하투의 북동쪽 굽이
+      [815, 145, 40.3, 107.0], // 하투의 북서쪽 굽이
+      [1055, 555, 34.6, 110.3], // 동관, 위수가 황하에 드는 곳
+      [1440, 345, 37.7, 118.9], // 황하 하구
+      [1420, 290, 39.1, 117.7], // 발해 서쪽 해안
+      [1805, 410, 37.4, 122.7], // 산동반도 끝
+      [1840, 895, 31.4, 121.8], // 장강 하구
+      [1690, 930, 31.2, 120.2], // 태호
+      [1555, 760, 33.3, 118.7], // 홍택호
+      [1300, 1010, 30.58, 114.28], // 한수가 장강에 드는 곳
+      [1190, 1150, 29.3, 112.9], // 동정호
+      [1450, 1130, 29.1, 116.3], // 파양호
+      [740, 1090, 29.56, 106.55], // 가릉강이 장강에 드는 곳 (강주)
+      [580, 980, 30.66, 104.06], // 성도 평원
+      [780, 775, 33.07, 107.03], // 한중 분지
+      [1385, 1585, 23.13, 113.26], // 주강 삼각주 머리 (번우)
+      [1060, 1890, 19.2, 109.7], // 해남도
+      [1080, 1790, 20.3, 110.2], // 뇌주반도 끝
+      [1860, 1580, 23.7, 121.0], // 대만
+      [660, 1800, 21.03, 105.85], // 홍하 삼각주
+      [560, 480, 36.06, 103.83], // 금성 부근의 황하
+    ],
+    // Places set by hand: off the picture, or on the wrong bank after the warp.
+    pos: {
+      dunhuang: [40, 120], lelang: [1990, 260], rinan: [690, 1990], donglai: [1650, 440],
+      henei: [1215, 512], weijun: [1255, 440], nanyang: [1185, 800], runan: [1295, 722],
+    },
+  };
+
   const proj = (pts) => pts.map(([la, lo]) => S.project(la, lo));
   S.MAPS["190"] = {
     cities,
@@ -215,5 +300,6 @@
     islands: islands.map(proj),
     rivers: rivers.map(proj),
     roads,
+    terrain,
   };
 })(globalThis.SAM = globalThis.SAM || {});
