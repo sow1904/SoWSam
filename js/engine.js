@@ -187,7 +187,7 @@
     // Neighbouring commanderies. A road that ends at a stronghold makes its
     // city a neighbour of the cities the stronghold's own road joins.
     const sites = (S.FORT_SITES && S.FORT_SITES[id]) || {};
-    const ends = (x) => (S.MAP.cities[x] ? [x] : sites[x] ? [sites[x][2], sites[x][3]] : []);
+    const ends = (x) => (S.MAP.cities[x] ? [x] : sites[x] ? S.siteRoad(sites[x]) : []);
     const join = (a, b) => {
       if (a === b) return;
       if (!(ADJ[a] = ADJ[a] || []).includes(b)) ADJ[a].push(b);

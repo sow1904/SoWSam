@@ -17,6 +17,8 @@
   S.BUILD_DAYS = 90;
 
   // Per map. id: [name, kind, road end a, road end b, home commandery, lat, lon, built]
+  // b may be a list: the stronghold then sits where the roads from a to each of
+  // them meet, and guards all of them.
   // built = already standing in the map's year; otherwise a site to build on.
   S.FORT_SITES = {
     190: {
@@ -28,19 +30,19 @@
       jiameng: ["가맹관", "pass", "hanzhong", "guanghan", "guanghan", 32.3, 105.8, true],
       jiange: ["검각", "pass", "hanzhong", "guanghan", "guanghan", 32.0, 105.5, false],
       baidi: ["백제성", "fort", "bajun", "nanjun", "bajun", 31.05, 109.55, true],
-      yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
+      yijing: ["역경", "fort", "zhuo", ["hejian", "zhongshan"], "hejian", 38.95, 116.05, false], // 탁군에서 하간·중산으로 가는 길을 함께 막음
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
       xiangyang: ["양양", "fort", "nanyang", "nanjun", "nanjun", 32.01, 112.14, true], // 유표가 190년부터 형주를 다스린 곳
     },
   };
 
   function newFort(state, id, site) {
-    const [name, kind, a, b, home, lat, lon, built] = site;
+    const [name, kind, , , home, lat, lon, built] = site;
     const [x, y] = S.placeXY(id, lat, lon);
     const st = S.FORT_STATS[kind];
     const owner = built ? state.cities[home].owner : null;
     return {
-      id, name, kind, road: [a, b], home, lat, lon, x, y, built, owner, building: null,
+      id, name, kind, road: S.siteRoad(site), home, lat, lon, x, y, built, owner, building: null,
       troops: owner ? st.troops : 0, train: owner ? state.cities[home].train : 40, food: owner ? 3000 : 0,
       wall: built ? st.wallMax : 0, wallMax: st.wallMax,
       // So the battle rules can treat a stronghold like a city.
@@ -48,6 +50,8 @@
       prov: state.cities[home].prov, posts: S.emptyPosts(),
     };
   }
+  // The places a stronghold's roads join: [a, b] or [a, b1, b2, ...].
+  S.siteRoad = (site) => [site[2], ...[].concat(site[3])];
   S.initForts = function (state) {
     state.forts = {};
     for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) state.forts[id] = newFort(state, id, site);
@@ -56,7 +60,7 @@
   // A save from before a site was added to the map gets it now.
   S.addMissingForts = function (state) {
     for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) {
-      if (state.forts[id]) continue;
+      if (state.forts[id]) { state.forts[id].road = S.siteRoad(site); continue; }
       state.forts[id] = newFort(state, id, site);
       state.fortVer = (state.fortVer || 0) + 1;
     }

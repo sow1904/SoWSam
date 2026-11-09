@@ -139,7 +139,7 @@
       g.innerHTML = S.MAP.roads.map(([a, b]) => {
         const A = nodes[a], B = nodes[b];
         // Roads bend through built strongholds that sit on them.
-        const via = Object.values(nodes).filter((n) => n.kind === "fort" && S.FORT_SITES["190"][n.id][2] && [S.FORT_SITES["190"][n.id][2], S.FORT_SITES["190"][n.id][3]].sort().join() === [a, b].sort().join())
+        const via = Object.values(nodes).filter((n) => n.kind === "fort" && S.siteRoad(S.FORT_SITES["190"][n.id]).slice(1).some((e) => [S.FORT_SITES["190"][n.id][2], e].sort().join() === [a, b].sort().join()))
           .sort((p, q) => Math.hypot(p.x - A.x, p.y - A.y) - Math.hypot(q.x - A.x, q.y - A.y));
         const pts = [A, ...via, B].map((n) => `${n.x},${n.y}`).join(" ");
         return `<polyline class="road" fill="none" points="${pts}"/>`;

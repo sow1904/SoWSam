@@ -351,13 +351,14 @@
 
   function fortPanel(f) {
     const own = mine(f);
-    const [a, b] = f.road.map((id) => state.cities[id]);
+    const ends = f.road.map((id) => state.cities[id].name);
+    const between = ends.length > 2 ? `${ends[0]}에서 ${S.ro(ends.slice(1).join("·"))} 가는 길` : `${ends.join("–")} 사이 길`;
     const ally = f.owner && S.allied(state, state.playerForce, f.owner) ? " · 동맹" : "";
     let html = `<h2>${f.name}<span class="badge" style="background:${forceColor(f.owner)}">${f.built ? (f.owner ? S.forceName(state, f.owner) : "비어 있음") : "터"}${ally}</span></h2>`;
-    html += `<p class="hint">${S.FORT_KINDS[f.kind]} · ${a.name}–${b.name} 사이 길 · 소속 ${state.cities[f.home].name}</p>`;
+    html += `<p class="hint">${S.FORT_KINDS[f.kind]} · ${between} · 소속 ${state.cities[f.home].name}</p>`;
     if (!f.built) {
       html += `<p>${f.building ? `${S.forceName(state, f.building.force)}이 쌓고 있습니다.` : "아직 쌓지 않은 터입니다."} ` +
-        `축성 특기가 있는 무장이 ${a.name}이나 ${b.name}에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>`;
+        `축성 특기가 있는 무장이 ${ends.join(", ")} 중 한 곳에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>`;
       html += `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
       return html;
     }

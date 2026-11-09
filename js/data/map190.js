@@ -242,7 +242,7 @@
     ["taishan", "jibei"], ["taishan", "jinan"], ["jibei", "qinghe"], ["jibei", "jinan"], ["jibei", "pingyuan"],
     ["shanyang", "jiyin"], ["shanyang", "pengcheng"], ["weijun", "zhaoguo"], ["weijun", "shangdang"], ["julu", "changshan"], ["julu", "anping"],
     ["julu", "qinghe"], ["julu", "zhaoguo"], ["changshan", "zhongshan"], ["changshan", "anping"], ["changshan", "taiyuan"], ["zhongshan", "anping"],
-    ["zhongshan", "hejian"], ["zhongshan", "zhuo"], ["zhongshan", "daijun"], ["anping", "hejian"], ["anping", "qinghe"], ["anping", "pingyuan"],
+    ["zhongshan", "hejian"], ["zhongshan", "zhuo"], ["anping", "hejian"], ["anping", "qinghe"], ["anping", "pingyuan"],
     ["hejian", "bohai"], ["hejian", "zhuo"], ["qinghe", "pingyuan"], ["zhaoguo", "shangdang"], ["bohai", "youbeiping"], ["bohai", "lean"],
     ["bohai", "pingyuan"], ["zhuo", "guangyang"], ["zhuo", "shanggu"], ["guangyang", "shanggu"], ["guangyang", "yuyang"], ["daijun", "shanggu"],
     ["daijun", "yanmen"], ["yuyang", "youbeiping"], ["youbeiping", "liaoxi"], ["liaoxi", "liaodong"], ["liaodong", "xuantu"], ["liaodong", "lelang"],
