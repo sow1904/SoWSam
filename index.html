@@ -15,11 +15,18 @@
       <button data-action="court">황실</button>
       <button data-action="save">저장</button>
       <button data-action="title">타이틀</button>
-      <button class="primary" data-action="endTurn">턴 종료</button>
+      <div id="clock">
+        <button id="clockPlay" class="primary" data-action="togglePause" title="시간 흐름 / 일시정지 (Space)">▶ 진행</button>
+        <button class="spd" data-action="speed" data-s="0" title="1개월 8초 (키 1)">1×</button>
+        <button class="spd" data-action="speed" data-s="1" title="1개월 4초 (키 2)">2×</button>
+        <button class="spd" data-action="speed" data-s="2" title="1개월 2초 (키 3)">4×</button>
+        <button class="spd" data-action="speed" data-s="3" title="1개월 0.5초, 1년 6초 (키 4)">16×</button>
+        <button data-action="clockSettings" title="자동 일시정지 설정">⚙</button>
+      </div>
     </div>
   </header>
   <main>
-    <section id="mapWrap"><svg id="map" viewBox="0 0 2060 1840" aria-label="지도"></svg></section>
+    <section id="mapWrap"><svg id="map" viewBox="0 0 2060 1840" aria-label="지도"></svg><div id="battles"></div><div id="pauseBadge" class="hidden">일시정지</div></section>
     <aside id="panel"></aside>
   </main>
   <section id="log"></section>

@@ -273,16 +273,36 @@
   }
 
   // All non-player forces act, then the month advances.
-  S.advanceTurn = function (state, onEvent) {
-    const order = Object.values(state.forces).filter((f) => f.alive && f.id !== state.playerForce).map((f) => f.id);
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(S.rand(state) * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
+  // ---------- the clock ----------
+  // Time runs in days, 30 to a month. Each computer force acts on its own day
+  // of the month, so news arrives across the month instead of all at once.
+  // Monthly rules (income, harvest, loyalty, the court) run when a month ends.
+  S.DAYS_PER_MONTH = 30;
+  function planAIDays(state) {
+    state.aiDays = {};
+    for (const f of Object.values(state.forces)) {
+      if (f.alive && f.id !== state.playerForce) state.aiDays[f.id] = 1 + Math.floor(S.rand(state) * S.DAYS_PER_MONTH);
     }
-    for (const fid of order) {
-      if (state.forces[fid].alive) S.runAI(state, fid, onEvent);
-      if (S.checkOver(state)) return;
+  }
+  // One day passes. Returns "month" when a new month has begun.
+  S.tickDay = function (state, onEvent) {
+    if (state.over) return null;
+    if (!state.day) state.day = 1;
+    if (!state.aiDays) planAIDays(state);
+    for (const [fid, d] of Object.entries(state.aiDays)) {
+      if (d !== state.day || !state.forces[fid].alive) continue;
+      S.runAI(state, fid, onEvent);
+      if (S.checkOver(state)) return null;
     }
+    state.day++;
+    if (state.day <= S.DAYS_PER_MONTH) return null;
     S.endMonth(state);
+    state.day = 1;
+    planAIDays(state);
+    return "month";
+  };
+  // A whole month at once (headless simulations).
+  S.advanceTurn = function (state, onEvent) {
+    while (!state.over && S.tickDay(state, onEvent) !== "month") { /* next day */ }
   };
 })(globalThis.SAM = globalThis.SAM || {});

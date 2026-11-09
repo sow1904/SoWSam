@@ -53,7 +53,30 @@ input, select {
 .brand span { color: var(--ink); font-weight: 600; }
 #status { flex: 1; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
 #status b { color: var(--ink); }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+#clock { display: flex; gap: 3px; padding-left: 8px; border-left: 1px solid var(--line); }
+#clock .spd.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+#clockPlay { min-width: 84px; }
+#mapWrap { position: relative; }
+#pauseBadge {
+  position: absolute; left: 12px; top: 10px; padding: 3px 10px; border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 13px; pointer-events: none;
+}
+#battles {
+  position: absolute; right: 10px; top: 10px; width: 300px; max-height: calc(100% - 20px);
+  display: flex; flex-direction: column; gap: 6px; overflow-y: auto; pointer-events: none;
+}
+.bcard {
+  pointer-events: auto; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); cursor: pointer;
+}
+.bcard.win { border-left-color: #6fbf73; }
+.bcard.lose { border-left-color: var(--bad); }
+.bcard .bh { display: flex; justify-content: space-between; gap: 6px; font-weight: 700; margin-bottom: 3px; }
+.bcard .bh button { padding: 0 6px; font-size: 11px; }
+.bcard .bl { color: var(--muted); line-height: 1.45; }
+.bcard .bl div:last-child { color: var(--ink); }
+.bcard .bs { margin-top: 3px; font-weight: 700; }
 
 main { flex: 1; display: flex; min-height: 0; }
 #mapWrap { flex: 1; min-width: 0; display: flex; }

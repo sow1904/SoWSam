@@ -103,7 +103,7 @@
       if (!S.canPayDemand(state, d)) return fail(`${state.cities[state.emperor].name}의 금이나 군량이 부족합니다.`);
       payDemand(state, d);
       state.han.pending = null;
-      return { ok: true, msg: `헌제의 청을 받들어 ${S.demandCargo(d)}을(를) 바쳤습니다. 헌제의 우호도가 ${S.COURT.accept} 올랐습니다.` };
+      return { ok: true, msg: `헌제의 청을 받들어 ${S.josa(S.demandCargo(d), "을", "를")} 바쳤습니다. 헌제의 우호도가 ${S.COURT.accept} 올랐습니다.` };
     }
     addFavor(state, -S.COURT.refuse);
     state.han.pending = null;
@@ -165,7 +165,7 @@
       // Loyalists will not stay allied with a usurper.
       for (const other of S.allies(state, fid)) {
         if (rulerOf(state, other).han === "H" && dropPact(state, fid, other)) {
-          S.addLog(state, `${S.josa(S.forceName(state, other), "이", "가")} 역적과 손잡을 수 없다며 ${S.forceName(state, fid)}과(와)의 동맹을 끊었습니다.`, "info");
+          S.addLog(state, `${S.josa(S.forceName(state, other), "이", "가")} 역적과 손잡을 수 없다며 ${S.josa(S.forceName(state, fid), "과", "와")}의 동맹을 끊었습니다.`, "info");
         }
       }
     }
@@ -202,7 +202,7 @@
     state.emperor = cid;
     han.movedAt = t;
     addFavor(state, S.moveFavorDelta(from.id, cid));
-    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} 헌제를 모시고 ${from.name}에서 ${state.cities[cid].name}(으)로 천도했습니다.` +
+    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} 헌제를 모시고 ${from.name}에서 ${S.ro(state.cities[cid].name)} 천도했습니다.` +
       (cid === S.COURT.home ? " 헌제가 고향 낙양으로 돌아와 기뻐합니다." : from.id === S.COURT.home ? " 헌제가 낙양을 떠나며 슬퍼합니다." : "");
     if (fid !== state.playerForce) S.addLog(state, msg, "info");
     return { ok: true, msg };
@@ -239,7 +239,7 @@
     if (!best) return;
     const from = state.cities[state.emperor];
     state.emperor = best.id;
-    S.addLog(state, `헌제가 ${from.name}을(를) 빠져나와 ${state.cities[best.id].name}(으)로 몸을 피했습니다.`,
+    S.addLog(state, `헌제가 ${S.josa(from.name, "을", "를")} 빠져나와 ${S.ro(state.cities[best.id].name)} 몸을 피했습니다.`,
       holder === state.playerForce ? "warn" : "info");
     S.syncCourt(state);
   }

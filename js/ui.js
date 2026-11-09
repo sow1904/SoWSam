@@ -42,7 +42,7 @@
     const t = S.totals(state, state.playerForce);
     const ruler = state.officers[f.ruler];
     $("#status").innerHTML =
-      `<span><b>${state.year}년 ${state.month}월</b></span>` +
+      `<span><b>${state.year}년 ${state.month}월 ${state.day || 1}일</b></span>` +
       `<span style="color:${f.color}">■</span><span><b>${f.name}군</b> (군주 ${ruler.name})</span>` +
       `<span>체제 <b>${S.regime(state, state.playerForce).label}</b></span>` +
       `<span>도시 <b>${t.cities}</b></span><span>무장 <b>${t.officers}</b></span>` +
@@ -283,7 +283,7 @@
 
   function renderLog() {
     const entries = state.log.slice(-80).reverse();
-    $("#log").innerHTML = entries.map((e) => `<div class="${e.kind}">[${e.y}.${e.m}] ${e.text}</div>`).join("");
+    $("#log").innerHTML = entries.map((e) => `<div class="${e.kind}">[${e.y}.${e.m}${e.d ? "." + e.d : ""}] ${e.text}</div>`).join("");
   }
 
   // ---------- modal / toast ----------
@@ -293,10 +293,16 @@
     box.innerHTML = html;
     $("#modal").classList.remove("hidden");
     modalOnInput = null;
+    // Time stands still while a window is open, and runs again when it closes.
+    if (clock.running && clock.settings.modal) { setRunning(false); clock.resumeOnClose = true; }
+    renderClock();
   }
   function closeModal() {
     $("#modal").classList.add("hidden");
     modalOnInput = null;
+    if (clock.resumeOnClose && state && !state.over) setRunning(true);
+    clock.resumeOnClose = false;
+    renderClock();
   }
   let toastTimer = null;
   function toast(msg) {
@@ -389,7 +395,7 @@
       const c = state.cities[selected];
       const list = S.serving(state, c.id).filter((o) => !S.isRuler(state, o)).sort((a, b) => a.loyalty - b.loyalty);
       if (!list.length) { toast("포상할 무장이 없습니다."); return; }
-      officerPicker("포상", `금 ${S.COST.reward}을(를) 하사해 충성을 올립니다. 행동력은 쓰지 않습니다. (보유 금 ${c.gold})`, list, "doReward",
+      officerPicker("포상", `금 ${S.josa(S.COST.reward, "을", "를")} 하사해 충성을 올립니다. 행동력은 쓰지 않습니다. (보유 금 ${c.gold})`, list, "doReward",
         (o) => `충성 ${o.loyalty}`);
     },
     move() {
@@ -516,25 +522,145 @@
     openModal(html);
   }
 
-  // ---------- turn ----------
-  function endTurn() {
-    const start = state.log.length;
-    const defenses = [];
-    S.advanceTurn(state, (r) => {
-      if (r.report && r.report.defender === state.playerForce) defenses.push(r.report);
-    });
-    saveGame(true);
-    renderAll();
-    if (state.over) return showEnd();
-    const news = state.log.slice(start).filter((e) => e.kind !== "mine");
-    let html = `<h2>${state.year}년 ${state.month}월</h2>`;
-    html += news.length ? `<div class="report">${news.map((e) => `<div class="${e.kind}">${e.text}</div>`).join("")}</div>` : `<p class="hint">조용한 한 달이었습니다.</p>`;
-    for (const r of defenses) {
-      html += `<h3>${r.from} → ${r.to} 전투</h3><div class="report">${r.lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
+  // ---------- the clock ----------
+  // Time flows by itself; the player pauses to think. Days tick at the chosen
+  // speed, computer forces act on their own days, and battles involving the
+  // player appear as report cards on the map, a line at a time.
+  const SPEEDS = [8000, 4000, 2000, 500]; // milliseconds per month
+  const CLOCK_KEY = "sowsam.clock";
+  const CLOCK_DEFAULTS = { speed: 1, modal: true, attacked: true, bad: true, court: true, month: false };
+  const CLOCK_LABELS = {
+    modal: "명령 창이나 정보 창을 열면 멈춤",
+    attacked: "아군 도시가 공격받으면 멈춤",
+    bad: "나쁜 소식(무장 이탈, 도시 함락, 반란 등)이 오면 멈춤",
+    court: "헌제의 청이나 선양 조서가 오면 멈추고 황실 창 열기",
+    month: "매달 1일마다 멈춤 (턴제처럼 플레이)",
+  };
+  const clock = { running: false, resumeOnClose: false, acc: 0, last: 0, seenN: 0, pending: null, settings: loadClockSettings() };
+  const battles = [];
+
+  function loadClockSettings() {
+    try { return Object.assign({}, CLOCK_DEFAULTS, JSON.parse(localStorage.getItem(CLOCK_KEY) || "{}")); } catch (e) { return Object.assign({}, CLOCK_DEFAULTS); }
+  }
+  function saveClockSettings() {
+    try { localStorage.setItem(CLOCK_KEY, JSON.stringify(clock.settings)); } catch (e) { /* ignore */ }
+  }
+  function setRunning(on) {
+    clock.running = !!on && !!state && !state.over;
+    clock.acc = 0;
+    clock.last = 0;
+    renderClock();
+  }
+  function pause(reason) {
+    clock.resumeOnClose = false;
+    if (!clock.running) return;
+    setRunning(false);
+    if (reason) toast(`일시정지: ${reason}`);
+  }
+  function renderClock() {
+    const play = $("#clockPlay");
+    if (!play) return;
+    play.textContent = clock.running ? "⏸ 일시정지" : "▶ 진행";
+    document.querySelectorAll("#clock .spd").forEach((b) => b.classList.toggle("on", +b.dataset.s === clock.settings.speed));
+    $("#pauseBadge").classList.toggle("hidden", clock.running || !state || $("#modal").classList.contains("hidden") === false);
+  }
+  // Reset when a game starts or loads.
+  function resetClock() {
+    clock.running = false;
+    clock.resumeOnClose = false;
+    clock.seenN = state.logN || 0;
+    clock.pending = state.han && state.han.pending;
+    battles.length = 0;
+    renderBattles();
+    renderClock();
+  }
+
+  // A plain timer rather than animation frames, so time keeps flowing while
+  // the window is in the background.
+  function frame() {
+    const ts = performance.now();
+    if (!clock.running || !state) { clock.last = 0; return; }
+    if (!clock.last) clock.last = ts;
+    clock.acc += Math.min(ts - clock.last, 1100);
+    clock.last = ts;
+    const dayMs = SPEEDS[clock.settings.speed] / S.DAYS_PER_MONTH;
+    let steps = 0;
+    while (clock.running && clock.acc >= dayMs && steps < 70) {
+      clock.acc -= dayMs;
+      steps++;
+      stepDay();
     }
-    html += courtPending();
-    html += `<div class="footer"><button class="primary" data-action="close">확인</button></div>`;
-    openModal(html);
+    if (steps) renderStatus();
+  }
+
+  function stepDay() {
+    const me = state.playerForce;
+    const reports = [];
+    const month = S.tickDay(state, (r) => {
+      if (r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
+    });
+    // Reveal one more line of every running battle card each day.
+    let cardsChanged = false;
+    for (const b of battles) if (b.shown < b.report.lines.length) { b.shown++; cardsChanged = true; }
+    for (const r of reports) addBattle(r);
+    if (cardsChanged || reports.length) renderBattles();
+    const fresh = state.log.filter((e) => e.n > clock.seenN);
+    clock.seenN = state.logN || clock.seenN;
+    const big = month || reports.length || fresh.some((e) => e.kind === "war" || e.kind === "fall");
+    if (fresh.length) renderLog();
+    if (big) { renderMap(); keepScroll(renderPanel); }
+    if (month) saveGame(true);
+    if (state.over) { setRunning(false); return showEnd(); }
+    const s = clock.settings;
+    const han = state.han;
+    const courtNew = han && han.pending && han.holder === me && han.pending !== clock.pending;
+    clock.pending = han && han.pending;
+    if (s.court && courtNew) { pause("헌제의 소식"); showCourt(); return; }
+    if (s.attacked && reports.some((r) => r.defender === me)) return pause(`${S.josa(reports.find((r) => r.defender === me).to, "이", "가")} 공격받았습니다`);
+    const bad = fresh.find((e) => e.kind === "warn" || (e.kind === "fall" && e.text.includes(state.forces[me].name)));
+    if (s.bad && bad) return pause(bad.text);
+    if (s.month && month) return pause(`${state.year}년 ${state.month}월`);
+  }
+
+  function keepScroll(fn) {
+    const p = $("#panel");
+    const top = p.scrollTop;
+    fn();
+    p.scrollTop = top;
+  }
+
+  function addBattle(report) {
+    battles.unshift({ id: (battles.length ? Math.max(...battles.map((b) => b.id)) : 0) + 1, report, shown: 1 });
+    if (battles.length > 6) battles.pop();
+  }
+  function renderBattles() {
+    const me = state && state.playerForce;
+    $("#battles").innerHTML = battles.map((b) => {
+      const r = b.report;
+      const done = b.shown >= r.lines.length;
+      const attacking = r.attacker === me;
+      const won = attacking ? r.attackerWon : !r.attackerWon;
+      const title = attacking ? `${r.to} 공격` : `${r.to} 방어전`;
+      const lines = r.lines.slice(Math.max(0, b.shown - 3), b.shown);
+      return `<div class="bcard${done ? (won ? " win" : " lose") : ""}" data-action="battleOpen" data-b="${b.id}">` +
+        `<div class="bh"><span>⚔ ${title}</span><button data-action="battleClose" data-b="${b.id}" title="닫기">×</button></div>` +
+        `<div class="bl">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
+        (done ? `<div class="bs">${won ? "승리" : "패배"}</div>` : "") + `</div>`;
+    }).join("");
+  }
+
+  function showClockSettings() {
+    const s = clock.settings;
+    openModal(`<h2>시간 설정</h2>` +
+      `<p class="hint">스페이스 바로 진행과 일시정지를, 숫자 키 1~4로 배속을 바꿉니다. 1×는 한 달 8초, 16×는 한 달 0.5초(1년 6초)입니다. ` +
+      `컴퓨터 세력은 달마다 각자 정해진 날에 움직이고, 수입·수확·충성 변화는 매달 1일에 처리됩니다. 매달 1일에 자동 저장합니다.</p>` +
+      `<h3>자동 일시정지</h3>` +
+      Object.entries(CLOCK_LABELS).map(([k, v]) => `<div><label><input type="checkbox" class="cset" data-k="${k}"${s[k] ? " checked" : ""}> ${v}</label></div>`).join("") +
+      `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`);
+    modalOnInput = () => {
+      document.querySelectorAll(".cset").forEach((el) => { clock.settings[el.dataset.k] = el.checked; });
+      saveClockSettings();
+    };
   }
 
   function showEnd() {
@@ -670,10 +796,11 @@
     const home = S.citiesOf(state, fid)[0];
     selected = home.id;
     closeModal();
+    resetClock();
     view.zoom = 1;
     renderAll();
     centerOn(home);
-    toast(`${state.forces[fid].name}군으로 천하통일을 시작합니다!`);
+    toast(`${state.forces[fid].name}군으로 천하통일을 시작합니다! 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`);
   }
 
   // ---------- events ----------
@@ -698,14 +825,20 @@
       if (result(S.breakPact(state, state.playerForce, d.force))) showForces();
     },
     save: () => state && saveGame(),
-    endTurn: () => state && !state.over && endTurn(),
+    togglePause: () => { if (state && !state.over) { clock.resumeOnClose = false; setRunning(!clock.running); } },
+    speed: (d) => { clock.settings.speed = +d.s; saveClockSettings(); renderClock(); },
+    clockSettings: () => state && showClockSettings(),
+    battleOpen: (d) => { const b = battles.find((x) => x.id === +d.b); if (b) showReport(b.report); },
+    battleClose: (d) => { const i = battles.findIndex((x) => x.id === +d.b); if (i >= 0) battles.splice(i, 1); renderBattles(); },
     start: (d) => start(d.force),
     continue: () => {
       state = S.migrate(loadSaved());
       selected = S.citiesOf(state, state.playerForce)[0].id;
       closeModal();
+      resetClock();
       view.zoom = 1;
       renderAll();
+      toast("스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.");
       centerOn(state.cities[selected]);
     },
     select: (d) => { selected = d.city; renderAll(); },
@@ -760,8 +893,10 @@
       const r = S.attack(state, selected, $("#atTarget").value, checked(), num("atTroops"));
       if (!r.ok) { toast(r.msg); return; }
       if (r.report.attackerWon) selected = state.cities[$("#atTarget").value].id;
+      closeModal();
+      addBattle(r.report);
+      renderBattles();
       renderAll();
-      showReport(r.report);
       if (S.checkOver(state)) setTimeout(showEnd, 0);
     },
   };
@@ -790,6 +925,17 @@
   $("#modal").addEventListener("click", (ev) => {
     if (ev.target.id === "modal" && state) closeModal();
   });
+  document.addEventListener("keydown", (ev) => {
+    if (!state || state.over || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
+    if (ev.code === "Space") {
+      ev.preventDefault();
+      if (!$("#modal").classList.contains("hidden")) return;
+      actions.togglePause();
+    } else if (/^Digit[1-4]$/.test(ev.code)) {
+      actions.speed({ s: +ev.code.slice(5) - 1 });
+    }
+  });
+  setInterval(frame, 33);
 
   showTitle();
 })(globalThis.SAM = globalThis.SAM || {});

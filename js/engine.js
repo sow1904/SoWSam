@@ -18,11 +18,20 @@
   S.chance = (state, pct) => rand(state) * 100 < pct;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   // Korean particle that fits the last syllable: S.josa("조조군", "이", "가") -> "조조군이".
-  S.josa = function (word, withFinal, withoutFinal) {
+  // Numbers are read by their last digit (영 일 이 삼 사 오 육 칠 팔 구).
+  const DIGIT_FINAL = [1, 8, 0, 1, 0, 0, 1, 8, 8, 0]; // 0 none, 1 a final, 8 a final ㄹ
+  function finalOf(word) {
+    word = String(word);
+    const last = word[word.length - 1];
+    if (last >= "0" && last <= "9") return DIGIT_FINAL[+last];
     const code = word.charCodeAt(word.length - 1) - 0xac00;
-    const hasFinal = code >= 0 && code <= 11171 && code % 28 !== 0;
-    return word + (hasFinal ? withFinal : withoutFinal);
-  };
+    if (code < 0 || code > 11171) return 0;
+    const f = code % 28;
+    return f === 0 ? 0 : f === 8 ? 8 : 1;
+  }
+  S.josa = (word, withFinal, withoutFinal) => String(word) + (finalOf(word) ? withFinal : withoutFinal);
+  // 으로/로: words ending in ㄹ take 로 as well.
+  S.ro = (word) => String(word) + (finalOf(word) === 1 ? "으로" : "로");
   S.clamp = clamp;
 
   // ---------- setup ----------
@@ -160,7 +169,8 @@
   S.inTruce = (state) => S.monthsElapsed(state) < S.TRUCE_MONTHS;
 
   S.addLog = function (state, text, kind) {
-    state.log.push({ y: state.year, m: state.month, text, kind: kind || "info" });
+    state.logN = (state.logN || 0) + 1;
+    state.log.push({ y: state.year, m: state.month, d: state.day || 1, n: state.logN, text, kind: kind || "info" });
     if (state.log.length > 300) state.log.splice(0, state.log.length - 300);
   };
 
@@ -260,7 +270,7 @@
     if (spec && spec.type === "officer") {
       const o = state.officers[spec.id];
       if (!o || o.status !== "serving" || o.city !== cid || o.force !== c.owner) return fail("이 도시의 무장이 아닙니다.");
-      if (o.done) return fail(`${o.name}은(는) 이번 달 이미 행동해 임명할 수 없습니다.`);
+      if (o.done) return fail(`${S.josa(o.name, "은", "는")} 이번 달 이미 행동해 임명할 수 없습니다.`);
       const prev = S.postOf(state, o);
       if (prev === kind) return fail("이미 이 담당입니다.");
       if (prev) c.posts[prev] = null;
@@ -277,7 +287,7 @@
       if (o) o.done = true;
     }
     const who = !spec ? "공석" : spec.type === "clerk" ? S.CLERKS[spec.tier].name : state.officers[spec.id].name;
-    return { ok: true, msg: `${c.name}의 ${label} 담당을 ${who}(으)로 정했습니다.` };
+    return { ok: true, msg: `${c.name}의 ${label} 담당을 ${S.ro(who)} 정했습니다.` };
   };
 
   // Drop posts whose officer is no longer serving in the city.
@@ -353,8 +363,8 @@
     const c = state.cities[cid];
     if (!o || !c) return [null, null, "잘못된 대상입니다."];
     if (o.status !== "serving" || o.city !== cid || o.force !== c.owner) return [null, null, "이 도시의 무장이 아닙니다."];
-    if (o.done) return [null, null, `${o.name}은(는) 이번 달 이미 행동했습니다.`];
-    if (S.postOf(state, o)) return [null, null, `${o.name}은(는) 담당 업무 중입니다.`];
+    if (o.done) return [null, null, `${S.josa(o.name, "은", "는")} 이번 달 이미 행동했습니다.`];
+    if (S.postOf(state, o)) return [null, null, `${S.josa(o.name, "은", "는")} 담당 업무 중입니다.`];
     return [o, c, null];
   }
   const fail = (msg) => ({ ok: false, msg });
@@ -385,7 +395,7 @@
     c.order = Math.max(0, c.order - 4);
     S.addWeariness(state, c.owner, (amount / forcePop(state, c.owner)) * 400);
     o.done = true;
-    return { ok: true, msg: `${o.name}이(가) ${c.name}에서 병사 ${amount}명을 모았습니다.` };
+    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${c.name}에서 병사 ${amount}명을 모았습니다.` };
   };
 
   S.drill = function (state, oid, cid) {
@@ -396,7 +406,7 @@
     const gain = Math.min(100 - c.train, S.preview.train(o));
     c.train += gain;
     o.done = true;
-    return { ok: true, msg: `${o.name}이(가) ${c.name}의 병사를 훈련해 훈련도가 ${gain} 올랐습니다.` };
+    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${c.name}의 병사를 훈련해 훈련도가 ${gain} 올랐습니다.` };
   };
 
   S.wooPreview = (o) => 4 + Math.round(o.speech / 12);
@@ -409,7 +419,7 @@
     const gain = Math.min(100 - c.consent, S.wooPreview(o));
     c.consent += gain;
     o.done = true;
-    return { ok: true, msg: `${o.name}이(가) ${c.name}의 호족들을 찾아가 협력이 ${gain} 올랐습니다.` };
+    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${c.name}의 호족들을 찾아가 협력이 ${gain} 올랐습니다.` };
   };
 
   S.search = function (state, oid, cid) {
@@ -420,15 +430,15 @@
     for (const h of hidden) {
       if (S.chance(state, S.searchChance(o))) {
         h.hidden = false;
-        return { ok: true, found: h.id, msg: `${o.name}이(가) 재야의 인재 ${h.name}을(를) 찾아냈습니다!` };
+        return { ok: true, found: h.id, msg: `${S.josa(o.name, "이", "가")} 재야의 인재 ${S.josa(h.name, "을", "를")} 찾아냈습니다!` };
       }
     }
     if (S.chance(state, 40)) {
       const g = 30 + Math.floor(rand(state) * 120);
       c.gold += g;
-      return { ok: true, msg: `${o.name}이(가) 탐색 중 금 ${g}을(를) 얻었습니다.` };
+      return { ok: true, msg: `${S.josa(o.name, "이", "가")} 탐색 중 금 ${S.josa(g, "을", "를")} 얻었습니다.` };
     }
-    return { ok: true, msg: `${o.name}이(가) ${c.name}을(를) 탐색했지만 아무것도 찾지 못했습니다.` };
+    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${S.josa(c.name, "을", "를")} 탐색했지만 아무것도 찾지 못했습니다.` };
   };
 
   S.searchChance = (o) => Math.min(100, Math.round(25 + o.wit / 2));
@@ -452,7 +462,7 @@
     const valid = (t.status === "free" && !t.hidden) || (t.status === "captive" && t.captor === c.owner);
     if (!valid) return fail("등용할 수 없는 대상입니다.");
     const pct = S.recruitChance(state, o, t);
-    if (pct <= 0) return fail(`${t.name}은(는) 등용할 수 없습니다.`);
+    if (pct <= 0) return fail(`${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
     o.done = true;
     if (S.chance(state, pct)) {
       const old = t.force;
@@ -463,9 +473,9 @@
       t.captor = null;
       t.done = true;
       const from = old && old !== c.owner ? ` (${S.forceName(state, old)} 출신)` : "";
-      return { ok: true, joined: true, msg: `${o.name}의 설득으로 ${t.name}이(가) ${S.forceName(state, c.owner)}에 합류했습니다!${from}` };
+      return { ok: true, joined: true, msg: `${o.name}의 설득으로 ${S.josa(t.name, "이", "가")} ${S.forceName(state, c.owner)}에 합류했습니다!${from}` };
     }
-    return { ok: true, joined: false, msg: `${o.name}이(가) ${t.name}을(를) 설득했지만 거절당했습니다.` };
+    return { ok: true, joined: false, msg: `${S.josa(o.name, "이", "가")} ${S.josa(t.name, "을", "를")} 설득했지만 거절당했습니다.` };
   };
 
   S.reward = function (state, cid, targetId) {
@@ -480,7 +490,7 @@
     const gain = Math.min(100 - t.loyalty, 6 + Math.floor(rand(state) * 6));
     t.loyalty += gain;
     t.rewarded = true;
-    return { ok: true, msg: `${t.name}에게 금 ${S.COST.reward}을(를) 하사해 충성이 ${gain} 올랐습니다.` };
+    return { ok: true, msg: `${t.name}에게 금 ${S.josa(S.COST.reward, "을", "를")} 하사해 충성이 ${gain} 올랐습니다.` };
   };
 
   S.release = function (state, cid, targetId) {
@@ -488,7 +498,7 @@
     const c = state.cities[cid];
     if (!t || t.status !== "captive" || t.city !== cid || t.captor !== c.owner) return fail("석방할 수 없는 대상입니다.");
     freeCaptive(state, t);
-    return { ok: true, msg: `${t.name}을(를) 석방했습니다.` };
+    return { ok: true, msg: `${S.josa(t.name, "을", "를")} 석방했습니다.` };
   };
 
   // Send a released/escaped captive back to their own force if it still exists.
@@ -531,7 +541,7 @@
     const names = oids.map((id) => state.officers[id]);
     for (const o of names) { o.city = targetCid; o.done = true; }
     const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`].filter(Boolean).join(", ");
-    return { ok: true, msg: `${names.map((o) => o.name).join(", ")}이(가) ${t.name}(으)로 이동했습니다.${cargo ? " (" + cargo + ")" : ""}` };
+    return { ok: true, msg: `${S.josa(names.map((o) => o.name).join(", "), "이", "가")} ${S.ro(t.name)} 이동했습니다.${cargo ? " (" + cargo + ")" : ""}` };
   };
 
   // Officers alone travel to any own city reachable through own territory.
@@ -558,7 +568,7 @@
     }
     const list = oids.map((id) => state.officers[id]);
     for (const o of list) { o.city = targetCid; o.done = true; }
-    return { ok: true, msg: `${list.map((o) => o.name).join(", ")}이(가) ${t.name}(으)로 이동했습니다.` };
+    return { ok: true, msg: `${S.josa(list.map((o) => o.name).join(", "), "이", "가")} ${S.ro(t.name)} 이동했습니다.` };
   };
 
   // ---------- schemes ----------
@@ -608,9 +618,9 @@
   function schemeFailed(state, o, t, what) {
     const g = S.cityWit(state, t.id);
     const seen = g && S.chance(state, g.wit / 2);
-    if (seen && t.owner === state.playerForce) S.addLog(state, `${S.josa(g.name, "이", "가")} ${S.forceName(state, o.force)} ${o.name}의 ${what}을(를) 간파했습니다.`, "info");
+    if (seen && t.owner === state.playerForce) S.addLog(state, `${S.josa(g.name, "이", "가")} ${S.forceName(state, o.force)} ${o.name}의 ${S.josa(what, "을", "를")} 간파했습니다.`, "info");
     return { ok: true, success: false, msg: seen
-      ? `${S.josa(g.name, "이", "가")} ${o.name}의 ${what}을(를) 간파했습니다.`
+      ? `${S.josa(g.name, "이", "가")} ${o.name}의 ${S.josa(what, "을", "를")} 간파했습니다.`
       : `${o.name}의 ${S.josa(what, "이", "가")} ${t.name}에서 먹혀들지 않았습니다.` };
   }
   // 유언비어: unsettle the people and the great families of an enemy city.
@@ -723,7 +733,7 @@
     // A bold commander lifts his men's spirits.
     let aMorale = S.hasTrait(S.best(attackers, "cmd"), "과감") ? 1.05 : 1;
     let dMorale = defenders.length && S.hasTrait(S.best(defenders, "cmd"), "과감") ? 1.05 : 1;
-    say(`${S.forceName(state, atkForce)} ${A}명이 ${t.name}(${S.forceName(state, defForce)}, 수비 ${D}명)을(를) 공격합니다.`);
+    say(`${S.forceName(state, atkForce)} ${A}명이 ${t.name}(${S.forceName(state, defForce)}, 수비 ${D}명)을 공격합니다.`);
 
     // Duel between the strongest warriors, when both sides have one.
     // Bold warriors seek a duel; a cautious defender stays behind the walls.
@@ -735,9 +745,9 @@
       const d = duelD;
       if (a.war >= 70 || d.war >= 70) {
         const roll = (a.war - d.war) / 2 + (rand(state) - 0.5) * 40;
-        if (Math.abs(roll) < 4) say(`일기토! ${a.name}과(와) ${d.name}이(가) 맞붙었으나 승부가 나지 않았습니다.`);
-        else if (roll > 0) { dMorale = 0.85; say(`일기토! ${a.name}이(가) ${d.name}을(를) 물리쳤습니다. 수비군의 사기가 떨어집니다.`); }
-        else { aMorale = 0.85; say(`일기토! ${d.name}이(가) ${a.name}을(를) 물리쳤습니다. 공격군의 사기가 떨어집니다.`); }
+        if (Math.abs(roll) < 4) say(`일기토! ${S.josa(a.name, "과", "와")} ${S.josa(d.name, "이", "가")} 맞붙었으나 승부가 나지 않았습니다.`);
+        else if (roll > 0) { dMorale = 0.85; say(`일기토! ${S.josa(a.name, "이", "가")} ${S.josa(d.name, "을", "를")} 물리쳤습니다. 수비군의 사기가 떨어집니다.`); }
+        else { aMorale = 0.85; say(`일기토! ${S.josa(d.name, "이", "가")} ${S.josa(a.name, "을", "를")} 물리쳤습니다. 공격군의 사기가 떨어집니다.`); }
       }
     }
 
@@ -787,23 +797,23 @@
     S.addWeariness(state, atkForce, (killedA / forcePop(state, atkForce)) * 1500 + (report.attackerWon ? -2 : 3));
     if (defForce) S.addWeariness(state, defForce, (killedD / forcePop(state, defForce)) * 1500 + (report.attackerWon ? 5 : -1));
     if (report.attackerWon) {
-      say(`${t.name} 함락! ${S.forceName(state, atkForce)}이(가) 성을 차지했습니다.`);
+      say(`${t.name} 함락! ${S.josa(S.forceName(state, atkForce), "이", "가")} 성을 차지했습니다.`);
       // Defending officers escape to an adjacent friendly city or are captured.
       const escapes = defForce ? S.neighbors(targetCid).filter((n) => state.cities[n].owner === defForce) : [];
       for (const d of defenders) {
         if (escapes.length && S.chance(state, S.isRuler(state, d) ? 85 : 55)) {
           d.city = escapes[Math.floor(rand(state) * escapes.length)];
-          say(`${d.name}은(는) ${state.cities[d.city].name}(으)로 달아났습니다.`);
+          say(`${S.josa(d.name, "은", "는")} ${S.ro(state.cities[d.city].name)} 달아났습니다.`);
         } else {
           d.status = "captive";
           d.captor = atkForce;
           report.captured.push(d.id);
-          say(`${d.name}을(를) 사로잡았습니다.`);
+          say(`${S.josa(d.name, "을", "를")} 사로잡았습니다.`);
         }
       }
       // Captives the defender held are freed.
       for (const p of S.officersIn(state, targetCid, (x) => x.status === "captive" && x.captor === defForce)) {
-        if (p.force === atkForce) { p.status = "serving"; p.captor = null; say(`포로였던 ${p.name}이(가) 풀려나 합류했습니다.`); }
+        if (p.force === atkForce) { p.status = "serving"; p.captor = null; say(`포로였던 ${S.josa(p.name, "이", "가")} 풀려나 합류했습니다.`); }
         else freeCaptive(state, p);
       }
       const remainingD = Math.max(0, D);
@@ -822,11 +832,11 @@
     } else {
       loseTroops(t, t.troops - Math.max(0, D));
       c.troops += survivors;
-      say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${c.name}(으)로 물러났습니다.`);
+      say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${S.ro(c.name)} 물러났습니다.`);
     }
     const kind = report.attackerWon ? "war" : "warfail";
     S.addLog(state, report.attackerWon
-      ? `${S.forceName(state, atkForce)}이(가) ${S.forceName(state, defForce)}의 ${t.name}을(를) 함락했습니다.`
+      ? `${S.josa(S.forceName(state, atkForce), "이", "가")} ${S.forceName(state, defForce)}의 ${S.josa(t.name, "을", "를")} 함락했습니다.`
       : `${S.forceName(state, atkForce)}의 ${t.name} 공격이 실패했습니다.`, kind);
     return { ok: true, report, msg: report.lines[report.lines.length - 1] };
   };
@@ -927,7 +937,7 @@
         o.status = "free";
         o.force = null;
         o.hidden = false;
-        S.addLog(state, `${o.name}이(가) ${S.forceName(state, f)}을(를) 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
+        S.addLog(state, `${S.josa(o.name, "이", "가")} ${S.josa(S.forceName(state, f), "을", "를")} 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
       } else if (S.chance(state, (10 + Math.max(0, state.forces[o.force].weariness - 50) / 2) * S.loyaltyDrift(o))) {
         o.loyalty = Math.max(0, o.loyalty - 1);
       }
@@ -936,7 +946,7 @@
     for (const o of Object.values(state.officers)) {
       if (o.status === "captive" && S.chance(state, 3)) {
         freeCaptive(state, o);
-        S.addLog(state, `포로 ${o.name}이(가) 탈출했습니다.`, "info");
+        S.addLog(state, `포로 ${S.josa(o.name, "이", "가")} 탈출했습니다.`, "info");
       }
     }
     // Weariness fades in peacetime.
