@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SoWSam 지도 편집기</title>
+  <style>
+    :root { --bg: #1d1a16; --panel: #2a2520; --line: #4a4036; --ink: #f1e6cf; --muted: #b5a68a; --accent: #f0b35e; --fs: 13px; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.4 "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+    body { display: flex; flex-direction: column; }
+    header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+    header b { color: var(--accent); margin-right: 8px; }
+    header .sp { flex: 1; }
+    button { font: inherit; color: var(--ink); background: #3a322a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); color: #1d1a16; font-weight: 700; border-color: var(--accent); }
+    label { color: var(--muted); }
+    main { flex: 1; display: flex; min-height: 0; }
+    #map { flex: 1; min-width: 0; height: 100%; background: #1d4f7a; cursor: grab; user-select: none; touch-action: none; }
+    #map.panning { cursor: grabbing; }
+    aside { width: 300px; flex-shrink: 0; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line); padding: 10px 12px; }
+    aside h3 { margin: 12px 0 6px; font-size: 14px; color: var(--accent); }
+    .hint { color: var(--muted); font-size: 12px; }
+    .changed div { padding: 2px 0; border-bottom: 1px dotted var(--line); cursor: pointer; font-size: 13px; }
+    .changed div:hover { color: var(--accent); }
+    .road { stroke: rgba(255, 244, 214, 0.75); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; }
+    .node { cursor: move; }
+    .node circle, .node path { stroke: #1d1a16; stroke-width: 2; }
+    .node.city circle { fill: #e04a3a; }
+    .node.fort path { fill: #f0b35e; }
+    .node.site path { fill: #9a8d76; }
+    .node.moved circle, .node.moved path { stroke: #7cf27c; stroke-width: 3; }
+    .node.sel circle, .node.sel path { stroke: #fff; stroke-width: 4; }
+    .node text { font-size: var(--fs); font-weight: 700; fill: #fff8e6; stroke: #1d1a16; stroke-width: 3.5px; paint-order: stroke; pointer-events: none; }
+    #map.nolabels .node text { display: none; }
+    #map.noroads .road { display: none; }
+    #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--accent); border-radius: 6px; padding: 8px 14px; display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <b>SoWSam 지도 편집기</b>
+    <button class="primary" id="btnSave" title="위치를 JSON 파일로 내려받습니다">파일로 저장</button>
+    <button id="btnCopy" title="위치 JSON을 클립보드에 복사합니다">복사</button>
+    <button id="btnUndo" title="Ctrl+Z">되돌리기</button>
+    <button id="btnResetSel">선택한 곳 원래대로</button>
+    <button id="btnResetAll">모두 원래대로</button>
+    <label><input type="checkbox" id="chkRoads" checked> 도로</label>
+    <label><input type="checkbox" id="chkLabels" checked> 이름</label>
+    <span class="sp"></span>
+    <span id="count" class="hint"></span>
+  </header>
+  <main>
+    <svg id="map" xmlns="http://www.w3.org/2000/svg"></svg>
+    <aside>
+      <div id="sel"><p class="hint">성이나 거점을 끌어서 옮깁니다.</p></div>
+      <h3>사용법</h3>
+      <p class="hint">
+        · 성(빨간 점)이나 거점(노란 표시)을 끌어서 옮깁니다. 옮긴 곳은 초록 테두리로 표시됩니다.<br>
+        · 빈 곳을 끌면 지도가 움직이고, 휠로 확대·축소합니다.<br>
+        · 선택한 곳은 방향키로 1px씩(Shift를 누르면 10px씩) 옮깁니다.<br>
+        · Ctrl+Z로 되돌리고, Esc로 선택을 풉니다.<br>
+        · 바꾼 위치는 이 브라우저에 자동으로 저장됩니다. 다 끝나면 「파일로 저장」을 눌러 받은 sowsam-positions.json을 알려 주세요. 「복사」로 내용을 붙여 넣어 주셔도 됩니다.<br>
+        · 거리와 행군 일수는 실제 위경도로 재므로, 위치를 옮겨도 게임 밸런스는 바뀌지 않습니다.
+      </p>
+      <h3>옮긴 곳 <span id="count2"></span></h3>
+      <div id="changed" class="changed"></div>
+    </aside>
+  </main>
+  <div id="toast"></div>
+
+  <script src="../js/data/map190.js"></script>
+  <script src="../js/forts.js"></script>
+  <script>
+  (function (S) {
+    const KEY = "sowsam.editor.pos.190.v2"; // v2: fitted to the redrawn map (one Yellow River)
+    const $ = (s) => document.querySelector(s);
+    S.MAP = S.MAPS["190"];
+    const T = S.MAP.terrain;
+    const svg = $("#map");
+
+    // Starting positions: what the game uses now.
+    const nodes = {};
+    for (const [id, c] of Object.entries(S.MAP.cities)) {
+      const [x, y] = S.placeXY(id, c[3], c[4]);
+      nodes[id] = { id, name: c[0], kind: "city", x, y, x0: x, y0: y };
+    }
+    for (const [id, f] of Object.entries(S.FORT_SITES["190"])) {
+      const [x, y] = S.placeXY(id, f[5], f[6]);
+      nodes[id] = { id, name: f[0], kind: f[7] ? "fort" : "site", fortKind: f[1], x, y, x0: x, y0: y };
+    }
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+      for (const [id, p] of Object.entries(saved)) if (nodes[id]) [nodes[id].x, nodes[id].y] = p;
+    } catch (e) { /* start fresh */ }
+
+    let selected = null;
+    const undo = [];
+    const moved = (n) => n.x !== n.x0 || n.y !== n.y0;
+    function persist() {
+      const out = {};
+      for (const n of Object.values(nodes)) if (moved(n)) out[n.id] = [n.x, n.y];
+      try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
+    }
+    function toast(msg) {
+      const t = $("#toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      clearTimeout(toast.t);
+      toast.t = setTimeout(() => (t.style.display = "none"), 2200);
+    }
+
+    // ---------- drawing ----------
+    const view = { x: 0, y: 0, w: T.w, h: T.h };
+    function applyView() {
+      svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+      const r = svg.getBoundingClientRect();
+      const px = view.w / Math.max(1, r.width); // map units per screen pixel
+      document.documentElement.style.setProperty("--fs", `${Math.max(6, 13 * px)}px`);
+      nodeScale = Math.max(0.35, px);
+      for (const n of Object.values(nodes)) placeNode(n);
+    }
+    let nodeScale = 1;
+    function nodeShape(n) {
+      const s = 7 * nodeScale;
+      if (n.kind === "city") return `<circle r="${s}"/>`;
+      return `<path d="M0 ${-s * 1.3} L${s * 1.2} ${s} L${-s * 1.2} ${s} Z"/>`;
+    }
+    function placeNode(n) {
+      const g = n.el;
+      if (!g) return;
+      g.setAttribute("transform", `translate(${n.x} ${n.y})`);
+      g.innerHTML = nodeShape(n) + `<text x="${9 * nodeScale}" y="${4 * nodeScale}">${n.name}${n.kind === "site" ? " (터)" : ""}</text>`;
+      g.setAttribute("class", `node ${n.kind}${moved(n) ? " moved" : ""}${selected === n.id ? " sel" : ""}`);
+    }
+    function drawRoads() {
+      const g = $("#roads");
+      g.innerHTML = S.MAP.roads.map(([a, b]) => {
+        const A = nodes[a], B = nodes[b];
+        // Roads bend through built strongholds that sit on them.
+        const via = Object.values(nodes).filter((n) => n.kind === "fort" && S.FORT_SITES["190"][n.id][2] && [S.FORT_SITES["190"][n.id][2], S.FORT_SITES["190"][n.id][3]].sort().join() === [a, b].sort().join())
+          .sort((p, q) => Math.hypot(p.x - A.x, p.y - A.y) - Math.hypot(q.x - A.x, q.y - A.y));
+        const pts = [A, ...via, B].map((n) => `${n.x},${n.y}`).join(" ");
+        return `<polyline class="road" fill="none" points="${pts}"/>`;
+      }).join("");
+    }
+    function build() {
+      svg.innerHTML = `<image href="../${T.image}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>` +
+        `<g id="roads"></g><g id="nodes"></g>`;
+      const g = $("#nodes");
+      for (const n of Object.values(nodes)) {
+        const el = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        el.dataset.id = n.id;
+        n.el = el;
+        g.appendChild(el);
+      }
+      drawRoads();
+      fitView();
+    }
+    function fitView() {
+      const r = svg.getBoundingClientRect();
+      const scale = Math.max(T.w / r.width, T.h / r.height);
+      view.w = r.width * scale;
+      view.h = r.height * scale;
+      view.x = (T.w - view.w) / 2;
+      view.y = (T.h - view.h) / 2;
+      applyView();
+    }
+    function refreshSide() {
+      const list = Object.values(nodes).filter(moved);
+      $("#count").textContent = `옮긴 곳 ${list.length}개`;
+      $("#count2").textContent = `(${list.length})`;
+      $("#changed").innerHTML = list.map((n) => `<div data-id="${n.id}">${n.name} (${n.x0}, ${n.y0}) → (${n.x}, ${n.y})</div>`).join("") || `<p class="hint">아직 없습니다.</p>`;
+      const n = selected && nodes[selected];
+      $("#sel").innerHTML = n
+        ? `<h3>${n.name}${n.kind === "city" ? "" : " · " + (n.kind === "site" ? "터" : S.FORT_KINDS[n.fortKind])}</h3>` +
+          `<p>위치 <b>(${n.x}, ${n.y})</b><br><span class="hint">처음 위치 (${n.x0}, ${n.y0}) · id ${n.id}</span></p>`
+        : `<p class="hint">성이나 거점을 끌어서 옮깁니다.</p>`;
+    }
+    function select(id) {
+      const prev = selected;
+      selected = id;
+      if (prev && nodes[prev]) placeNode(nodes[prev]);
+      if (id) placeNode(nodes[id]);
+      refreshSide();
+    }
+    function moveNode(n, x, y, record) {
+      x = Math.round(Math.max(0, Math.min(T.w, x)));
+      y = Math.round(Math.max(0, Math.min(T.h, y)));
+      if (record) undo.push({ id: n.id, x: n.x, y: n.y });
+      n.x = x;
+      n.y = y;
+      placeNode(n);
+      drawRoads();
+    }
+
+    // ---------- mouse ----------
+    const toMap = (ev) => {
+      const pt = svg.createSVGPoint();
+      pt.x = ev.clientX;
+      pt.y = ev.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    };
+    let drag = null;
+    svg.addEventListener("pointerdown", (ev) => {
+      const g = ev.target.closest(".node");
+      const p = toMap(ev);
+      svg.setPointerCapture(ev.pointerId);
+      if (g) {
+        const n = nodes[g.dataset.id];
+        select(n.id);
+        drag = { kind: "node", n, dx: n.x - p.x, dy: n.y - p.y, from: { x: n.x, y: n.y }, movedYet: false };
+      } else {
+        drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y };
+        svg.classList.add("panning");
+      }
+    });
+    svg.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      if (drag.kind === "node") {
+        const p = toMap(ev);
+        if (!drag.movedYet) { undo.push({ id: drag.n.id, x: drag.from.x, y: drag.from.y }); drag.movedYet = true; }
+        moveNode(drag.n, p.x + drag.dx, p.y + drag.dy, false);
+        refreshSide();
+      } else {
+        const r = svg.getBoundingClientRect();
+        view.x = drag.vx - ((ev.clientX - drag.sx) * view.w) / r.width;
+        view.y = drag.vy - ((ev.clientY - drag.sy) * view.h) / r.height;
+        applyView();
+      }
+    });
+    const endDrag = () => {
+      if (drag && drag.kind === "node" && drag.movedYet) { persist(); refreshSide(); }
+      if (drag && drag.kind === "pan" && Math.abs(view.x - drag.vx) + Math.abs(view.y - drag.vy) < 2) select(null);
+      drag = null;
+      svg.classList.remove("panning");
+    };
+    svg.addEventListener("pointerup", endDrag);
+    svg.addEventListener("pointercancel", endDrag);
+    svg.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      const p = toMap(ev);
+      const f = ev.deltaY < 0 ? 1 / 1.2 : 1.2;
+      const nw = Math.max(150, Math.min(T.w * 1.6, view.w * f));
+      const k = nw / view.w;
+      view.x = p.x - (p.x - view.x) * k;
+      view.y = p.y - (p.y - view.y) * k;
+      view.w = nw;
+      view.h *= k;
+      applyView();
+    }, { passive: false });
+    window.addEventListener("resize", applyView);
+
+    // ---------- keys and buttons ----------
+    function doUndo() {
+      const u = undo.pop();
+      if (!u) return toast("되돌릴 것이 없습니다.");
+      moveNode(nodes[u.id], u.x, u.y, false);
+      select(u.id);
+      persist();
+    }
+    document.addEventListener("keydown", (ev) => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); return doUndo(); }
+      if (ev.key === "Escape") return select(null);
+      const n = selected && nodes[selected];
+      const step = ev.shiftKey ? 10 : 1;
+      const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
+      if (n && d) {
+        ev.preventDefault();
+        moveNode(n, n.x + d[0], n.y + d[1], true);
+        persist();
+        refreshSide();
+      }
+    });
+    function exportJSON() {
+      const out = { map: "190", note: "SoWSam map editor", cities: {}, forts: {}, moved: [] };
+      for (const n of Object.values(nodes)) {
+        (n.kind === "city" ? out.cities : out.forts)[n.id] = [n.x, n.y];
+        if (moved(n)) out.moved.push(n.id);
+      }
+      return JSON.stringify(out, null, 1);
+    }
+    $("#btnSave").onclick = () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([exportJSON()], { type: "application/json" }));
+      a.download = "sowsam-positions.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast("sowsam-positions.json을 내려받았습니다.");
+    };
+    $("#btnCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(exportJSON()); toast("클립보드에 복사했습니다."); }
+      catch (e) { toast("복사하지 못했습니다. 「파일로 저장」을 써 주세요."); }
+    };
+    $("#btnUndo").onclick = doUndo;
+    $("#btnResetSel").onclick = () => {
+      const n = selected && nodes[selected];
+      if (!n) return toast("먼저 성이나 거점을 고르세요.");
+      moveNode(n, n.x0, n.y0, true);
+      persist();
+      refreshSide();
+    };
+    $("#btnResetAll").onclick = () => {
+      if (!confirm("옮긴 위치를 모두 처음으로 되돌릴까요?")) return;
+      for (const n of Object.values(nodes)) if (moved(n)) { undo.push({ id: n.id, x: n.x, y: n.y }); n.x = n.x0; n.y = n.y0; placeNode(n); }
+      drawRoads();
+      persist();
+      refreshSide();
+    };
+    $("#chkRoads").onchange = (e) => svg.classList.toggle("noroads", !e.target.checked);
+    $("#chkLabels").onchange = (e) => svg.classList.toggle("nolabels", !e.target.checked);
+    $("#changed").onclick = (e) => {
+      const id = e.target.dataset && e.target.dataset.id;
+      if (!id) return;
+      const n = nodes[id];
+      view.x = n.x - view.w / 2;
+      view.y = n.y - view.h / 2;
+      applyView();
+      select(id);
+    };
+
+    build();
+    refreshSide();
+  })(globalThis.SAM);
+  </script>
+</body>
+</html>

@@ -269,11 +269,14 @@
   const terrain = {
     image: "assets/map/terrain.jpg", w: 2048, h: 2048,
     anchors: [
-      [1110, 185, 40.2, 111.2], // 황하 하투의 북동쪽 굽이
-      [815, 145, 40.3, 107.0], // 하투의 북서쪽 굽이
-      [1055, 555, 34.6, 110.3], // 동관, 위수가 황하에 드는 곳
-      [1440, 345, 37.7, 118.9], // 황하 하구
-      [1420, 290, 39.1, 117.7], // 발해 서쪽 해안
+      [1090, 180, 40.2, 111.2], // 황하 하투의 북동쪽 굽이
+      [860, 140, 40.3, 107.0], // 하투의 북서쪽 굽이
+      [1022, 628, 34.6, 110.3], // 동관, 위수가 황하에 드는 곳
+      [1528, 388, 37.7, 118.9], // 황하 하구
+      [1406, 500, 36.75, 117.0], // 황하 하류, 제남 북쪽
+      [1290, 598, 35.75, 115.0], // 황하가 북동으로 꺾이는 곳 (복양 부근)
+      [1150, 612, 34.9, 113.2], // 황하, 호로관 북쪽
+      [1418, 215, 39.1, 117.7], // 발해 서쪽 해안
       [1805, 410, 37.4, 122.7], // 산동반도 끝
       [1840, 895, 31.4, 121.8], // 장강 하구
       [1690, 930, 31.2, 120.2], // 태호
@@ -289,17 +292,41 @@
       [1080, 1790, 20.3, 110.2], // 뇌주반도 끝
       [1860, 1580, 23.7, 121.0], // 대만
       [660, 1800, 21.03, 105.85], // 홍하 삼각주
-      [560, 480, 36.06, 103.83], // 금성 부근의 황하
+      [578, 500, 36.06, 103.83], // 금성 부근의 황하
     ],
     // The picture packs the north China plain tightly; spread places out
     // from its middle, most at the centre and not at all at the rim.
-    spread: { x: 1330, y: 470, r: 380, k: 1.35 },
-    // Places set by hand: off the picture, in the sea, or on the wrong bank of a river.
+    spread: { x: 1300, y: 520, r: 380, k: 1.2 },
+    // Where every city and stronghold is drawn, set by hand with tools/map-editor.html.
+    // A place missing here falls back to the warp above.
     pos: {
-      dunhuang: [40, 120], lelang: [1990, 260], rinan: [690, 1990], donglai: [1650, 440],
-      liaoxi: [1610, 95], hepu: [990, 1668], hongnong: [1100, 575],
-      henei: [1215, 512], weijun: [1255, 440], qinghe: [1300, 395], pingyuan: [1352, 383],
-      nanyang: [1185, 800], runan: [1280, 730], chenguo: [1330, 700],
+      henan: [1136, 624], henei: [1179, 594], hedong: [1048, 590], hongnong: [1065, 638],
+      jingzhao: [914, 676], zuopingyi: [990, 620], youfufeng: [853, 647], yingchuan: [1235, 708],
+      runan: [1261, 809], liangguo: [1341, 710], peiguo: [1442, 682], chenguo: [1292, 762],
+      luguo: [1490, 574], chenliu: [1259, 645], dongjun: [1268, 579], dongping: [1349, 558],
+      rencheng: [1436, 589], taishan: [1449, 530], jibei: [1389, 509], shanyang: [1392, 628],
+      jiyin: [1318, 611], weijun: [1235, 530], julu: [1265, 440], changshan: [1233, 360],
+      zhongshan: [1268, 294], anping: [1309, 392], hejian: [1335, 305], qinghe: [1323, 487],
+      zhaoguo: [1222, 467], bohai: [1381, 335], zhuo: [1317, 193], guangyang: [1341, 142],
+      daijun: [1239, 161], shanggu: [1286, 110], yuyang: [1362, 87], youbeiping: [1432, 257],
+      liaoxi: [1498, 240], liaodong: [1805, 176], xuantu: [1790, 47], lelang: [1979, 302],
+      shangdang: [1132, 517], taiyuan: [1124, 370], xihe: [1055, 390], shangjun: [1006, 346],
+      wuyuan: [1021, 137], yunzhong: [1096, 134], dingxiang: [1139, 186], yanmen: [1160, 254],
+      shuofang: [880, 134], longxi: [681, 535], hanyang: [716, 619], wudu: [651, 724],
+      jincheng: [619, 470], anding: [863, 566], beidi: [929, 623], wuwei: [514, 333], zhangye: [366, 243],
+      jiuquan: [230, 172], dunhuang: [40, 120], hanzhong: [792, 776], bajun: [740, 1090],
+      guanghan: [610, 929], shujun: [580, 980], qianwei: [560, 1048], zangke: [742, 1343],
+      yuexi: [425, 1224], yizhoujun: [423, 1489], yongchang: [177, 1471], nanyang: [1130, 789],
+      nanjun: [1132, 1047], jiangxia: [1351, 1002], changsha: [1235, 1226], wuling: [1121, 1171],
+      lingling: [1119, 1344], guiyang: [1260, 1387], jiujiang: [1481, 823], danyang: [1601, 873],
+      lujiang: [1470, 983], kuaiji: [1743, 1029], wujun: [1726, 917], yuzhang: [1429, 1160],
+      donghai: [1575, 638], langya: [1577, 563], pengcheng: [1482, 634], guangling: [1628, 738],
+      xiapi: [1528, 717], qiguo: [1515, 438], beihai: [1580, 461], donglai: [1716, 404],
+      jinan: [1448, 473], lean: [1461, 391], pingyuan: [1401, 431], nanhai: [1418, 1610],
+      cangwu: [1161, 1568], yulin: [997, 1585], hepu: [1021, 1674], jiaozhi: [712, 1813],
+      jiuzhen: [673, 1900], rinan: [774, 1997], hulao: [1175, 630], hangu: [1101, 627],
+      tongguan: [1021, 642], chencang: [844, 675], yangping: [711, 761], jiameng: [703, 833],
+      jiange: [668, 873], baidi: [948, 968], yijing: [1325, 240], hefei: [1475, 883],
     },
   };
 
