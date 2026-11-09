@@ -87,6 +87,7 @@
       map: scenario.map,
       emperor: scenario.emperor || null, // city where the Han emperor is held
       pacts: {},
+      marches: [],
     };
     S.useMap(scenario.map);
     for (const [id, [name, prov, seat, lat, lon, size, gentry]] of Object.entries(S.MAP.cities)) {
@@ -200,7 +201,7 @@
 
   S.officersIn = (state, cid, filter) =>
     Object.values(state.officers).filter((o) => o.city === cid && (!filter || filter(o)));
-  S.serving = (state, cid) => S.officersIn(state, cid, (o) => o.status === "serving");
+  S.serving = (state, cid) => S.officersIn(state, cid, (o) => o.status === "serving" && !o.transit);
   S.idle = (state, cid) => S.serving(state, cid).filter((o) => !o.done && !S.postOf(state, o));
   S.visibleFree = (state, cid) => S.officersIn(state, cid, (o) => o.status === "free" && !o.hidden);
   S.captivesIn = (state, cid, force) =>
@@ -515,13 +516,15 @@
     }
   }
 
-  // Move officers and optionally troops/gold/food to an adjacent own city.
+  // Send officers with troops, gold and food to another own city along roads
+  // through own territory. The convoy travels at cargo speed.
   S.move = function (state, cid, targetCid, oids, troops, gold, food) {
     const c = state.cities[cid];
     const t = state.cities[targetCid];
-    if (!t || !S.neighbors(cid).includes(targetCid)) return fail("인접한 도시가 아닙니다.");
-    if (t.owner !== c.owner) return fail("자기 세력 도시로만 이동할 수 있습니다.");
-    if (!oids.length) return fail("이동할 무장을 골라 주세요.");
+    if (!t || t.owner !== c.owner || t === c) return fail("자기 세력의 다른 도시로만 수송할 수 있습니다.");
+    const route = S.route(state, cid, targetCid, "cargo");
+    if (!route) return fail("아군 영토로 이어진 도시로만 수송할 수 있습니다.");
+    if (!oids.length) return fail("수송을 이끌 무장을 골라 주세요.");
     for (const id of oids) {
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
@@ -531,44 +534,31 @@
     troops = clamp(troops, 0, c.troops);
     gold = clamp(Math.floor(gold || 0), 0, c.gold);
     food = clamp(Math.floor(food || 0), 0, c.food);
-    if (troops) {
-      t.train = Math.round((t.train * t.troops + c.train * troops) / (t.troops + troops));
-      t.troops += troops;
-      c.troops -= troops;
-    }
-    c.gold -= gold; t.gold += gold;
-    c.food -= food; t.food += food;
-    const names = oids.map((id) => state.officers[id]);
-    for (const o of names) { o.city = targetCid; o.done = true; }
+    c.troops -= troops;
+    c.gold -= gold;
+    c.food -= food;
+    const speed = troops || gold || food ? "cargo" : "officer";
+    const m = S.launch(state, { kind: "move", force: c.owner, path: route.path, km: route.km, speed,
+      officers: oids, troops, train: c.train, gold, food, origin: cid, target: targetCid });
+    const names = oids.map((id) => state.officers[id].name).join(", ");
     const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`].filter(Boolean).join(", ");
-    return { ok: true, msg: `${S.josa(names.map((o) => o.name).join(", "), "이", "가")} ${S.ro(t.name)} 이동했습니다.${cargo ? " (" + cargo + ")" : ""}` };
+    return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${m.arrive - m.start}일 뒤 도착합니다.${cargo ? " (" + cargo + ")" : ""}` };
   };
 
-  // Officers alone travel to any own city reachable through own territory.
-  S.reachable = function (state, cid) {
-    const owner = state.cities[cid].owner;
-    const dist = { [cid]: 0 };
-    const queue = [cid];
-    while (queue.length) {
-      const id = queue.shift();
-      for (const n of S.neighbors(id)) {
-        if (!(n in dist) && state.cities[n].owner === owner) { dist[n] = dist[id] + 1; queue.push(n); }
-      }
-    }
-    delete dist[cid];
-    return dist;
-  };
+  // Officers alone travel faster, to any own city reachable through own territory.
   S.relocate = function (state, cid, targetCid, oids) {
     const t = state.cities[targetCid];
-    if (!t || !(targetCid in S.reachable(state, cid))) return fail("아군 영토로 이어진 도시로만 이동할 수 있습니다.");
+    const route = t && t.owner === state.cities[cid].owner && targetCid !== cid ? S.route(state, cid, targetCid, "officer") : null;
+    if (!route) return fail("아군 영토로 이어진 도시로만 이동할 수 있습니다.");
     if (!oids.length) return fail("이동할 무장을 골라 주세요.");
     for (const id of oids) {
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
     }
-    const list = oids.map((id) => state.officers[id]);
-    for (const o of list) { o.city = targetCid; o.done = true; }
-    return { ok: true, msg: `${S.josa(list.map((o) => o.name).join(", "), "이", "가")} ${S.ro(t.name)} 이동했습니다.` };
+    const m = S.launch(state, { kind: "move", force: t.owner, path: route.path, km: route.km, speed: "officer",
+      officers: oids, origin: cid, target: targetCid });
+    const names = oids.map((id) => state.officers[id].name).join(", ");
+    return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${route.days}일 뒤 도착합니다.` };
   };
 
   // ---------- schemes ----------
@@ -713,34 +703,52 @@
     if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
       return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
     }
-    const foodNeed = Math.ceil(troops / 10);
+    const days = S.travelDays(S.roadKm(cid, targetCid), "army");
+    const foodNeed = S.marchFood(troops, days);
     if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
-
-    const attackers = oids.map((id) => state.officers[id]);
-    const defenders = S.serving(state, targetCid).filter((o) => o.force === t.owner);
-    attackers.forEach((o) => (o.done = true));
     c.troops -= troops;
     c.food -= foodNeed;
+    const m = S.launch(state, { kind: "army", force: c.owner, path: [cid, targetCid], speed: "army",
+      officers: oids, troops, train: c.train, origin: cid, target: targetCid });
+    const names = oids.map((id) => state.officers[id].name).join(", ");
+    if (t.owner === state.playerForce && c.owner !== state.playerForce) {
+      S.addLog(state, `${S.forceName(state, c.owner)} ${troops}명이 ${c.name}에서 ${S.ro(t.name)} 진군하고 있습니다. (${days}일 뒤 도착)`, "threat");
+    }
+    return { ok: true, march: m, msg: `${names}의 군단 ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
+  };
 
-    const atkForce = c.owner;
+  // Rations for the march: a tenth of the men up front, plus the days on the road.
+  S.marchFood = (troops, days) => Math.ceil(troops / 10 + (troops * days) / 1000);
+
+  // The battle, when an army reaches its target.
+  S.fight = function (state, m) {
+    const c = state.cities[m.origin];
+    const t = state.cities[m.target];
+    const targetCid = m.target;
+
+    const attackers = m.officers.map((id) => state.officers[id]).filter((o) => o.status === "serving" && o.force === m.force);
+    const defenders = S.serving(state, targetCid).filter((o) => o.force === t.owner);
+    const troops = m.troops;
+
+    const atkForce = m.force;
     const defForce = t.owner;
-    const report = { lines: [], attackerWon: false, from: c.name, to: t.name, captured: [], attacker: atkForce, defender: defForce };
+    const report = { lines: [], attackerWon: false, from: c.name, days: m.arrive - m.start, to: t.name, captured: [], attacker: atkForce, defender: defForce };
     const say = (s) => report.lines.push(s);
     const att = sideStats(attackers, 30);
     const def = sideStats(defenders, defForce ? 40 : 35);
     let A = troops, D = t.troops;
     const A0 = A, D0 = Math.max(D, 1);
     // A bold commander lifts his men's spirits.
-    let aMorale = S.hasTrait(S.best(attackers, "cmd"), "과감") ? 1.05 : 1;
+    let aMorale = attackers.length && S.hasTrait(S.best(attackers, "cmd"), "과감") ? 1.05 : 1;
     let dMorale = defenders.length && S.hasTrait(S.best(defenders, "cmd"), "과감") ? 1.05 : 1;
     say(`${S.forceName(state, atkForce)} ${A}명이 ${t.name}(${S.forceName(state, defForce)}, 수비 ${D}명)을 공격합니다.`);
 
     // Duel between the strongest warriors, when both sides have one.
     // Bold warriors seek a duel; a cautious defender stays behind the walls.
-    const duelA = defenders.length && S.best(attackers, "war");
+    const duelA = attackers.length && defenders.length && S.best(attackers, "war");
     const duelD = defenders.length && S.best(defenders, "war");
     const duelPct = defenders.length ? 30 + (S.hasTrait(duelA, "과감") ? 15 : 0) + (S.hasTrait(duelD, "과감") ? 15 : 0) - (S.hasTrait(duelD, "신중") ? 20 : 0) : 0;
-    if (defenders.length && S.chance(state, duelPct)) {
+    if (attackers.length && defenders.length && S.chance(state, duelPct)) {
       const a = duelA;
       const d = duelD;
       if (a.war >= 70 || d.war >= 70) {
@@ -775,7 +783,7 @@
 
     const wb = wallBonus(t) * gentryDefense(t);
     for (let round = 1; round <= 8 && A > 0 && D > 0; round++) {
-      const aPow = power(A, att, c.train, 1) * aMorale;
+      const aPow = power(A, att, m.train, 1) * aMorale;
       const dPow = power(D, def, t.train, wb) * dMorale;
       const lossD = Math.min(D, Math.round(aPow * 0.09 * (0.85 + rand(state) * 0.3)));
       const lossA = Math.min(A, Math.round(dPow * 0.09 * (0.85 + rand(state) * 0.3)));
@@ -823,16 +831,17 @@
       // Surrendered locals stay as retainers; the families distrust the new lord.
       t.retainers = Math.floor(remainingD * 0.3);
       t.consent = Math.min(t.consent, 30);
-      t.train = c.train;
+      t.train = m.train;
       t.gold = Math.floor(t.gold / 2);
       t.food = Math.floor(t.food / 2);
       t.order = Math.max(10, t.order - 20);
-      attackers.forEach((o) => (o.city = targetCid));
+      attackers.forEach((o) => { o.city = targetCid; o.transit = null; });
+      for (const id of m.officers) if (state.officers[id] && state.officers[id].transit === m.id) state.officers[id].transit = null;
       if (defForce) checkForce(state, defForce, report);
     } else {
       loseTroops(t, t.troops - Math.max(0, D));
-      c.troops += survivors;
-      say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${S.ro(c.name)} 물러났습니다.`);
+      S.sendHome(state, m, survivors);
+      say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${S.ro(c.name)} 물러납니다.`);
     }
     const kind = report.attackerWon ? "war" : "warfail";
     S.addLog(state, report.attackerWon
@@ -1128,6 +1137,7 @@
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.pacts) state.pacts = {};
+    if (!state.marches) state.marches = [];
     // Older saves used 통솔/무력/지력/정치.
     for (const o of Object.values(state.officers)) {
       if (o.cmd != null || !S.ABILITIES[o.name]) continue;
@@ -1169,7 +1179,7 @@
     return {
       cities: cs.length,
       officers: S.officersOf(state, fid).length,
-      troops: cs.reduce((s, c) => s + c.troops, 0),
+      troops: cs.reduce((s, c) => s + c.troops, 0) + S.marchesOf(state, fid).reduce((s, m) => s + m.troops, 0),
       gold: cs.reduce((s, c) => s + c.gold, 0),
       food: cs.reduce((s, c) => s + c.food, 0),
       manpower: cs.reduce((s, c) => s + c.manpower, 0),

@@ -147,8 +147,55 @@
         `<text class="name" x="${c.x}" y="${c.y + r + 13}">${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + r + 24}">${fmt(c.troops)}</text></g>`;
     }
+    svg += `<g id="marchLayer"></g>`;
     $("#map").innerHTML = svg;
+    renderMarches();
     applyView();
+  }
+
+  // Armies, convoys and travelling officers on the roads. Our own marches and
+  // enemy armies heading for our cities show their route ahead.
+  function renderMarches(frac) {
+    const layer = $("#marchLayer");
+    if (!layer || !state) return;
+    const me = state.playerForce;
+    let svg = "";
+    for (const m of state.marches || []) {
+      const p = S.marchPos(state, m, frac);
+      const dest = state.cities[m.target];
+      const threat = m.kind === "army" && dest.owner === me && m.force !== me;
+      const color = forceColor(m.force);
+      if (m.force === me || threat) {
+        svg += `<line class="mroute${threat ? " threat" : ""}" x1="${p.x}" y1="${p.y}" x2="${dest.x}" y2="${dest.y}"/>`;
+      }
+      const left = S.daysLeft(state, m);
+      const tip = `${S.forceName(state, m.force)} ${m.kind === "army" ? "군단" : m.kind === "return" ? "귀환" : "이동"} → ${dest.name}` +
+        `${m.troops ? ` · 병사 ${m.troops}` : ""} · ${left}일 남음`;
+      if (m.kind === "army" || (m.kind === "return" && m.troops)) {
+        svg += `<g class="march army${threat ? " threat" : ""}"><title>${tip}</title>` +
+          `<rect x="${p.x - 13}" y="${p.y - 8}" width="26" height="16" rx="3" fill="${color}"/>` +
+          `<text x="${p.x}" y="${p.y + 4}">${fmt(m.troops)}</text></g>`;
+      } else {
+        svg += `<g class="march"><title>${tip}</title><circle cx="${p.x}" cy="${p.y}" r="5" fill="${color}"/></g>`;
+      }
+    }
+    layer.innerHTML = svg;
+  }
+
+  // What is on the road to or from a city.
+  function roadList(c) {
+    const me = state.playerForce;
+    const rows = (state.marches || []).filter((m) => (m.target === c.id || m.origin === c.id) && (m.force === me || m.target === c.id))
+      .sort((a, b) => a.arrive - b.arrive).map((m) => {
+        const names = m.officers.map((id) => state.officers[id]).filter((o) => o && o.transit === m.id).map((o) => o.name);
+        const cargo = [m.troops && `병사 ${m.troops}`, m.gold && `금 ${m.gold}`, m.food && `군량 ${m.food}`].filter(Boolean).join(", ");
+        const enemy = m.force !== me;
+        const what = m.kind === "army" ? (enemy ? `<span class="bad">${S.forceName(state, m.force)} 군단</span>` : "출진")
+          : m.kind === "return" ? "귀환" : enemy ? S.forceName(state, m.force) : m.target === c.id ? "도착 예정" : "출발";
+        const dir = m.target === c.id ? `${state.cities[m.origin].name} →` : `→ ${state.cities[m.target].name}`;
+        return `<div>${what} ${dir} · ${names.join(", ") || "-"}${cargo ? " · " + cargo : ""} · <b>${S.daysLeft(state, m)}일</b></div>`;
+      });
+    return rows.length ? `<h3>길 위</h3><div class="road-list">${rows.join("")}</div>` : "";
   }
 
   function stat(label, value) {
@@ -178,7 +225,7 @@
     const p = $("#panel");
     if (!selected) {
       p.innerHTML = `<h2>도시를 선택하세요</h2><p class="hint">지도에서 도시를 누르면 정보와 명령이 나옵니다. ` +
-        `무장마다 한 달에 한 번 명령할 수 있고, 명령을 마치면 「턴 종료」를 누릅니다.</p>` +
+        `무장마다 한 달에 한 번 명령할 수 있습니다. 시간은 「▶ 진행」이나 스페이스 바로 흐르게 합니다.</p>` +
         `<h3>내 도시</h3><div class="links">${S.citiesOf(state, state.playerForce)
           .map((c) => `<button data-action="select" data-city="${c.id}">${c.name} (${S.idle(state, c.id).length})</button>`).join("")}</div>`;
       return;
@@ -205,6 +252,7 @@
       `</div>` +
       (own ? `<p class="hint">호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. ` +
         `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.</p>` : "");
+    html += roadList(c);
     if (own) {
       html += `<h3>월 수지 내역</h3><div class="stats">` +
         stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) +
@@ -400,26 +448,28 @@
     },
     move() {
       const c = state.cities[selected];
-      const dests = S.neighbors(c.id).filter((n) => state.cities[n].owner === c.owner);
-      if (!dests.length) { toast("인접한 아군 도시가 없습니다."); return; }
-      openModal(`<h2>수송</h2><p class="hint">무장과 함께 병사·금·군량을 인접한 아군 도시로 보냅니다.</p>` +
-        `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${state.cities[d].name}</option>`).join("")}</select></div>` +
+      const dist = S.reachable(state, c.id, "cargo");
+      const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
+      if (!dests.length) { toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
+      openModal(`<h2>수송</h2><p class="hint">무장이 병사·금·군량을 이끌고 아군 영토를 지나 다른 아군 도시로 갑니다. ` +
+        `수송대는 하루 ${S.SPEED.cargo}km를 가고, 짐 없이 무장만 보내면 하루 ${S.SPEED.officer}km를 갑니다. 보낸 병사와 물자는 도착할 때까지 어느 도시에도 없습니다.</p>` +
+        `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${state.cities[d].name} (${dist[d]}일)</option>`).join("")}</select></div>` +
         checkList(S.idle(state, c.id)) +
         rangeRow("mvTroops", "병사", S.marchable(c)) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 이동하지 않습니다.</p>` : "") +
-        `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doMove">이동</button></div>`);
+        `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doMove">수송</button></div>`);
     },
     relocate() {
       const c = state.cities[selected];
-      const dist = S.reachable(state, c.id);
+      const dist = S.reachable(state, c.id, "officer");
       const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b] || state.cities[a].name.localeCompare(state.cities[b].name));
       if (!dests.length) { toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
       const idle = S.idle(state, c.id);
       if (!idle.length) { toast("이동할 수 있는 무장이 없습니다."); return; }
-      openModal(`<h2>이동</h2><p class="hint">무장만 아군 영토로 이어진 도시로 보냅니다. 거리에 상관없이 이번 달 안에 도착하고, 이동한 무장은 이번 달 행동을 마칩니다.</p>` +
+      openModal(`<h2>이동</h2><p class="hint">무장만 아군 영토로 이어진 도시로 보냅니다. 하루 ${S.SPEED.officer}km를 가며, 길 위에 있는 동안에는 명령할 수 없습니다.</p>` +
         `<div class="row"><label>목적지</label><select id="rlDest">${dests.map((d) => {
           const t = state.cities[d];
-          return `<option value="${d}">${t.name} (${dist[d]}칸 · 무장 ${S.serving(state, d).length})</option>`;
+          return `<option value="${d}">${t.name} (${dist[d]}일 · 무장 ${S.serving(state, d).length})</option>`;
         }).join("")}</select></div>` +
         checkList(idle) +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doRelocate">이동</button></div>`);
@@ -447,10 +497,11 @@
       if (!targets.length) { toast("인접한 적 도시가 없습니다."); return; }
       if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
-      openModal(`<h2>출진</h2><p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. 군량은 병사 10명당 1이 듭니다.</p>` +
+      openModal(`<h2>출진</h2><p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. ` +
+        `군단은 하루 ${S.SPEED.army}km를 행군하고, 도착한 날 그 도시의 병력과 싸웁니다. 군량은 병사 10명당 1에 행군 일수만큼 더 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
           const t = state.cities[d];
-          return `<option value="${d}">${t.name} (${S.forceName(state, t.owner)}, 병력 ${t.troops})</option>`;
+          return `<option value="${d}">${t.name} (${S.forceName(state, t.owner)}, 병력 ${t.troops}, ${S.travelDays(S.roadKm(c.id, d), "army")}일)</option>`;
         }).join("")}</select></div>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
         rangeRow("atTroops", "병사", S.marchable(c), Math.round(S.marchable(c) * 0.7)) +
@@ -482,7 +533,9 @@
     const e = S.estimate(state, selected, $("#atTarget").value, ids, num("atTroops"));
     const label = e.ratio >= 1.6 ? `<span class="good">압도적 우세</span>` : e.ratio >= 1.2 ? `<span class="good">우세</span>`
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
-    el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label}`;
+    const days = S.travelDays(S.roadKm(selected, $("#atTarget").value), "army");
+    el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label}<br>` +
+      `<span class="hint">${days}일 뒤 도착 · 군량 ${S.marchFood(num("atTroops"), days)} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 
   function updateScheme() {
@@ -528,10 +581,11 @@
   // player appear as report cards on the map, a line at a time.
   const SPEEDS = [8000, 4000, 2000, 500]; // milliseconds per month
   const CLOCK_KEY = "sowsam.clock";
-  const CLOCK_DEFAULTS = { speed: 1, modal: true, attacked: true, bad: true, court: true, month: false };
+  const CLOCK_DEFAULTS = { speed: 1, modal: true, threat: true, attacked: true, bad: true, court: true, month: false };
   const CLOCK_LABELS = {
     modal: "명령 창이나 정보 창을 열면 멈춤",
-    attacked: "아군 도시가 공격받으면 멈춤",
+    threat: "적 군단이 아군 도시로 진군을 시작하면 멈춤",
+    attacked: "아군 도시에서 전투가 벌어지면 멈춤",
     bad: "나쁜 소식(무장 이탈, 도시 함락, 반란 등)이 오면 멈춤",
     court: "헌제의 청이나 선양 조서가 오면 멈추고 황실 창 열기",
     month: "매달 1일마다 멈춤 (턴제처럼 플레이)",
@@ -591,6 +645,7 @@
       stepDay();
     }
     if (steps) renderStatus();
+    renderMarches(clock.acc / dayMs);
   }
 
   function stepDay() {
@@ -606,7 +661,9 @@
     if (cardsChanged || reports.length) renderBattles();
     const fresh = state.log.filter((e) => e.n > clock.seenN);
     clock.seenN = state.logN || clock.seenN;
-    const big = month || reports.length || fresh.some((e) => e.kind === "war" || e.kind === "fall");
+    const big = month || reports.length || fresh.some((e) => e.kind === "war" || e.kind === "fall" || e.kind === "mine" || e.kind === "threat") ||
+      (state.marches || []).length !== clock.marchCount;
+    clock.marchCount = (state.marches || []).length;
     if (fresh.length) renderLog();
     if (big) { renderMap(); keepScroll(renderPanel); }
     if (month) saveGame(true);
@@ -616,6 +673,8 @@
     const courtNew = han && han.pending && han.holder === me && han.pending !== clock.pending;
     clock.pending = han && han.pending;
     if (s.court && courtNew) { pause("헌제의 소식"); showCourt(); return; }
+    const threat = fresh.find((e) => e.kind === "threat");
+    if (s.threat && threat) return pause(threat.text);
     if (s.attacked && reports.some((r) => r.defender === me)) return pause(`${S.josa(reports.find((r) => r.defender === me).to, "이", "가")} 공격받았습니다`);
     const bad = fresh.find((e) => e.kind === "warn" || (e.kind === "fall" && e.text.includes(state.forces[me].name)));
     if (s.bad && bad) return pause(bad.text);
@@ -736,7 +795,7 @@
           `한 번 옮기면 ${S.COURT.moveCooldown}개월 동안 다시 옮길 수 없고, 헌제를 새로 맞이한 세력은 바로 천도할 수 있습니다.` +
           (wait > 0 ? ` <b>${wait}개월 뒤에 천도할 수 있습니다.</b>` : "") + `</p>` +
           (dests.length ? `<div class="row"><label>새 도읍</label><select id="ctDest">${dests.map((d) =>
-            `<option value="${d}">${state.cities[d].name} (${dist[d]}칸, 우호도 ${(S.moveFavorDelta(state.emperor, d) > 0 ? "+" : "") + S.moveFavorDelta(state.emperor, d)})</option>`).join("")}</select>` +
+            `<option value="${d}">${state.cities[d].name} (${dist[d]}일 거리, 우호도 ${(S.moveFavorDelta(state.emperor, d) > 0 ? "+" : "") + S.moveFavorDelta(state.emperor, d)})</option>`).join("")}</select>` +
             `<button data-action="moveEmperor">천도</button></div>` : `<p class="hint">옮길 수 있는 도시가 없습니다.</p>`);
       }
     }
@@ -892,12 +951,8 @@
     doAttack: () => {
       const r = S.attack(state, selected, $("#atTarget").value, checked(), num("atTroops"));
       if (!r.ok) { toast(r.msg); return; }
-      if (r.report.attackerWon) selected = state.cities[$("#atTarget").value].id;
       closeModal();
-      addBattle(r.report);
-      renderBattles();
-      renderAll();
-      if (S.checkOver(state)) setTimeout(showEnd, 0);
+      result(r);
     },
   };
 

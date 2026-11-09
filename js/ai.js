@@ -114,15 +114,7 @@
     const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
     if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve) return;
     if (!S.chance(state, 45)) return;
-    const r = S.attack(state, c.id, best.t.id, ids, troops);
-    if (r.ok) {
-      log(r);
-      // AI tries to recruit captives right away next month; release rulers.
-      for (const pid of r.report.captured) {
-        const p = state.officers[pid];
-        if (S.recruitChance(state, team[0], p) === 0) S.release(state, p.city, pid);
-      }
-    }
+    S.attack(state, c.id, best.t.id, ids, troops);
   }
 
   // Put spare officers and hired clerks on the four domestic posts.
@@ -289,6 +281,8 @@
     if (state.over) return null;
     if (!state.day) state.day = 1;
     if (!state.aiDays) planAIDays(state);
+    S.runMarches(state, onEvent);
+    if (state.over) return null;
     for (const [fid, d] of Object.entries(state.aiDays)) {
       if (d !== state.day || !state.forces[fid].alive) continue;
       S.runAI(state, fid, onEvent);
