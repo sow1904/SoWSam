@@ -1,5 +1,7 @@
 // Strongholds: passes (관문) and forts (요새) on the roads between
-// commanderies. They hold troops and officers but have no people or domestic
+// commanderies. A fort is a small walled town: its garrison may march out
+// and meet an army in the field, as a city's can. A pass only holds.
+// They hold troops and officers but have no people or domestic
 // work; their food comes from a neighbouring own city. An army cannot get past
 // an enemy stronghold without taking it. Sites not yet built in a scenario's
 // year can be built by an officer with the 축성 specialty.
@@ -28,6 +30,7 @@
       baidi: ["백제성", "fort", "bajun", "nanjun", "bajun", 31.05, 109.55, true],
       yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
+      xiangyang: ["양양", "fort", "nanyang", "nanjun", "nanjun", 32.01, 112.14, true], // 유표가 190년부터 형주를 다스린 곳
     },
   };
 
@@ -49,6 +52,14 @@
     state.forts = {};
     for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) state.forts[id] = newFort(state, id, site);
     state.fortVer = 1;
+  };
+  // A save from before a site was added to the map gets it now.
+  S.addMissingForts = function (state) {
+    for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) {
+      if (state.forts[id]) continue;
+      state.forts[id] = newFort(state, id, site);
+      state.fortVer = (state.fortVer || 0) + 1;
+    }
   };
   S.fortsOf = (state, fid) => Object.values(state.forts || {}).filter((f) => f.built && f.owner === fid);
   // The city an officer at a stronghold goes back to when he leaves service.

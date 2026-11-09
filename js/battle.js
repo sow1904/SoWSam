@@ -20,22 +20,25 @@
   S.FIELD_MAX_DAYS = 10;
   S.HOME_GROUND = 1.15; // interceptors fight on ground they know
 
-  // Roads that cross or follow a great river: a battle there is fought on the water.
-  // Provisional; the 장강 crossings in particular may change.
+  // Links of the network that cross or follow a great river: a battle there is
+  // fought on the water. A road split by a fort is listed by its pieces.
+  // A pass is never on the water: its garrison does not march out.
   const WATER = {};
   for (const [a, b] of [
     // 장강
     ["jiujiang", "danyang"], ["lujiang", "danyang"], ["guangling", "danyang"], ["guangling", "wujun"], ["wujun", "kuaiji"],
     ["nanjun", "jiangxia"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["jiangxia", "changsha"], ["jiangxia", "yuzhang"],
-    ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["bajun", "nanjun"],
+    ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["danyang", "hefei"], // 유수구
     // 황하
     ["henan", "henei"], ["henan", "hedong"], ["henei", "chenliu"], ["chenliu", "dongjun"], ["dongjun", "jiyin"], ["dongjun", "weijun"],
     ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["qinghe", "dongping"], ["qinghe", "jibei"],
     ["jibei", "pingyuan"], ["pingyuan", "jinan"], ["jinan", "lean"], ["lean", "qiguo"],
-    // 한수
-    ["nanyang", "nanjun"],
+    // 한수: 번성에서 양양으로 건넌다
+    ["nanyang", "xiangyang"],
   ]) WATER[S.roadKey(a, b)] = true;
+  const isPass = (state, id) => S.isFort(state, id) && state.forts[id].kind === "pass";
   S.isWater = (a, b) => !!WATER[S.roadKey(a, b)];
+  S.waterLink = (state, a, b) => !isPass(state, a) && !isPass(state, b) && S.isWater(a, b);
 
   const crewOf = (state, ids, force) => ids.map((id) => state.officers[id]).filter((o) => o && o.status === "serving" && o.force === force);
   const has = (list, k) => list.some((o) => S.hasSkill(o, k));
@@ -534,9 +537,10 @@
   S.interceptOdds = function (state, id, m) {
     const t = S.place(state, id);
     if (S.besieged(state, id)) return null; // a besieged place cannot march out
+    if (isPass(state, id)) return null; // a pass holds its walls
     const pool = S.serving(state, id).filter((o) => o.force === t.owner && !S.postOf(state, o));
     const P = m.path[m.path.length - 2];
-    const water = !S.isFort(state, id) && !S.isFort(state, P) && S.isWater(P, id);
+    const water = S.waterLink(state, P, id);
     const troops = Math.max(0, Math.min(S.marchable(t) - Math.max(1000, Math.round(t.troops * 0.2)), t.troops));
     if (!pool.length || troops < 1000) return null;
     const score = (o) => o.cmd + o.war / 2 + (S.hasSkill(o, water ? "수전" : "야전") ? 20 : 0);
@@ -554,7 +558,6 @@
     if (S.hasTrait(chief, "신중")) need += 0.35;
     if (sp) need -= 0.35 + (surprisePct / 100) * 0.4; // a specialist, and how likely the ambush is to land
     if (has(pool, "수성")) need += 0.2;
-    if (S.isFort(state, id) && t.kind === "pass") need += 0.3;
     const policy = S.defensePolicy(state, id);
     if (policy === "intercept") need -= 0.4;
     return { team, troops, water, ratio: ours / Math.max(1, theirs), need, policy, P, surprise: sp ? { name: sp.name, pct: surprisePct } : null };

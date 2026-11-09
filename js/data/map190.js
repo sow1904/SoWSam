@@ -261,7 +261,8 @@
     ["qiguo", "lean"], ["beihai", "donglai"], ["jinan", "lean"], ["jinan", "pingyuan"], ["nanhai", "cangwu"], ["cangwu", "yulin"],
     ["yulin", "hepu"], ["hepu", "jiaozhi"], ["jiaozhi", "jiuzhen"], ["jiuzhen", "rinan"],
     // Roads that end at a stronghold: the stronghold guards them as well.
-    ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"],
+    ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"], ["danyang", "hefei"],
+    ["wuling", "lingling"],
     ["jingzhao", "beidi"], ["zuopingyi", "hedong"], ["dongping", "jiyin"], ["taishan", "rencheng"], ["qinghe", "dongping"],
     ["pingyuan", "lean"], ["luguo", "pengcheng"], ["donghai", "guangling"], ["nanjun", "changsha"],
   ];
@@ -320,7 +321,7 @@
       jincheng: [619, 470], anding: [863, 566], beidi: [929, 623], wuwei: [514, 333], zhangye: [366, 243],
       jiuquan: [230, 172], dunhuang: [40, 120], hanzhong: [792, 776], bajun: [740, 1090],
       guanghan: [610, 929], shujun: [580, 980], qianwei: [560, 1048], zangke: [742, 1343],
-      yuexi: [425, 1224], yizhoujun: [423, 1489], yongchang: [177, 1471], nanyang: [1130, 789],
+      yuexi: [425, 1224], yizhoujun: [423, 1489], yongchang: [177, 1471], nanyang: [1130, 789], xiangyang: [1125, 895],
       nanjun: [1132, 1047], jiangxia: [1351, 1002], changsha: [1235, 1226], wuling: [1121, 1171],
       lingling: [1119, 1344], guiyang: [1260, 1387], jiujiang: [1481, 823], danyang: [1601, 873],
       lujiang: [1470, 983], kuaiji: [1743, 1029], wujun: [1726, 917], yuzhang: [1429, 1160],

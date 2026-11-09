@@ -367,7 +367,7 @@
       `거점에는 백성과 내정이 없습니다. 지키는 병사는 한 달에 병사 50명당 군량 1을 먹고, 군량은 길로 이어진 아군 도시에서 채웁니다. ` +
       `적이 지키는 거점은 먼저 빼앗아야 그 너머로 갈 수 있습니다. 비어 있는 거점은 수송이나 이동으로 들어가면 차지합니다.</p>`;
     html += roadList(f) + battleList(f.id);
-    if (own) html += policyRow(f.id);
+    if (own) html += f.kind === "pass" ? `<p class="hint">관문은 나가 싸우지 않고 지킵니다.</p>` : policyRow(f.id);
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") +
         (S.reliefTargets(state, f.id).length ? cmdButton("relieve", "원군") : "") + `</div>`;

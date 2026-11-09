@@ -1026,6 +1026,7 @@
     if (!state.pacts) state.pacts = {};
     if (!state.marches) state.marches = [];
     if (!state.forts) S.initForts(state);
+    S.addMissingForts(state);
     // Where places are drawn follows the map, not the save.
     for (const c of Object.values(state.cities)) {
       const m = S.MAP.cities[c.id];

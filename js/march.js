@@ -14,7 +14,7 @@
     "youfufeng|hanzhong": 1.6, // 포사도
     "wudu|hanzhong": 1.4,
     "hanzhong|guanghan": 1.5, // 금우도
-    "bajun|jiameng": 1.5, // 미창도에서 가맹관으로
+    "bajun|jiameng": 1.2, // 가릉강 골짜기를 거슬러
     "wudu|guanghan": 1.8, // 음평도
     "bajun|nanjun": 1.4, // 장강 삼협
     "bajun|zangke": 1.5, // 야랑도
