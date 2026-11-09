@@ -7,9 +7,10 @@
     return S.neighbors(c.id).map((id) => state.cities[id]).filter((n) => n.owner !== c.owner && !S.allied(state, c.owner, n.owner));
   }
   // Cities the AI is willing to attack right now.
+  // Along the roads, so enemy strongholds must be taken before what lies behind them.
   function attackable(state, c) {
     const truce = S.inTruce(state);
-    return enemyNeighbors(state, c).filter((n) => !truce || !n.owner);
+    return S.attackTargets(state, c.id).map((x) => S.place(state, x.id)).filter((n) => !truce || !n.owner);
   }
 
   // Next step from an interior city toward the nearest frontier city.
@@ -244,12 +245,52 @@
       if (c.owner !== fid) continue;
       tryAttack(state, c, log);
     }
+    // Strongholds with a strong garrison can strike too.
+    for (const f of S.fortsOf(state, fid)) if (f.troops >= 5000) tryAttack(state, f, log);
+    manageForts(state, fid);
     state._plans = state._plans || {};
     state._plans[fid] = planCampaign(state, fid);
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
     seekAlly(state, fid);
     S.courtAI(state, fid);
   };
+
+  // Keep frontline strongholds manned from the city behind them, call idle
+  // officers home from quiet ones, and build where a builder is free.
+  function manageForts(state, fid) {
+    for (const f of S.fortsOf(state, fid)) {
+      const near = S.links(state, f.id);
+      const front = near.some((n) => { const p = S.place(state, n); return p.owner !== fid && !(p.owner && S.allied(state, fid, p.owner)); });
+      const staff = S.serving(state, f.id);
+      const home = near.map((n) => state.cities[n]).filter((x) => x && x.owner === fid).sort((a, b) => S.marchable(b) - S.marchable(a))[0];
+      const keep = front ? 4000 : 1000;
+      const idle = S.idle(state, f.id);
+      if (front && (f.troops < 3000 || !staff.length)) {
+        if (home && S.idle(state, home.id).length > 1) {
+          const send = Math.max(0, Math.min(keep - f.troops, S.marchable(home) - 3000));
+          const o = S.idle(state, home.id).sort((a, b) => b.cmd - a.cmd)[0];
+          if (send >= 500 || !staff.length) S.move(state, home.id, f.id, [o.id], send, 0, Math.min(2000, Math.max(0, home.food - 4000)));
+        }
+      } else if (f.troops > keep * 1.5 && home) {
+        // Too many men sitting in the stronghold: an officer leads the surplus home.
+        if (idle.length && (front ? idle.length > 1 : true)) S.move(state, f.id, home.id, [idle[0].id], f.troops - keep, 0, 0);
+        else if (!staff.length && S.idle(state, home.id).length > 1) S.relocate(state, home.id, f.id, [S.idle(state, home.id)[0].id]);
+      } else if (!front && idle.length && home) {
+        S.relocate(state, f.id, home.id, idle.map((o) => o.id));
+      }
+    }
+    // Take over empty strongholds next to our cities.
+    for (const f of Object.values(state.forts || {})) {
+      if (!f.built || f.owner || f.troops > 0) continue;
+      const c = S.links(state, f.id).map((n) => state.cities[n]).find((x) => x && x.owner === fid && S.idle(state, x.id).length > 1 && S.marchable(x) > 5000);
+      if (c && S.chance(state, 25)) S.move(state, c.id, f.id, [S.idle(state, c.id)[0].id], 2000, 0, 1500);
+    }
+    for (const c of S.citiesOf(state, fid)) {
+      const sites = S.buildSites(state, c.id);
+      const who = S.builders(state, c.id);
+      if (sites.length && who.length && c.gold > S.BUILD_COST + 800 && S.chance(state, 10)) S.buildFort(state, c.id, sites[0].id, who[0].id);
+    }
+  }
 
   // Now and then a computer force sends an envoy to another computer force.
   function seekAlly(state, fid) {

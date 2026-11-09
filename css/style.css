@@ -107,6 +107,17 @@ main { flex: 1; display: flex; min-height: 0; }
 .river { fill: none; stroke: var(--river); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
 .road { stroke: var(--road); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
 .road.hl { stroke: var(--accent); stroke-width: 3.5; stroke-dasharray: none; opacity: 1; }
+.fort { cursor: pointer; }
+.fort .fnode { stroke: #2a2014; stroke-width: 1.5; }
+.fort.site .fnode { stroke: #5c4a30; stroke-dasharray: 3 2; opacity: 0.6; }
+.fort.site text { opacity: 0.6; }
+.fort circle.ring { fill: none; stroke: transparent; stroke-width: 3; }
+.fort.sel circle.ring { stroke: #b31b1b; }
+.fort.target circle.ring { stroke: var(--accent); stroke-dasharray: 4 3; }
+.fort text { font-size: 11px; font-weight: 700; fill: var(--label); text-anchor: middle; paint-order: stroke; stroke: var(--land); stroke-width: 3px; }
+.fort text.troops { font-size: 9px; fill: #5c4a30; }
+.fort.mine text.name { fill: #7a1010; }
+.trait.skill { border-color: var(--accent); color: var(--accent); }
 .mroute { stroke: #2a2014; stroke-width: 2; stroke-dasharray: 2 5; opacity: 0.6; pointer-events: none; }
 .mroute.threat { stroke: #b31b1b; stroke-width: 3; opacity: 0.85; }
 .march rect { stroke: #2a2014; stroke-width: 1.5; }

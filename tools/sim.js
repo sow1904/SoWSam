@@ -5,7 +5,7 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.join(__dirname, "..", "js");
-for (const f of ["data/map190.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/scenario191.js", "engine.js", "march.js", "court.js", "ai.js"]) {
+for (const f of ["data/map190.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/scenario191.js", "engine.js", "march.js", "forts.js", "court.js", "ai.js"]) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;
@@ -45,7 +45,7 @@ function validate(state) {
     }
   }
   for (const o of Object.values(state.officers)) {
-    if (o.status === "serving" && !o.transit && state.cities[o.city].owner !== o.force) {
+    if (o.status === "serving" && !o.transit && S.place(state, o.city).owner !== o.force) {
       throw new Error(`${o.name} serves ${o.force} but sits in ${o.city} owned by ${state.cities[o.city].owner}`);
     }
   }

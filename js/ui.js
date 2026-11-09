@@ -116,8 +116,8 @@
   }
 
   function renderMap() {
-    const sel = selected && state.cities[selected];
-    const targets = new Set(sel && mine(sel) ? S.neighbors(sel.id) : []);
+    const sel = selected && S.place(state, selected);
+    const targets = new Set(sel && mine(sel) ? S.attackTargets(state, sel.id).map((t) => t.id) : []);
     const M = S.MAP;
     let svg = `<rect class="sea" x="-2000" y="-2000" width="${S.MAP_SIZE.w + 4000}" height="${S.MAP_SIZE.h + 4000}"/>` +
       `<polygon class="land" points="${pts(M.land)}"/>` +
@@ -130,11 +130,18 @@
       const x = cs.reduce((s, c) => s + c.x, 0) / cs.length, y = cs.reduce((s, c) => s + c.y, 0) / cs.length;
       svg += `<text class="prov" x="${Math.round(x)}" y="${Math.round(y)}">${pname}</text>`;
     }
-    for (const [a, b] of M.roads) {
-      const A = state.cities[a], B = state.cities[b];
-      const hl = sel && (a === sel.id || b === sel.id) ? " hl" : "";
-      svg += `<line class="road${hl}" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"/>`;
+    const drawn = new Set();
+    for (const a of Object.keys(state.cities).concat(Object.keys(state.forts || {}))) {
+      for (const b of S.links(state, a)) {
+        const k = S.roadKey(a, b);
+        if (drawn.has(k)) continue;
+        drawn.add(k);
+        const A = S.place(state, a), B = S.place(state, b);
+        const hl = sel && (a === sel.id || b === sel.id) ? " hl" : "";
+        svg += `<line class="road${hl}" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"/>`;
+      }
     }
+    for (const f of Object.values(state.forts || {})) svg += fortGlyph(f, sel, targets);
     for (const c of Object.values(state.cities)) {
       const r = 6 + c.size * 1.5;
       const icon = cityIcon(c), [iw, ih] = CITY_ICONS[icon];
@@ -153,6 +160,20 @@
     applyView();
   }
 
+  // A stronghold on the map: a gatehouse for a pass, a walled square for a
+  // fort. Unbuilt sites are drawn faintly.
+  function fortGlyph(f, sel, targets) {
+    const cls = ["fort", f.built ? "" : "site", f.id === selected ? "sel" : "", targets.has(f.id) ? "target" : "", mine(f) ? "mine" : ""].join(" ");
+    const fill = f.built ? forceColor(f.owner) : "none";
+    const shape = f.kind === "pass"
+      ? `<path class="fnode" d="M${f.x - 9} ${f.y + 6} V${f.y - 4} H${f.x - 5} V${f.y - 8} H${f.x - 2} V${f.y - 4} H${f.x + 2} V${f.y - 8} H${f.x + 5} V${f.y - 4} H${f.x + 9} V${f.y + 6} H${f.x + 3} V${f.y + 1} H${f.x - 3} V${f.y + 6} Z" fill="${fill}"/>`
+      : `<rect class="fnode" x="${f.x - 8}" y="${f.y - 7}" width="16" height="14" rx="1" fill="${fill}"/><rect class="fnode" x="${f.x - 3}" y="${f.y - 2}" width="6" height="4" fill="#2a2014"/>`;
+    const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
+    return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
+      `<text class="name" x="${f.x}" y="${f.y + 19}">${label}</text>` +
+      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 29}">${fmt(f.troops)}</text>` : "") + `</g>`;
+  }
+
   // Armies, convoys and travelling officers on the roads. Our own marches and
   // enemy armies heading for our cities show their route ahead.
   function renderMarches(frac) {
@@ -161,8 +182,9 @@
     const me = state.playerForce;
     let svg = "";
     for (const m of state.marches || []) {
+      if (m.kind === "build") continue;
       const p = S.marchPos(state, m, frac);
-      const dest = state.cities[m.target];
+      const dest = S.place(state, m.target);
       const threat = m.kind === "army" && dest.owner === me && m.force !== me;
       const color = forceColor(m.force);
       if (m.force === me || threat) {
@@ -192,7 +214,8 @@
         const enemy = m.force !== me;
         const what = m.kind === "army" ? (enemy ? `<span class="bad">${S.forceName(state, m.force)} 군단</span>` : "출진")
           : m.kind === "return" ? "귀환" : enemy ? S.forceName(state, m.force) : m.target === c.id ? "도착 예정" : "출발";
-        const dir = m.target === c.id ? `${state.cities[m.origin].name} →` : `→ ${state.cities[m.target].name}`;
+        if (m.kind === "build") return `<div>축성 · ${S.placeName(state, m.fort)} · ${names.join(", ")} · <b>${S.daysLeft(state, m)}일</b></div>`;
+        const dir = m.target === c.id ? `${S.placeName(state, m.origin)} →` : `→ ${S.placeName(state, m.target)}`;
         return `<div>${what} ${dir} · ${names.join(", ") || "-"}${cargo ? " · " + cargo : ""} · <b>${S.daysLeft(state, m)}일</b></div>`;
       });
     return rows.length ? `<h3>길 위</h3><div class="road-list">${rows.join("")}</div>` : "";
@@ -212,11 +235,12 @@
       return `<tr class="${cls}"${attrs}><td>${crown}${o.name}</td><td>${S.age(state, o)}</td>${S.ABILITY_KEYS.map((k) => `<td>${o[k]}</td>`).join("")}` +
         `<td class="han-${o.han}">${S.HAN_NAMES[o.han].slice(2)}</td>` +
         `<td class="traits">${S.traitsOf(o).map((t) => `<span class="trait" title="${S.TRAIT_HELP[t]}">${t}</span>`).join(" ")}</td>` +
+        `<td class="traits">${S.skillsOf(o).map((t) => `<span class="trait skill" title="${S.SKILL_HELP[t]}">${t}</span>`).join(" ")}</td>` +
         (opts.loyalty ? `<td>${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +
         (opts.extra ? `<td>${opts.extra(o)}</td>` : "") +
         (opts.status ? `<td>${status}</td>` : "") + `</tr>`;
     }).join("");
-    return `<div class="otable"><table><tr><th>이름</th><th>나이</th>${S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("")}<th>한조</th><th>성격</th>` +
+    return `<div class="otable"><table><tr><th>이름</th><th>나이</th>${S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("")}<th>한조</th><th>성격</th><th>특기</th>` +
       (opts.loyalty ? `<th>충성</th>` : "") + (opts.extraHead ? `<th>${opts.extraHead}</th>` : "") +
       (opts.status ? `<th>상태</th>` : "") + `</tr>${rows}</table></div>`;
   }
@@ -230,6 +254,7 @@
           .map((c) => `<button data-action="select" data-city="${c.id}">${c.name} (${S.idle(state, c.id).length})</button>`).join("")}</div>`;
       return;
     }
+    if (S.isFort(state, selected)) { p.innerHTML = fortPanel(state.forts[selected]); return; }
     const c = state.cities[selected];
     const own = mine(c);
     const ally = S.allied(state, state.playerForce, c.owner) ? " · 동맹" : "";
@@ -264,6 +289,7 @@
         cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("recruit", "등용") +
         cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + cmdButton("scheme", "계략") +
         cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
+        (S.buildSites(state, c.id).length ? cmdButton("build", "축성") : "") +
         `</div>`;
     }
     const servants = S.serving(state, c.id);
@@ -284,11 +310,44 @@
         });
       }
     }
-    html += `<h3>인접 도시</h3><div class="links">${S.neighbors(c.id).map((n) => {
-      const nc = state.cities[n];
+    html += `<h3>길로 이어진 곳</h3><div class="links">${S.links(state, c.id).map((n) => {
+      const nc = S.place(state, n);
+      return `<button data-action="select" data-city="${n}" style="border-left:4px solid ${forceColor(nc.owner)}">${nc.name}${S.isFort(state, n) ? " (" + S.FORT_KINDS[nc.kind] + ")" : ""} ${fmt(nc.troops)}</button>`;
+    }).join("")}</div>`;
+    const sites = S.buildSites(state, c.id);
+    if (sites.length) html += `<p class="hint">축성할 수 있는 터: ${sites.map((f) => f.name).join(", ")}. 축성 특기가 있는 무장이 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓습니다.</p>`;
+    p.innerHTML = html;
+  }
+
+  function fortPanel(f) {
+    const own = mine(f);
+    const [a, b] = f.road.map((id) => state.cities[id]);
+    const ally = f.owner && S.allied(state, state.playerForce, f.owner) ? " · 동맹" : "";
+    let html = `<h2>${f.name}<span class="badge" style="background:${forceColor(f.owner)}">${f.built ? (f.owner ? S.forceName(state, f.owner) : "비어 있음") : "터"}${ally}</span></h2>`;
+    html += `<p class="hint">${S.FORT_KINDS[f.kind]} · ${a.name}–${b.name} 사이 길 · 소속 ${state.cities[f.home].name}</p>`;
+    if (!f.built) {
+      html += `<p>${f.building ? `${S.forceName(state, f.building.force)}이 쌓고 있습니다.` : "아직 쌓지 않은 터입니다."} ` +
+        `축성 특기가 있는 무장이 ${a.name}이나 ${b.name}에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>`;
+      html += `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
+      return html;
+    }
+    html += `<div class="stats">` + stat("병력", f.troops.toLocaleString()) + stat("훈련", f.train) +
+      stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) + `</div>`;
+    html += `<p class="hint">${f.kind === "pass" ? "지형이 험해 지키기 쉽습니다." : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다."} ` +
+      `거점에는 백성과 내정이 없습니다. 지키는 병사는 한 달에 병사 50명당 군량 1을 먹고, 군량은 길로 이어진 아군 도시에서 채웁니다. ` +
+      `적이 지키는 거점은 먼저 빼앗아야 그 너머로 갈 수 있습니다. 비어 있는 거점은 수송이나 이동으로 들어가면 차지합니다.</p>`;
+    html += roadList(f);
+    if (own) {
+      html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + `</div>`;
+    }
+    const servants = S.serving(state, f.id);
+    html += `<h3>무장 (${servants.length})</h3>` + officerTable(servants, { loyalty: true, showDone: own,
+      status: own ? (o) => (o.done ? "완료" : "대기") : null });
+    html += `<h3>길로 이어진 곳</h3><div class="links">${S.links(state, f.id).map((n) => {
+      const nc = S.place(state, n);
       return `<button data-action="select" data-city="${n}" style="border-left:4px solid ${forceColor(nc.owner)}">${nc.name} ${fmt(nc.troops)}</button>`;
     }).join("")}</div>`;
-    p.innerHTML = html;
+    return html;
   }
 
   function signed(n) {
@@ -324,7 +383,7 @@
   }
 
   function cmdButton(cmd, label, free) {
-    const c = state.cities[selected];
+    const c = S.place(state, selected);
     const disabled = !free && !S.idle(state, c.id).length;
     return `<button data-action="cmd" data-cmd="${cmd}"${disabled ? " disabled" : ""}>${label}</button>`;
   }
@@ -447,32 +506,43 @@
         (o) => `충성 ${o.loyalty}`);
     },
     move() {
-      const c = state.cities[selected];
-      const dist = S.reachable(state, c.id, "cargo");
+      const c = S.place(state, selected);
+      const dist = S.reachable(state, c.id, "cargo", true);
       const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
       if (!dests.length) { toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
       openModal(`<h2>수송</h2><p class="hint">무장이 병사·금·군량을 이끌고 아군 영토를 지나 다른 아군 도시로 갑니다. ` +
         `수송대는 하루 ${S.SPEED.cargo}km를 가고, 짐 없이 무장만 보내면 하루 ${S.SPEED.officer}km를 갑니다. 보낸 병사와 물자는 도착할 때까지 어느 도시에도 없습니다.</p>` +
-        `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${state.cities[d].name} (${dist[d]}일)</option>`).join("")}</select></div>` +
+        `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${placeLabel(d)} (${dist[d]}일)</option>`).join("")}</select></div>` +
         checkList(S.idle(state, c.id)) +
         rangeRow("mvTroops", "병사", S.marchable(c)) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 이동하지 않습니다.</p>` : "") +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doMove">수송</button></div>`);
     },
     relocate() {
-      const c = state.cities[selected];
-      const dist = S.reachable(state, c.id, "officer");
+      const c = S.place(state, selected);
+      const dist = S.reachable(state, c.id, "officer", true);
       const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b] || state.cities[a].name.localeCompare(state.cities[b].name));
       if (!dests.length) { toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
       const idle = S.idle(state, c.id);
       if (!idle.length) { toast("이동할 수 있는 무장이 없습니다."); return; }
       openModal(`<h2>이동</h2><p class="hint">무장만 아군 영토로 이어진 도시로 보냅니다. 하루 ${S.SPEED.officer}km를 가며, 길 위에 있는 동안에는 명령할 수 없습니다.</p>` +
         `<div class="row"><label>목적지</label><select id="rlDest">${dests.map((d) => {
-          const t = state.cities[d];
-          return `<option value="${d}">${t.name} (${dist[d]}일 · 무장 ${S.serving(state, d).length})</option>`;
+          return `<option value="${d}">${placeLabel(d)} (${dist[d]}일 · 무장 ${S.serving(state, d).length})</option>`;
         }).join("")}</select></div>` +
         checkList(idle) +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doRelocate">이동</button></div>`);
+    },
+    build() {
+      const c = state.cities[selected];
+      const sites = S.buildSites(state, c.id);
+      const who = S.builders(state, c.id);
+      if (!sites.length) { toast("이 도시에서 쌓을 수 있는 터가 없습니다."); return; }
+      if (!who.length) { toast(`축성 특기가 있는 무장이 이 도시에 없습니다. (${Object.keys(S.SKILLS).join(", ")})`); return; }
+      openModal(`<h2>축성</h2><p class="hint">축성 특기가 있는 무장이 길 위의 터에 관문이나 요새를 쌓습니다. 금 ${S.BUILD_COST}이 들고 ${S.BUILD_DAYS}일이 걸리며, ` +
+        `그동안 그 무장은 다른 명령을 할 수 없습니다. 완성되면 병사를 보내 지키게 하십시오. (보유 금 ${c.gold})</p>` +
+        `<div class="row"><label>터</label><select id="bdSite">${sites.map((f) => `<option value="${f.id}">${f.name} (${S.FORT_KINDS[f.kind]}, ${f.road.map((id) => state.cities[id].name).join("–")})</option>`).join("")}</select></div>` +
+        officerTableHTML(who) +
+        `<div class="footer"><button data-action="close">취소</button></div>`);
     },
     scheme() {
       const c = state.cities[selected];
@@ -492,16 +562,18 @@
       updateScheme();
     },
     attack() {
-      const c = state.cities[selected];
-      const targets = S.neighbors(c.id).filter((n) => state.cities[n].owner !== c.owner && !S.allied(state, c.owner, state.cities[n].owner));
-      if (!targets.length) { toast("인접한 적 도시가 없습니다."); return; }
+      const c = S.place(state, selected);
+      const ways = S.attackTargets(state, c.id);
+      const targets = ways.map((w) => w.id);
+      if (!targets.length) { toast("길로 이어진 적 도시나 거점이 없습니다."); return; }
       if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
       openModal(`<h2>출진</h2><p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. ` +
         `군단은 하루 ${S.SPEED.army}km를 행군하고, 도착한 날 그 도시의 병력과 싸웁니다. 군량은 병사 10명당 1에 행군 일수만큼 더 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
-          const t = state.cities[d];
-          return `<option value="${d}">${t.name} (${S.forceName(state, t.owner)}, 병력 ${t.troops}, ${S.travelDays(S.roadKm(c.id, d), "army")}일)</option>`;
+          const t = S.place(state, d);
+          const w = ways.find((x) => x.id === d);
+          return `<option value="${d}">${placeLabel(d)} (${t.owner || t.troops > 0 ? S.forceName(state, t.owner) : "비어 있음"}, 병력 ${t.troops}, ${w.days}일)</option>`;
         }).join("")}</select></div>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
         rangeRow("atTroops", "병사", S.marchable(c), Math.round(S.marchable(c) * 0.7)) +
@@ -512,6 +584,9 @@
       updateEstimate();
     },
   };
+
+  const officerTableHTML = (list) => officerTable(list, { pick: "doBuild", extraHead: "", extra: () => "쌓기" });
+  const placeLabel = (id) => (S.isFort(state, id) ? `${state.forts[id].name}(${S.FORT_KINDS[state.forts[id].kind]})` : state.cities[id].name);
 
   function checkList(list, max) {
     return `<div class="row" style="align-items:flex-start"><label>무장</label><div>${list.map((o, i) =>
@@ -533,7 +608,8 @@
     const e = S.estimate(state, selected, $("#atTarget").value, ids, num("atTroops"));
     const label = e.ratio >= 1.6 ? `<span class="good">압도적 우세</span>` : e.ratio >= 1.2 ? `<span class="good">우세</span>`
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
-    const days = S.travelDays(S.roadKm(selected, $("#atTarget").value), "army");
+    const way = S.attackTargets(state, selected).find((x) => x.id === $("#atTarget").value);
+    const days = way ? way.days : 0;
     el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label}<br>` +
       `<span class="hint">${days}일 뒤 도착 · 군량 ${S.marchFood(num("atTroops"), days)} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
@@ -933,6 +1009,11 @@
     release: (d) => result(S.release(state, selected, d.oid)),
     doMove: () => {
       const r = S.move(state, selected, $("#mvDest").value, checked(), num("mvTroops"), num("mvGold"), num("mvFood"));
+      if (r.ok) closeModal();
+      result(r);
+    },
+    doBuild: (d) => {
+      const r = S.buildFort(state, selected, $("#bdSite").value, d.oid);
       if (r.ok) closeModal();
       result(r);
     },

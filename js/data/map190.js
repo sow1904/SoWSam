@@ -176,7 +176,7 @@
   // Roads between neighbouring commanderies, including the main passes and
   // river routes (함곡·동관, 분수, 장강 삼협, 회수, 금우도·미창도, 음평도, 야랑도).
   const roads = [
-    ["henan", "henei"], ["henan", "hedong"], ["henan", "yingchuan"], ["henan", "nanyang"], ["henei", "yingchuan"], ["henei", "chenliu"],
+    ["henan", "henei"], ["henan", "hedong"], ["henan", "hongnong"], ["henan", "chenliu"], ["henan", "yingchuan"], ["henan", "nanyang"], ["henei", "yingchuan"], ["henei", "chenliu"],
     ["henei", "dongjun"], ["henei", "weijun"], ["henei", "shangdang"], ["hedong", "hongnong"], ["hedong", "shangdang"], ["hedong", "xihe"],
     ["hedong", "taiyuan"], ["hongnong", "zuopingyi"], ["hongnong", "nanyang"], ["hongnong", "jingzhao"], ["jingzhao", "zuopingyi"], ["jingzhao", "youfufeng"],
     ["zuopingyi", "beidi"], ["youfufeng", "hanyang"], ["youfufeng", "anding"], ["youfufeng", "hanzhong"], ["yingchuan", "runan"], ["yingchuan", "chenguo"],
