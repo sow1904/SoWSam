@@ -248,6 +248,7 @@
     // Strongholds with a strong garrison can strike too.
     for (const f of S.fortsOf(state, fid)) if (f.troops >= 5000) tryAttack(state, f, log);
     manageForts(state, fid);
+    S.reliefAI(state, fid);
     state._plans = state._plans || {};
     state._plans[fid] = planCampaign(state, fid);
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);

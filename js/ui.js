@@ -297,6 +297,7 @@
         cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + cmdButton("scheme", "계략") +
         cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
         (S.buildSites(state, c.id).length ? cmdButton("build", "축성") : "") +
+        (S.reliefTargets(state, c.id).length ? cmdButton("relieve", "원군") : "") +
         `</div>`;
     }
     const servants = S.serving(state, c.id);
@@ -360,7 +361,8 @@
     html += roadList(f) + battleList(f.id);
     if (own) html += policyRow(f.id);
     if (own) {
-      html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + `</div>`;
+      html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") +
+        (S.reliefTargets(state, f.id).length ? cmdButton("relieve", "원군") : "") + `</div>`;
     }
     const servants = S.serving(state, f.id);
     html += `<h3>무장 (${servants.length})</h3>` + officerTable(servants, { loyalty: true, showDone: own,
@@ -583,8 +585,30 @@
       modalOnInput = updateScheme;
       updateScheme();
     },
+    relieve() {
+      const c = S.place(state, selected);
+      if (S.besieged(state, c.id)) { toast("포위당한 곳에서는 군대를 내보낼 수 없습니다."); return; }
+      const ways = S.reliefTargets(state, c.id);
+      if (!ways.length) { toast("원군을 보낼 수 있는, 포위당한 아군 도시나 거점이 없습니다."); return; }
+      if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { toast(`보낼 수 있는 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다.`); return; }
+      const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
+      openModal(`<h2>원군</h2><p class="hint">포위당한 아군 도시나 거점으로 원군을 보냅니다. 원군은 도착하면 성 밖에서 포위군과 싸우고, ` +
+        `포위군의 보급로를 끊거나 군량고를 태우려 합니다. 원군이 있는 동안 포위군은 병력을 나눠야 해서 성을 덜 몰아칩니다. ` +
+        `포위가 풀리면 원군은 성에 들어갑니다. 군략·모략이 높은 무장은 보급을 끊는 데, 용병·무력이 높은 무장은 싸우는 데 유리합니다.</p>` +
+        `<div class="row"><label>목표</label><select id="rlfTarget">${ways.map((w) => {
+          const b = S.battleOf(state, w.battle);
+          return `<option value="${w.id}">${placeLabel(w.id)} (포위군 ${S.forceName(state, b.att.force)} ${b.att.troops}명, ${b.day}일째, ${w.days}일 거리)</option>`;
+        }).join("")}</select></div>` +
+        checkList(idle, S.MAX_SORTIE_OFFICERS) +
+        rangeRow("rlfTroops", "병사", S.marchable(c), Math.round(S.marchable(c) * 0.7)) +
+        `<div class="row"><label>전망</label><span id="rlfEst"></span></div>` +
+        `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doRelieve">원군 출발</button></div>`);
+      modalOnInput = updateRelief;
+      updateRelief();
+    },
     attack() {
       const c = S.place(state, selected);
+      if (S.besieged(state, c.id)) { toast("포위당한 곳에서는 출진할 수 없습니다. 다른 도시에서 원군을 보내야 합니다."); return; }
       const ways = S.attackTargets(state, c.id);
       const targets = ways.map((w) => w.id);
       if (!targets.length) { toast("길로 이어진 적 도시나 거점이 없습니다."); return; }
@@ -621,6 +645,23 @@
   }
   const checked = () => [...document.querySelectorAll(".pickOfficer:checked")].map((x) => x.value);
   const num = (id) => +$("#" + id).value;
+
+  function updateRelief() {
+    const el = $("#rlfEst");
+    const ids = checked();
+    const way = S.reliefTargets(state, selected).find((w) => w.id === $("#rlfTarget").value);
+    if (!way) { el.textContent = "포위가 이미 풀렸습니다."; return; }
+    if (!ids.length) { el.textContent = "무장을 골라 주세요."; return; }
+    const b = S.battleOf(state, way.battle);
+    const t = S.place(state, way.id);
+    const team = ids.map((id) => state.officers[id]);
+    const besiegers = b.att.officers.map((id) => state.officers[id]).filter((o) => o && o.status === "serving");
+    const pc = S.raidChance(team, besiegers, true);
+    const ours = num("rlfTroops") + t.troops;
+    el.innerHTML = `원군 ${fmt(num("rlfTroops"))} + 성안 ${fmt(t.troops)} : 포위군 ${fmt(b.att.troops)} — ` +
+      (ours >= b.att.troops ? `<span class="good">수가 많음</span>` : `<span class="bad">수가 적음</span>`) +
+      `<br><span class="hint">하루에 보급로 절단 ${pc.cut}% · 군량고 소각 ${pc.burn}% · ${way.days}일 뒤 도착 · 군량 ${S.marchFood(num("rlfTroops"), way.days)}</span>`;
+  }
 
   function updateEstimate() {
     const ids = checked();
@@ -801,6 +842,11 @@
     if (b.kind === "siege") return `${where} 공방전`;
     return `${where} 앞 ${b.water ? "수전" : "야전"}`;
   }
+  function supplyText(b) {
+    const one = (side) => (!side.supply ? "" : side.supply.burnt ? "군량고 불탐" : !side.supply.line ? "보급로 끊김" : "보급 정상");
+    if (b.kind === "siege") return `포위군 ${one(b.att)} · 군량 ${fmt(Math.round(b.att.rations))}`;
+    return `진군 측 ${one(b.att)} · 요격 측 ${one(b.def)}`;
+  }
   function bar(label, troops, troops0, morale) {
     const pct = Math.max(0, Math.min(100, Math.round((troops / Math.max(1, troops0)) * 100)));
     return `<div class="bside"><span>${label}</span><span class="bbar"><i style="width:${pct}%"></i></span><b>${fmt(Math.max(0, troops))}</b><span class="hint">사기 ${Math.round(morale)}</span></div>`;
@@ -818,6 +864,8 @@
         (attacking ? `<button data-action="retreat" data-b="${b.id}" title="퇴각 명령">퇴각</button>` : "") + `</div>` +
         bar(S.forceName(state, b.att.force), b.att.troops, b.att.troops0, b.att.morale) +
         bar(S.forceName(state, b.def.force), dTroops, dMax, b.def.morale) +
+        (b.relief ? bar(`원군`, b.relief.troops, b.relief.troops0, b.relief.morale) : "") +
+        `<div class="hint">${supplyText(b)}</div>` +
         `<div class="bl"><div>${b.last}</div></div></div>`;
     });
     const done = battles.map((x) => {
@@ -1079,6 +1127,12 @@
         ? S.discord(state, d.oid, selected, $("#scTarget").value)
         : S.rumor(state, d.oid, selected, $("#scCity").value);
       if (r.ok) closeModal();
+      result(r);
+    },
+    doRelieve: () => {
+      const r = S.relieve(state, selected, $("#rlfTarget").value, checked(), num("rlfTroops"));
+      if (!r.ok) { toast(r.msg); return; }
+      closeModal();
       result(r);
     },
     doAttack: () => {

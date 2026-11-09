@@ -3,6 +3,13 @@
 // army on the road (요격), which makes a field battle, or a battle on the
 // water where the road crosses a great river. Each day the two sides clash
 // once; troops, morale and food decide when one side breaks.
+//
+// Supply (internal only, nothing is drawn on the map): in a field battle both
+// sides have a supply line (보급로) and a depot (군량고); in a siege only the
+// besiegers do. Raiders hunt for them: a cut line saps morale until it is
+// mended, a burnt depot (as at 관도) breaks it. A besieged city cannot march
+// out, so its relief must come from other cities (원군), and whether to send
+// one weighs the chance of cutting the besiegers' supply.
 (function (S) {
   const clamp = S.clamp;
   const fail = (msg) => ({ ok: false, msg });
@@ -29,12 +36,18 @@
 
   const crewOf = (state, ids, force) => ids.map((id) => state.officers[id]).filter((o) => o && o.status === "serving" && o.force === force);
   const has = (list, k) => list.some((o) => S.hasSkill(o, k));
+  const top = (list, k) => (list.length ? S.best(list, k)[k] : 30);
   const moraleMul = (m) => 0.6 + clamp(m, 0, 110) / 250;
   const skillMul = (list, water) => (water ? (has(list, "수전") ? 1.2 : 0.85) : has(list, "야전") ? 1.15 : 1);
   const startMorale = (list) => (list.length && S.hasTrait(S.best(list, "cmd"), "과감") ? 105 : 100);
+  const newSupply = () => ({ line: true, cut: 0, burnt: false });
+  // Morale follows who got the better of the day: the side that lost more men
+  // than it killed loses heart, up to cap a day.
+  const swing = (lost, killed, cap) => clamp((killed / Math.max(1, lost + killed) - 0.5) * cap * 2, -cap, cap);
 
   S.battlesAt = (state, id) => (state.battles || []).filter((b) => b.place === id);
   S.battleOf = (state, id) => (state.battles || []).find((b) => b.id === id);
+  S.besieged = (state, id) => (state.battles || []).some((b) => b.kind === "siege" && b.place === id);
 
   function say(b, line) {
     b.log.push(line);
@@ -84,6 +97,94 @@
     return loss;
   }
 
+  // ---------- surprise attack (기습) ----------
+  // On the first day a field (or naval) specialist among the interceptors
+  // strikes before the marching army is ready; a sharp strategist on the
+  // other side may have seen it coming.
+  S.surpriser = (list, water) => {
+    const sp = list.filter((o) => S.hasSkill(o, water ? "수전" : "야전"));
+    return sp.length ? sp.reduce((a, o) => (o.war + o.cmd > a.war + a.cmd ? o : a)) : null;
+  };
+  S.surpriseChance = (sp, foes) => clamp(Math.round(20 + (sp.war + sp.cmd) / 2 - top(foes, "strat") * 0.7), 5, 90);
+  function surprise(state, b, dfs, atk) {
+    const sp = S.surpriser(dfs, b.water);
+    if (!sp) return;
+    const pct = S.surpriseChance(sp, atk);
+    if (S.chance(state, pct)) {
+      b.att.morale -= 25;
+      b.def.morale += 15;
+      say(b, `${S.josa(sp.name, "이", "가")} ${b.water ? "물길을 타고" : "샛길로 돌아"} 기습을 걸었습니다! ${S.forceName(state, b.att.force)}이 크게 흔들립니다. (성공률 ${pct}%)`);
+    } else {
+      const guard = atk.length ? S.best(atk, "strat") : null;
+      b.att.morale += 5;
+      say(b, `${sp.name}의 기습! 그러나 ${guard ? S.josa(guard.name, "이", "가") + " 미리 대비하고 있었습니다" : "적이 대비하고 있었습니다"}. (성공률 ${pct}%)`);
+    }
+  }
+
+  // ---------- supply lines and depots ----------
+  // Raiders: the best of 군략 and 모략. Guards: the best of 지략 and 용병,
+  // sharper under a cautious commander. Fighting on home ground helps.
+  S.raidChance = function (raiders, guards, home) {
+    const r = Math.max(top(raiders, "strat"), top(raiders, "plot"));
+    const lead = guards.length ? S.best(guards, "cmd") : null;
+    const g = Math.max(top(guards, "wit"), top(guards, "cmd")) + (S.hasTrait(lead, "신중") ? 10 : 0);
+    return {
+      cut: clamp(Math.round((4 + (r - g) * 0.25 + (home ? 3 : 0)) * 10) / 10, 1, 25),
+      burn: clamp(Math.round((1 + (r - g) * 0.12 + (home ? 1 : 0)) * 10) / 10, 0.5, 10),
+    };
+  };
+  // One day of hunting for the other side's supply.
+  function raid(state, b, raidSide, raiders, guardSide, guards, home) {
+    const sup = guardSide.supply;
+    if (!sup || !raiders.length) return;
+    const pc = S.raidChance(raiders, guards, home);
+    const who = S.best(raiders, raiders.some((o) => o.plot > o.strat) ? "plot" : "strat").name;
+    if (!sup.burnt && S.chance(state, pc.burn)) {
+      sup.burnt = true;
+      guardSide.morale -= 25;
+      if (guardSide.rations != null) guardSide.rations = 0;
+      say(b, `${S.josa(who, "이", "가")} ${S.forceName(state, guardSide.force)}의 군량고를 찾아내 불태웠습니다! 적진이 크게 동요합니다.`);
+    } else if (sup.line && S.chance(state, pc.cut)) {
+      sup.line = false;
+      sup.cut = 0;
+      guardSide.morale -= 10;
+      say(b, `${S.josa(who, "이", "가")} ${S.forceName(state, guardSide.force)}의 보급로를 끊었습니다.`);
+    }
+  }
+  // The line is mended in time; while it is cut, morale ebbs.
+  function tendSupply(state, b, side) {
+    const sup = side.supply;
+    if (!sup || sup.line) return;
+    sup.cut++;
+    side.morale -= 2;
+    if (sup.cut >= 2 && S.chance(state, 20)) {
+      sup.line = true;
+      say(b, `${S.forceName(state, side.force)}이 끊긴 보급로를 다시 이었습니다.`);
+    }
+  }
+  // Besiegers eat from the depot, which is refilled from home while the line holds.
+  function feedBesiegers(state, b) {
+    const A = b.att;
+    const need = A.troops / 1000;
+    const home = S.place(state, A.origin);
+    if (A.supply.line && home && home.owner === A.force) {
+      const want = Math.min(Math.max(0, A.troops / 10 - A.rations), need * 2, home.food);
+      home.food -= Math.ceil(want);
+      A.rations += want;
+    } else if (A.supply.line && (!home || home.owner !== A.force)) {
+      A.supply.line = false;
+      A.supply.cut = -999; // the base is lost: no mending
+      say(b, `본거지를 잃어 ${S.forceName(state, A.force)}의 보급이 끊겼습니다.`);
+    }
+    A.rations -= need;
+    if (A.rations <= 0) {
+      A.rations = 0;
+      if (!b.hungry) say(b, `포위군의 군량이 떨어졌습니다.`);
+      b.hungry = true;
+      A.morale -= 8;
+    } else b.hungry = false;
+  }
+
   // ---------- siege ----------
   // An army reached an enemy place: it surrounds it, or joins its own force's siege there.
   S.startSiege = function (state, m) {
@@ -105,7 +206,8 @@
     const defs = S.serving(state, m.target).filter((o) => o.force === t.owner);
     const b = newBattle(state, {
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
-      att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(atk), rations: m.troops / 10, origin: m.origin, path: m.path },
+      att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(atk),
+        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
@@ -125,6 +227,7 @@
     if (t.owner !== b.def.force) {
       b.def = { force: t.owner, troops0: Math.max(1, t.troops), morale: 100 };
       say(b, `${S.josa(t.name, "은", "는")} 이제 ${S.forceName(state, t.owner)}의 땅입니다. 포위를 이어 갑니다.`);
+      if (b.relief && b.relief.force !== t.owner) endRelief(state, b, "home");
     }
     const atk = crewOf(state, A.officers, A.force);
     const defs = S.serving(state, b.place).filter((o) => o.force === t.owner);
@@ -133,7 +236,9 @@
     if (has(defs, "수성")) wb *= 1.15;
     if (has(atk, "공성")) wb = 1 + (wb - 1) * 0.75;
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * moraleMul(A.morale);
+    // With a relief army in the field the besiegers must split their men.
+    const split = b.relief ? 0.7 : 1;
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * moraleMul(A.morale) * split;
     const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * moraleMul(b.def.morale);
     let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd());
     let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd());
@@ -147,20 +252,18 @@
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
     t.wall = Math.max(0, t.wall - Math.round(lossD * 0.02 * (has(atk, "공성") ? 1.5 : 1)));
-    // Morale follows the day's exchange; a long siege wears the besiegers down.
-    const rA = lossA / Math.max(1, A.troops + lossA), rD = lossD / Math.max(1, D0);
-    A.morale += clamp((rD - rA) * 300, -8, 6) - (b.day > 20 ? 1 : 0);
-    b.def.morale += clamp((rA - rD) * 300, -8, 6);
-    A.rations -= A.troops / 1000;
-    if (A.rations <= 0) {
-      if (!b.hungry) say(b, `포위군의 군량이 떨어졌습니다.`);
-      b.hungry = true;
-      A.morale -= 8;
-    }
+    // Morale follows the day's exchange; a long siege wears the besiegers down,
+    // and broken walls dishearten the defenders.
+    A.morale += swing(lossA, lossD, 6) - (b.day > 20 ? 1 : 0);
+    b.def.morale += swing(lossD, lossA, 6) - (t.wall < 100 ? 2 : 0);
+    if (b.relief) reliefDay(state, b, atk);
+    tendSupply(state, b, A);
+    feedBesiegers(state, b);
     if (t.food <= 0) b.def.morale -= 8;
-    if (b.day <= 3 || b.day % 5 === 0 || lossA + lossD > (A.troops + t.troops) * 0.06) {
-      say(b, `${b.day}일째: 공격군 -${lossA} (${A.troops}), 수비군 -${lossD} (${t.troops}) · 성벽 ${t.wall}`);
+    if (b.day <= 3 || b.day % 5 === 0 || lossA + lossD > (A.troops + t.troops) * 0.06 || b.reliefLine) {
+      say(b, `${b.day}일째: 공격군 -${lossA} (${A.troops}), 수비군 -${lossD} (${t.troops}) · 성벽 ${t.wall}${b.reliefLine ? " · " + b.reliefLine : ""}`);
     }
+    b.reliefLine = null;
     if (t.troops <= 0 || t.troops < b.def.troops0 * 0.15 || b.def.morale <= 20) return "capture";
     if (A.troops < A.troops0 * 0.3 || A.morale <= 25 || b.day >= S.SIEGE_MAX_DAYS) return "retreat";
     return null;
@@ -200,13 +303,136 @@
     t.consent = Math.min(t.consent, 30);
     t.train = A.train;
     t.gold = Math.floor(t.gold / 2);
-    t.food = Math.floor(t.food / 2);
+    t.food = Math.floor(t.food / 2) + Math.floor(A.rations || 0);
     t.order = Math.max(10, t.order - 20);
     letGo(state, b, A.officers);
     for (const o of atk) o.city = b.place;
     report.attackerWon = true;
     if (defForce) S.checkForce(state, defForce, report);
   }
+
+  // ---------- relief armies (원군) ----------
+  // Own besieged places a city can send relief to, through own ground.
+  S.reliefTargets = function (state, cid) {
+    const me = S.place(state, cid).owner;
+    const out = [];
+    for (const b of state.battles || []) {
+      if (b.kind !== "siege" || b.place === cid || S.place(state, b.place).owner !== me) continue;
+      const r = S.route(state, cid, b.place, "army");
+      if (r) out.push({ id: b.place, battle: b.id, path: r.path, km: r.km, days: r.days });
+    }
+    return out;
+  };
+  S.relieve = function (state, cid, targetId, oids, troops) {
+    const c = S.place(state, cid);
+    const way = c && S.reliefTargets(state, cid).find((x) => x.id === targetId);
+    if (!way) return fail("포위당한 아군 도시나 거점에만 원군을 보낼 수 있습니다.");
+    if (S.besieged(state, cid)) return fail("포위당한 곳에서는 군대를 내보낼 수 없습니다.");
+    if (!oids.length || oids.length > S.MAX_SORTIE_OFFICERS) return fail(`무장을 1~${S.MAX_SORTIE_OFFICERS}명 골라 주세요.`);
+    for (const id of oids) {
+      const o = state.officers[id];
+      if (!o || o.status !== "serving" || o.city !== cid || o.force !== c.owner || o.done || o.transit || S.postOf(state, o)) return fail("이곳에서 쉬고 있는 무장만 보낼 수 있습니다.");
+    }
+    troops = Math.floor(troops);
+    if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) return fail(`원군 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다.`);
+    const food = S.marchFood(troops, way.days);
+    if (c.food < food) return fail(`군량이 부족합니다. (필요 ${food})`);
+    c.troops -= troops;
+    c.food -= food;
+    const m = S.launch(state, { kind: "relief", force: c.owner, path: way.path, km: way.km, speed: "army",
+      officers: oids, troops, train: c.train, origin: cid, target: targetId, battle: way.battle });
+    const names = oids.map((id) => state.officers[id].name).join(", ");
+    const msg = `${names}의 원군 ${troops}명이 ${S.ro(S.placeName(state, targetId))} 떠났습니다. ${way.days}일 뒤 도착합니다.`;
+    if (c.owner !== state.playerForce) S.addLog(state, `${S.forceName(state, c.owner)}의 ${msg}`, "info");
+    return { ok: true, march: m, msg };
+  };
+  // A relief army arrived: it takes the field against the besiegers.
+  S.reliefArrives = function (state, m) {
+    const b = (state.battles || []).find((x) => x.kind === "siege" && x.place === m.target && S.place(state, x.place).owner === m.force);
+    if (!b) return false;
+    const ids = m.officers.filter((id) => { const o = state.officers[id]; return o && o.status === "serving" && o.force === m.force; });
+    S.releaseMarch(state, m);
+    if (b.relief) {
+      b.relief.troops += m.troops;
+      b.relief.troops0 += m.troops;
+      b.relief.officers.push(...ids);
+    } else {
+      const rel = crewOf(state, ids, m.force);
+      b.relief = { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(rel), origin: m.origin, path: m.path };
+    }
+    hold(state, b, ids);
+    say(b, `${S.forceName(state, m.force)} 원군 ${m.troops}명이 ${S.placeName(state, m.origin)}에서 달려왔습니다!`);
+    return true;
+  };
+  // The relief army fights the besiegers in the open and hunts for their supply.
+  function reliefDay(state, b, atk) {
+    const R = b.relief, A = b.att;
+    const rel = crewOf(state, R.officers, R.force);
+    const rnd = () => 0.8 + S.rand(state) * 0.4;
+    const rPow = S.power(R.troops, S.sideStats(rel, 35), R.train, 1) * skillMul(rel, false) * moraleMul(R.morale) * S.HOME_GROUND;
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * moraleMul(A.morale) * 0.3;
+    const lossA = Math.min(A.troops, Math.round(rPow * S.BATTLE_RATE.field * 0.6 * rnd()));
+    const lossR = Math.min(R.troops, Math.round(aPow * S.BATTLE_RATE.field * rnd()));
+    A.troops -= lossA;
+    R.troops -= lossR;
+    b.killedA = (b.killedA || 0) + lossA;
+    b.killedR = (b.killedR || 0) + lossR;
+    A.morale += swing(lossA, lossR, 4);
+    R.morale += swing(lossR, lossA, 6);
+    b.reliefLine = `원군 -${lossR} (${R.troops}), 포위군 -${lossA}`;
+    raid(state, b, R, rel, A, atk, true);
+    if (R.troops < R.troops0 * 0.4 || R.morale <= 30) endRelief(state, b, "beaten");
+  }
+  function endRelief(state, b, why) {
+    const R = b.relief;
+    if (!R) return;
+    b.relief = null;
+    letGo(state, b, R.officers);
+    if (why === "beaten") say(b, `원군이 무너져 ${S.ro(S.placeName(state, R.origin))} 물러납니다.`);
+    else if (why === "home") say(b, `원군은 ${S.ro(S.placeName(state, R.origin))} 물러납니다.`);
+    else if (why === "enter") say(b, `포위가 풀려 원군 ${R.troops}명이 성에 들어갑니다.`);
+    const home = S.place(state, b.place);
+    if (why === "enter" && home.owner === R.force) {
+      // The siege is lifted: the relief army enters the city.
+      home.troops += R.troops;
+      for (const o of crewOf(state, R.officers, R.force)) o.city = b.place;
+      return;
+    }
+    S.launch(state, { kind: "return", force: R.force, path: R.path.slice().reverse(), speed: "army",
+      officers: crewOf(state, R.officers, R.force).map((o) => o.id), troops: R.troops, train: R.train, origin: b.place, target: R.origin });
+  }
+
+  // Computer forces decide whether to send relief to a besieged place: when
+  // relief and garrison together outnumber the besiegers, or when a raid on
+  // the besiegers' supply has a fair chance within a couple of weeks.
+  S.reliefAI = function (state, fid) {
+    for (const b of state.battles || []) {
+      const t = S.place(state, b.place);
+      if (b.kind !== "siege" || t.owner !== fid || b.relief) continue;
+      if ((state.marches || []).some((m) => m.kind === "relief" && m.target === b.place)) continue;
+      let best = null;
+      for (const c of S.citiesOf(state, fid)) {
+        if (c.id === b.place || S.besieged(state, c.id)) continue;
+        const idle = S.idle(state, c.id);
+        const spare = Math.min(S.marchable(c) - Math.max(3000, Math.round(c.troops * 0.3)), c.troops);
+        if (!idle.length || spare < 2000) continue;
+        const way = S.reliefTargets(state, c.id).find((x) => x.id === b.place);
+        if (!way || way.days > 25) continue;
+        if (!best || spare > best.spare) best = { c, spare, idle };
+      }
+      if (!best) continue;
+      const team = best.idle.slice().sort((a, x) => x.cmd + x.war - a.cmd - a.war).slice(0, Math.min(S.MAX_SORTIE_OFFICERS, Math.max(1, best.idle.length - 1)));
+      const chief = S.best(team, "cmd");
+      const nerve = S.hasTrait(chief, "과감") ? 0.8 : S.hasTrait(chief, "신중") ? 1.2 : 1;
+      const atk = crewOf(state, b.att.officers, b.att.force);
+      const pc = S.raidChance(team, atk, true);
+      const daily = (pc.burn + pc.cut * 0.4) / 100;
+      const raidOdds = 1 - Math.pow(1 - daily, 15);
+      const direct = best.spare + t.troops >= b.att.troops * nerve;
+      const raidWorth = raidOdds >= 0.45 * nerve && best.spare >= b.att.troops * 0.3;
+      if (direct || raidWorth) S.relieve(state, best.c.id, b.place, team.map((o) => o.id), best.spare);
+    }
+  };
 
   // ---------- field battles (요격) ----------
   // The defender's sortie met the marching army on the road.
@@ -221,12 +447,13 @@
     const b = newBattle(state, {
       kind: water ? "water" : "field", place: m.target, x: pos.x, y: pos.y, from: S.placeName(state, m.origin), water,
       march: m, sortie,
-      att: { force: m.force, officers: atkIds, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(atk) },
-      def: { force: sortie.force, officers: defIds, troops: sortie.troops, troops0: sortie.troops, train: sortie.train, morale: startMorale(dfs) },
+      att: { force: m.force, officers: atkIds, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(atk), supply: newSupply() },
+      def: { force: sortie.force, officers: defIds, troops: sortie.troops, troops0: sortie.troops, train: sortie.train, morale: startMorale(dfs), supply: newSupply() },
     });
     hold(state, b, atkIds.concat(defIds));
     const chief = dfs.length ? S.best(dfs, "cmd").name : "수비군";
     say(b, `${S.josa(chief, "이", "가")} ${b.def.troops}명을 이끌고 나와 ${S.forceName(state, m.force)} ${m.troops}명을 ${water ? "강 위에서" : "길에서"} 맞받아칩니다.`);
+    surprise(state, b, dfs, atk);
     duel(state, b, atk, dfs, (side) => { b[side].morale -= 15; });
     return b;
   }
@@ -245,13 +472,17 @@
     lossA += ruse(state, b, dfs, atk, A.troops, names);
     lossD = Math.min(D.troops, lossD);
     lossA = Math.min(A.troops, lossA);
-    const rA = lossA / Math.max(1, A.troops), rD = lossD / Math.max(1, D.troops);
     A.troops -= lossA;
     D.troops -= lossD;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
-    A.morale += clamp((rD - rA) * 250, -12, 8);
-    D.morale += clamp((rA - rD) * 250, -12, 8);
+    A.morale += swing(lossA, lossD, 10);
+    D.morale += swing(lossD, lossA, 10);
+    // Both sides hunt for the other's supply; the defenders know the land.
+    raid(state, b, D, dfs, A, atk, true);
+    raid(state, b, A, atk, D, dfs, false);
+    tendSupply(state, b, A);
+    tendSupply(state, b, D);
     say(b, `${b.day}일째: 진군 측 -${lossA} (${A.troops}), 요격 측 -${lossD} (${D.troops})`);
     const dBroke = D.troops < D.troops0 * 0.4 || D.morale <= 30;
     const aBroke = A.troops < A.troops0 * 0.4 || A.morale <= 30;
@@ -299,6 +530,7 @@
   // How the place would fare in the field against an army. Exposed for the UI.
   S.interceptOdds = function (state, id, m) {
     const t = S.place(state, id);
+    if (S.besieged(state, id)) return null; // a besieged place cannot march out
     const pool = S.serving(state, id).filter((o) => o.force === t.owner && !S.postOf(state, o));
     const P = m.path[m.path.length - 2];
     const water = !S.isFort(state, id) && !S.isFort(state, P) && S.isWater(P, id);
@@ -312,15 +544,17 @@
     const ours = S.power(troops, S.sideStats(team, 35), t.train, 1) * skillMul(team, water) * S.HOME_GROUND;
     const theirs = S.power(m.troops, S.sideStats(atk, 30), m.train, 1) * skillMul(atk, water);
     const chief = S.best(team, "cmd");
+    const sp = S.surpriser(team, water);
+    const surprisePct = sp ? S.surpriseChance(sp, atk) : 0;
     let need = 1.0;
     if (S.hasTrait(chief, "과감")) need -= 0.25;
     if (S.hasTrait(chief, "신중")) need += 0.35;
-    if (has(team, water ? "수전" : "야전")) need -= 0.2;
+    if (sp) need -= 0.35 + (surprisePct / 100) * 0.4; // a specialist, and how likely the ambush is to land
     if (has(pool, "수성")) need += 0.2;
     if (S.isFort(state, id) && t.kind === "pass") need += 0.3;
     const policy = S.defensePolicy(state, id);
     if (policy === "intercept") need -= 0.4;
-    return { team, troops, water, ratio: ours / Math.max(1, theirs), need, policy, P };
+    return { team, troops, water, ratio: ours / Math.max(1, theirs), need, policy, P, surprise: sp ? { name: sp.name, pct: surprisePct } : null };
   };
   S.planDefense = function (state, m) {
     const t = S.place(state, m.target);
@@ -381,6 +615,7 @@
         letGo(state, b, A.officers);
         S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train }, A.troops);
       }
+      if (b.relief) endRelief(state, b, report.attackerWon ? "home" : "enter");
       const t = S.place(state, b.place);
       if (origin) S.returnManpower(origin, (b.killedA || 0) * 0.3);
       S.returnManpower(t, (b.killedD || 0) * 0.3);
@@ -392,7 +627,7 @@
     }
     const won = report.attackerWon;
     S.addWeariness(state, A.force, ((b.killedA || 0) / S.forcePop(state, A.force)) * 1500 + (won ? -2 : 3));
-    if (D.force) S.addWeariness(state, D.force, ((b.killedD || 0) / S.forcePop(state, D.force)) * 1500 + (won ? 5 : -1));
+    if (D.force) S.addWeariness(state, D.force, (((b.killedD || 0) + (b.killedR || 0)) / S.forcePop(state, D.force)) * 1500 + (won ? 5 : -1));
     const where = S.placeName(state, b.place);
     const text = b.kind === "siege"
       ? (report.attackerWon ? `${S.josa(S.forceName(state, A.force), "이", "가")} ${S.forceName(state, D.force)}의 ${S.josa(where, "을", "를")} 함락했습니다. (${b.day}일)`
@@ -426,6 +661,7 @@
       let out;
       if (b.retreatOrder) { say(b, "퇴각 명령이 내려왔습니다."); out = b.kind === "siege" ? "retreat" : "defender"; }
       else out = b.kind === "siege" ? siegeDay(state, b) : fieldDay(state, b);
+      for (const side of [b.att, b.def, b.relief]) if (side) side.morale = clamp(side.morale, 0, 110);
       if (out) finish(state, b, out, onEvent);
       if (S.checkOver(state)) return;
     }

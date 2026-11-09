@@ -275,6 +275,7 @@
     if (m.kind === "sortie") return S.sortieArrives(state, m);
     const t = S.place(state, m.target);
     if (!state.forces[m.force].alive) { release(state, m); return; }
+    if (m.kind === "relief" && S.reliefArrives(state, m)) return;
     // An empty stronghold is ours for the taking.
     if (S.isFort(state, m.target) && !t.owner && t.troops <= 0 && t.built) {
       t.owner = m.force;

@@ -696,6 +696,7 @@
     const t = S.place(state, targetCid);
     const way = c && S.attackTargets(state, cid).find((x) => x.id === targetCid);
     if (!t || !way) return fail("길로 이어진 가장 가까운 적 도시나 거점만 공격할 수 있습니다.");
+    if (S.besieged(state, cid)) return fail("포위당한 곳에서는 출진할 수 없습니다. 다른 도시에서 원군을 보내야 합니다.");
     if (t.owner === c.owner) return fail("자기 세력은 공격할 수 없습니다.");
     if (S.allied(state, c.owner, t.owner)) return fail(`${S.josa(S.forceName(state, t.owner), "과", "와")}는 동맹 중입니다. 먼저 동맹을 파기해야 합니다.`);
     if (!oids.length || oids.length > S.MAX_SORTIE_OFFICERS) return fail(`무장을 1~${S.MAX_SORTIE_OFFICERS}명 골라 주세요.`);
@@ -1064,7 +1065,8 @@
       officers: S.officersOf(state, fid).length,
       troops: cs.reduce((s, c) => s + c.troops, 0) + S.marchesOf(state, fid).reduce((s, m) => s + m.troops, 0) +
         S.fortsOf(state, fid).reduce((s, f) => s + f.troops, 0) +
-        (state.battles || []).reduce((s, b) => s + (b.att.force === fid ? b.att.troops : 0) + (b.kind !== "siege" && b.def.force === fid ? b.def.troops : 0), 0),
+        (state.battles || []).reduce((s, b) => s + (b.att.force === fid ? b.att.troops : 0) + (b.kind !== "siege" && b.def.force === fid ? b.def.troops : 0) +
+          (b.relief && b.relief.force === fid ? b.relief.troops : 0), 0),
       gold: cs.reduce((s, c) => s + c.gold, 0),
       food: cs.reduce((s, c) => s + c.food, 0),
       manpower: cs.reduce((s, c) => s + c.manpower, 0),
