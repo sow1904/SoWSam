@@ -108,9 +108,17 @@ main { flex: 1; display: flex; min-height: 0; }
 .road { stroke: var(--road); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
 .road.hl { stroke: var(--accent); stroke-width: 3.5; stroke-dasharray: none; opacity: 1; }
 .fort { cursor: pointer; }
-.fort .fnode { stroke: #2a2014; stroke-width: 1.5; }
-.fort.site .fnode { stroke: #5c4a30; stroke-dasharray: 3 2; opacity: 0.6; }
-.fort.site text { opacity: 0.6; }
+.fort .fnode { stroke: #2a2014; stroke-width: 1.2; }
+.fort.site .ficon, .fort.site text { opacity: 0.55; }
+.battle circle { fill: rgba(179, 27, 27, 0.85); stroke: #fff; stroke-width: 1.5; }
+.battle.mineb circle { fill: rgba(240, 179, 94, 0.95); stroke: #b31b1b; }
+.battle text { font-size: 13px; text-anchor: middle; fill: #fff; pointer-events: none; }
+.bcard.live { border-left-color: #f0b35e; }
+.bside { display: grid; grid-template-columns: 72px 1fr 44px 46px; gap: 4px; align-items: center; margin: 2px 0; }
+.bside span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bbar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bbar i { display: block; height: 100%; background: var(--accent); }
+.road-list .pick { cursor: pointer; }
 .fort circle.ring { fill: none; stroke: transparent; stroke-width: 3; }
 .fort.sel circle.ring { stroke: #b31b1b; }
 .fort.target circle.ring { stroke: var(--accent); stroke-dasharray: 4 3; }

@@ -211,7 +211,7 @@
   S.marchPos = function (state, m, frac) {
     const total = Math.max(1, m.arrive - m.start);
     const p = clamp((S.today(state) + (frac || 0) - m.start) / total, 0, 1);
-    let want = p * m.km;
+    let want = (m.skip || 0) + p * m.km;
     for (let i = 1; i < m.path.length; i++) {
       const A = S.place(state, m.path[i - 1]), B = S.place(state, m.path[i]);
       const leg = S.legKm(state, m.path[i - 1], m.path[i]);
@@ -272,6 +272,7 @@
 
   function arrive(state, m, onEvent) {
     if (m.kind === "build") return S.finishBuild(state, m);
+    if (m.kind === "sortie") return S.sortieArrives(state, m);
     const t = S.place(state, m.target);
     if (!state.forces[m.force].alive) { release(state, m); return; }
     // An empty stronghold is ours for the taking.
@@ -285,16 +286,7 @@
       if (m.force === state.playerForce) S.addLog(state, `${S.josa(S.forceName(state, t.owner), "과", "와")} 동맹을 맺어 ${t.name} 공격을 거두고 돌아갑니다.`, "mine");
       return S.sendHome(state, m, m.troops);
     }
-    const r = S.fight(state, m);
-    if (onEvent) onEvent(r);
-    // Computer forces let go of captives who will never serve them.
-    if (m.force !== state.playerForce && r.report.attackerWon) {
-      const lead = crew(state, m)[0];
-      for (const pid of r.report.captured) {
-        const p = state.officers[pid];
-        if (lead && p.status === "captive" && S.recruitChance(state, lead, p) === 0) S.release(state, p.city, pid);
-      }
-    }
+    S.startSiege(state, m);
   }
 
   S.runMarches = function (state, onEvent) {

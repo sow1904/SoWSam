@@ -718,145 +718,13 @@
     if (t.owner === state.playerForce && c.owner !== state.playerForce) {
       S.addLog(state, `${S.forceName(state, c.owner)} ${troops}명이 ${c.name}에서 ${S.ro(t.name)} 진군하고 있습니다. (${days}일 뒤 도착)`, "threat");
     }
+    S.planDefense(state, m);
     return { ok: true, march: m, msg: `${names}의 군단 ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };
 
   // Rations for the march: a tenth of the men up front, plus the days on the road.
   S.marchFood = (troops, days) => Math.ceil(troops / 10 + (troops * days) / 1000);
 
-  // The battle, when an army reaches its target.
-  S.fight = function (state, m) {
-    const c = S.place(state, m.origin);
-    const t = S.place(state, m.target);
-    const targetCid = m.target;
-    const fort = S.isFort(state, targetCid);
-
-    const attackers = m.officers.map((id) => state.officers[id]).filter((o) => o.status === "serving" && o.force === m.force);
-    const defenders = S.serving(state, targetCid).filter((o) => o.force === t.owner);
-    const troops = m.troops;
-
-    const atkForce = m.force;
-    const defForce = t.owner;
-    const report = { lines: [], attackerWon: false, from: c.name, days: m.arrive - m.start, to: t.name, captured: [], attacker: atkForce, defender: defForce };
-    const say = (s) => report.lines.push(s);
-    const att = sideStats(attackers, 30);
-    const def = sideStats(defenders, defForce ? 40 : 35);
-    let A = troops, D = t.troops;
-    const A0 = A, D0 = Math.max(D, 1);
-    // A bold commander lifts his men's spirits.
-    let aMorale = attackers.length && S.hasTrait(S.best(attackers, "cmd"), "과감") ? 1.05 : 1;
-    let dMorale = defenders.length && S.hasTrait(S.best(defenders, "cmd"), "과감") ? 1.05 : 1;
-    say(`${S.forceName(state, atkForce)} ${A}명이 ${t.name}(${S.forceName(state, defForce)}, 수비 ${D}명)을 공격합니다.`);
-
-    // Duel between the strongest warriors, when both sides have one.
-    // Bold warriors seek a duel; a cautious defender stays behind the walls.
-    const duelA = attackers.length && defenders.length && S.best(attackers, "war");
-    const duelD = defenders.length && S.best(defenders, "war");
-    const duelPct = defenders.length ? 30 + (S.hasTrait(duelA, "과감") ? 15 : 0) + (S.hasTrait(duelD, "과감") ? 15 : 0) - (S.hasTrait(duelD, "신중") ? 20 : 0) : 0;
-    if (attackers.length && defenders.length && S.chance(state, duelPct)) {
-      const a = duelA;
-      const d = duelD;
-      if (a.war >= 70 || d.war >= 70) {
-        const roll = (a.war - d.war) / 2 + (rand(state) - 0.5) * 40;
-        if (Math.abs(roll) < 4) say(`일기토! ${S.josa(a.name, "과", "와")} ${S.josa(d.name, "이", "가")} 맞붙었으나 승부가 나지 않았습니다.`);
-        else if (roll > 0) { dMorale = 0.85; say(`일기토! ${S.josa(a.name, "이", "가")} ${S.josa(d.name, "을", "를")} 물리쳤습니다. 수비군의 사기가 떨어집니다.`); }
-        else { aMorale = 0.85; say(`일기토! ${S.josa(d.name, "이", "가")} ${S.josa(a.name, "을", "를")} 물리쳤습니다. 공격군의 사기가 떨어집니다.`); }
-      }
-    }
-
-    // Battle stratagems: each side's best 모략 tries a ruse; the other side's best 지략 may see through it.
-    const ruse = (us, them, names, foes) => {
-      if (!us.length) return 0;
-      const p = S.best(us, "plot");
-      if (!S.chance(state, S.ruseAttempt(p))) return 0;
-      const w = them.length ? S.best(them, "wit") : null;
-      const name = names[Math.floor(rand(state) * names.length)];
-      const lead = them.length ? S.best(them, "cmd") : null;
-      const temper = S.hasTrait(lead, "신중") ? -15 : S.hasTrait(lead, "과감") ? 10 : 0;
-      if (!S.chance(state, clamp(S.ruseChance(p, w) + temper, 5, 95))) {
-        say(w ? `${p.name}의 ${name}! 그러나 ${S.josa(w.name, "이", "가")} 간파했습니다.` : `${p.name}의 ${S.josa(name, "이", "가")} 실패했습니다.`);
-        return 0;
-      }
-      const loss = Math.round(foes * (0.03 + p.plot / 2000));
-      say(`${p.name}의 ${S.josa(name, "이", "가")} 적중했습니다! 적 ${loss}명이 쓰러지고 사기가 떨어집니다.`);
-      return loss;
-    };
-    const hitD = Math.min(D, ruse(attackers, defenders, ["화공", "매복", "위계", "야습"], D));
-    if (hitD) { D -= hitD; dMorale *= 0.92; }
-    const hitA = Math.min(A, ruse(defenders, attackers, ["야습", "매복", "역습"], A));
-    if (hitA) { A -= hitA; aMorale *= 0.92; }
-
-    const wb = wallBonus(t) * gentryDefense(t);
-    for (let round = 1; round <= 8 && A > 0 && D > 0; round++) {
-      const aPow = power(A, att, m.train, 1) * aMorale;
-      const dPow = power(D, def, t.train, wb) * dMorale;
-      const lossD = Math.min(D, Math.round(aPow * 0.09 * (0.85 + rand(state) * 0.3)));
-      const lossA = Math.min(A, Math.round(dPow * 0.09 * (0.85 + rand(state) * 0.3)));
-      D -= lossD; A -= lossA;
-      t.wall = Math.max(0, t.wall - Math.round(lossD * 0.02));
-      say(`${round}차 교전: 공격군 -${lossA} (${A}), 수비군 -${lossD} (${D})`);
-      if (D <= 0 || D < D0 * 0.2) { report.attackerWon = true; break; }
-      if (A < A0 * 0.3) break;
-    }
-    if (!report.attackerWon && D > 0 && A > 0 && D < A * 0.25) report.attackerWon = true;
-    if (D <= 0 && A > 0) report.attackerWon = true; // nobody there to hold it
-
-    const survivors = Math.max(0, A);
-    // Casualties: about a third were wounded or scattered and drift back home;
-    // the rest are lost to the manpower pool for good.
-    const killedA = A0 - survivors;
-    const killedD = t.troops - Math.max(0, D);
-    returnManpower(c, killedA * 0.3);
-    returnManpower(t, killedD * 0.3);
-    S.addWeariness(state, atkForce, (killedA / forcePop(state, atkForce)) * 1500 + (report.attackerWon ? -2 : 3));
-    if (defForce) S.addWeariness(state, defForce, (killedD / forcePop(state, defForce)) * 1500 + (report.attackerWon ? 5 : -1));
-    if (report.attackerWon) {
-      say(`${t.name} 함락! ${S.josa(S.forceName(state, atkForce), "이", "가")} ${fort ? S.FORT_KINDS[t.kind] : "성"}을 차지했습니다.`);
-      // Defending officers escape along the roads to an own place or are captured.
-      const escapes = defForce ? S.links(state, targetCid).filter((n) => S.place(state, n).owner === defForce) : [];
-      for (const d of defenders) {
-        if (escapes.length && S.chance(state, S.isRuler(state, d) ? 85 : 55)) {
-          d.city = escapes[Math.floor(rand(state) * escapes.length)];
-          say(`${S.josa(d.name, "은", "는")} ${S.ro(S.placeName(state, d.city))} 달아났습니다.`);
-        } else {
-          d.status = "captive";
-          d.captor = atkForce;
-          // Captives taken at a stronghold are led back to the attackers' city.
-          if (fort) d.city = c.owner === atkForce && state.cities[m.origin] ? m.origin : (S.citiesOf(state, atkForce)[0] || {}).id || d.city;
-          report.captured.push(d.id);
-          say(`${S.josa(d.name, "을", "를")} 사로잡았습니다.`);
-        }
-      }
-      // Captives the defender held are freed.
-      for (const p of S.officersIn(state, targetCid, (x) => x.status === "captive" && x.captor === defForce)) {
-        if (p.force === atkForce) { p.status = "serving"; p.captor = null; say(`포로였던 ${S.josa(p.name, "이", "가")} 풀려나 합류했습니다.`); }
-        else freeCaptive(state, p);
-      }
-      const remainingD = Math.max(0, D);
-      t.owner = atkForce;
-      t.posts = S.emptyPosts();
-      t.troops = survivors + Math.floor(remainingD * 0.3);
-      // Surrendered locals stay as retainers; the families distrust the new lord.
-      t.retainers = fort ? 0 : Math.floor(remainingD * 0.3);
-      t.consent = Math.min(t.consent, 30);
-      t.train = m.train;
-      t.gold = Math.floor(t.gold / 2);
-      t.food = Math.floor(t.food / 2);
-      t.order = Math.max(10, t.order - 20);
-      attackers.forEach((o) => { o.city = targetCid; o.transit = null; });
-      for (const id of m.officers) if (state.officers[id] && state.officers[id].transit === m.id) state.officers[id].transit = null;
-      if (defForce) checkForce(state, defForce, report);
-    } else {
-      loseTroops(t, t.troops - Math.max(0, D));
-      S.sendHome(state, m, survivors);
-      say(`공격 실패. 공격군은 ${survivors}명을 이끌고 ${S.ro(c.name)} 물러납니다.`);
-    }
-    const kind = report.attackerWon ? "war" : "warfail";
-    S.addLog(state, report.attackerWon
-      ? `${S.josa(S.forceName(state, atkForce), "이", "가")} ${S.forceName(state, defForce)}의 ${S.josa(t.name, "을", "를")} 함락했습니다.`
-      : `${S.forceName(state, atkForce)}의 ${t.name} 공격이 실패했습니다.`, kind);
-    return { ok: true, report, msg: report.lines[report.lines.length - 1] };
-  };
 
   // Family first, in order of succession; otherwise the most capable officer.
   S.pickHeir = function (ruler, heirs) {
@@ -1174,6 +1042,9 @@
     return state;
   };
 
+  // Battle arithmetic shared with js/battle.js.
+  Object.assign(S, { power, sideStats, wallBonus, gentryDefense, loseTroops, returnManpower, forcePop, checkForce, freeCaptive });
+
   S.checkOver = function (state) {
     if (state.over) return state.over;
     const alive = Object.values(state.forces).filter((f) => S.citiesOf(state, f.id).length > 0);
@@ -1192,7 +1063,8 @@
       cities: cs.length,
       officers: S.officersOf(state, fid).length,
       troops: cs.reduce((s, c) => s + c.troops, 0) + S.marchesOf(state, fid).reduce((s, m) => s + m.troops, 0) +
-        S.fortsOf(state, fid).reduce((s, f) => s + f.troops, 0),
+        S.fortsOf(state, fid).reduce((s, f) => s + f.troops, 0) +
+        (state.battles || []).reduce((s, b) => s + (b.att.force === fid ? b.att.troops : 0) + (b.kind !== "siege" && b.def.force === fid ? b.def.troops : 0), 0),
       gold: cs.reduce((s, c) => s + c.gold, 0),
       food: cs.reduce((s, c) => s + c.food, 0),
       manpower: cs.reduce((s, c) => s + c.manpower, 0),

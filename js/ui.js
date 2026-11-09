@@ -162,16 +162,17 @@
 
   // A stronghold on the map: a gatehouse for a pass, a walled square for a
   // fort. Unbuilt sites are drawn faintly.
+  const FORT_ICONS = { pass: [36, 22], fort: [24, 27], site: [22, 25] }; // display sizes
   function fortGlyph(f, sel, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === selected ? "sel" : "", targets.has(f.id) ? "target" : "", mine(f) ? "mine" : ""].join(" ");
-    const fill = f.built ? forceColor(f.owner) : "none";
-    const shape = f.kind === "pass"
-      ? `<path class="fnode" d="M${f.x - 9} ${f.y + 6} V${f.y - 4} H${f.x - 5} V${f.y - 8} H${f.x - 2} V${f.y - 4} H${f.x + 2} V${f.y - 8} H${f.x + 5} V${f.y - 4} H${f.x + 9} V${f.y + 6} H${f.x + 3} V${f.y + 1} H${f.x - 3} V${f.y + 6} Z" fill="${fill}"/>`
-      : `<rect class="fnode" x="${f.x - 8}" y="${f.y - 7}" width="16" height="14" rx="1" fill="${fill}"/><rect class="fnode" x="${f.x - 3}" y="${f.y - 2}" width="6" height="4" fill="#2a2014"/>`;
+    const icon = f.built ? f.kind : "site";
+    const [iw, ih] = FORT_ICONS[icon];
+    const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.32}" rx="${iw * 0.55}" ry="${ih * 0.22}" fill="${forceColor(f.owner)}"/>` : "") +
+      `<image class="ficon" href="assets/forts/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.62}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
-    return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
-      `<text class="name" x="${f.x}" y="${f.y + 19}">${label}</text>` +
-      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 29}">${fmt(f.troops)}</text>` : "") + `</g>`;
+    return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="16"/>${shape}` +
+      `<text class="name" x="${f.x}" y="${f.y + 22}">${label}</text>` +
+      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 32}">${fmt(f.troops)}</text>` : "") + `</g>`;
   }
 
   // Armies, convoys and travelling officers on the roads. Our own marches and
@@ -191,15 +192,20 @@
         svg += `<line class="mroute${threat ? " threat" : ""}" x1="${p.x}" y1="${p.y}" x2="${dest.x}" y2="${dest.y}"/>`;
       }
       const left = S.daysLeft(state, m);
-      const tip = `${S.forceName(state, m.force)} ${m.kind === "army" ? "군단" : m.kind === "return" ? "귀환" : "이동"} → ${dest.name}` +
+      const tip = `${S.forceName(state, m.force)} ${m.kind === "army" ? "군단" : m.kind === "sortie" ? "요격" : m.kind === "return" ? "귀환" : "이동"} → ${dest.name}` +
         `${m.troops ? ` · 병사 ${m.troops}` : ""} · ${left}일 남음`;
-      if (m.kind === "army" || (m.kind === "return" && m.troops)) {
+      if (m.kind === "army" || m.kind === "sortie" || (m.kind === "return" && m.troops)) {
         svg += `<g class="march army${threat ? " threat" : ""}"><title>${tip}</title>` +
           `<rect x="${p.x - 13}" y="${p.y - 8}" width="26" height="16" rx="3" fill="${color}"/>` +
           `<text x="${p.x}" y="${p.y + 4}">${fmt(m.troops)}</text></g>`;
       } else {
         svg += `<g class="march"><title>${tip}</title><circle cx="${p.x}" cy="${p.y}" r="5" fill="${color}"/></g>`;
       }
+    }
+    for (const b of state.battles || []) {
+      const mineB = b.att.force === me || b.def.force === me;
+      svg += `<g class="battle${mineB ? " mineb" : ""}"><title>${battleTitle(b)} · ${b.day}일째</title>` +
+        `<circle cx="${b.x}" cy="${b.y - 14}" r="11"/><text x="${b.x}" y="${b.y - 10}">⚔</text></g>`;
     }
     layer.innerHTML = svg;
   }
@@ -212,7 +218,7 @@
         const names = m.officers.map((id) => state.officers[id]).filter((o) => o && o.transit === m.id).map((o) => o.name);
         const cargo = [m.troops && `병사 ${m.troops}`, m.gold && `금 ${m.gold}`, m.food && `군량 ${m.food}`].filter(Boolean).join(", ");
         const enemy = m.force !== me;
-        const what = m.kind === "army" ? (enemy ? `<span class="bad">${S.forceName(state, m.force)} 군단</span>` : "출진")
+        const what = m.kind === "sortie" ? "요격" : m.kind === "army" ? (enemy ? `<span class="bad">${S.forceName(state, m.force)} 군단</span>` : "출진")
           : m.kind === "return" ? "귀환" : enemy ? S.forceName(state, m.force) : m.target === c.id ? "도착 예정" : "출발";
         if (m.kind === "build") return `<div>축성 · ${S.placeName(state, m.fort)} · ${names.join(", ")} · <b>${S.daysLeft(state, m)}일</b></div>`;
         const dir = m.target === c.id ? `${S.placeName(state, m.origin)} →` : `→ ${S.placeName(state, m.target)}`;
@@ -277,7 +283,8 @@
       `</div>` +
       (own ? `<p class="hint">호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. ` +
         `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.</p>` : "");
-    html += roadList(c);
+    html += roadList(c) + battleList(c.id);
+    if (own) html += policyRow(c.id);
     if (own) {
       html += `<h3>월 수지 내역</h3><div class="stats">` +
         stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) +
@@ -319,6 +326,20 @@
     p.innerHTML = html;
   }
 
+  // What the commander does when an enemy army comes: march out to meet it on
+  // the road (요격) or hold the walls (농성).
+  function policyRow(id) {
+    const cur = S.defensePolicy(state, id);
+    return `<div class="row"><label>방어 방침</label><select id="defPolicy" data-place="${id}">` +
+      Object.entries(S.DEFENSE_POLICY).map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
+      `</select></div><p class="hint">적 군단이 오면 태수가 요격과 농성 중 하나를 고릅니다. 태수에게 맡기면 야전에 강하고 과감한 장수는 나가 싸우고, ` +
+      `신중하거나 수성에 강한 장수는 성을 지킵니다. 요격 우선이면 더 쉽게 나가고, 농성이면 나가지 않습니다.</p>`;
+  }
+  function battleList(id) {
+    const list = S.battlesAt(state, id);
+    return list.length ? `<h3>전투</h3><div class="road-list">${list.map((b) => `<div class="pick" data-action="battleLive" data-b="${b.id}">⚔ ${battleTitle(b)} · ${b.day}일째 · ${b.last}</div>`).join("")}</div>` : "";
+  }
+
   function fortPanel(f) {
     const own = mine(f);
     const [a, b] = f.road.map((id) => state.cities[id]);
@@ -336,7 +357,8 @@
     html += `<p class="hint">${f.kind === "pass" ? "지형이 험해 지키기 쉽습니다." : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다."} ` +
       `거점에는 백성과 내정이 없습니다. 지키는 병사는 한 달에 병사 50명당 군량 1을 먹고, 군량은 길로 이어진 아군 도시에서 채웁니다. ` +
       `적이 지키는 거점은 먼저 빼앗아야 그 너머로 갈 수 있습니다. 비어 있는 거점은 수송이나 이동으로 들어가면 차지합니다.</p>`;
-    html += roadList(f);
+    html += roadList(f) + battleList(f.id);
+    if (own) html += policyRow(f.id);
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + `</div>`;
     }
@@ -537,7 +559,7 @@
       const sites = S.buildSites(state, c.id);
       const who = S.builders(state, c.id);
       if (!sites.length) { toast("이 도시에서 쌓을 수 있는 터가 없습니다."); return; }
-      if (!who.length) { toast(`축성 특기가 있는 무장이 이 도시에 없습니다. (${Object.keys(S.SKILLS).join(", ")})`); return; }
+      if (!who.length) { toast(`축성 특기가 있는 무장이 이 도시에 없습니다. (${Object.keys(S.SKILLS).filter((n) => S.hasSkill({ name: n }, "축성")).join(", ")})`); return; }
       openModal(`<h2>축성</h2><p class="hint">축성 특기가 있는 무장이 길 위의 터에 관문이나 요새를 쌓습니다. 금 ${S.BUILD_COST}이 들고 ${S.BUILD_DAYS}일이 걸리며, ` +
         `그동안 그 무장은 다른 명령을 할 수 없습니다. 완성되면 병사를 보내 지키게 하십시오. (보유 금 ${c.gold})</p>` +
         `<div class="row"><label>터</label><select id="bdSite">${sites.map((f) => `<option value="${f.id}">${f.name} (${S.FORT_KINDS[f.kind]}, ${f.road.map((id) => state.cities[id].name).join("–")})</option>`).join("")}</select></div>` +
@@ -645,7 +667,7 @@
   }
 
   function showReport(report) {
-    let html = `<h2>${report.from} → ${report.to} 전투</h2><div class="report">${report.lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
+    let html = `<h2>${report.live ? report.to : `${report.from} → ${report.to} 전투`}</h2><div class="report">${report.lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
     if (report.captured.length && report.attackerWon) html += `<p class="hint">사로잡은 무장은 도시 화면에서 등용하거나 석방할 수 있습니다.</p>`;
     html += `<div class="footer"><button class="primary" data-action="close">확인</button></div>`;
     openModal(html);
@@ -701,6 +723,7 @@
     clock.seenN = state.logN || 0;
     clock.pending = state.han && state.han.pending;
     battles.length = 0;
+    clock.seenBattles = new Set((state.battles || []).map((b) => b.id));
     renderBattles();
     renderClock();
   }
@@ -730,11 +753,14 @@
     const month = S.tickDay(state, (r) => {
       if (r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
     });
-    // Reveal one more line of every running battle card each day.
-    let cardsChanged = false;
-    for (const b of battles) if (b.shown < b.report.lines.length) { b.shown++; cardsChanged = true; }
     for (const r of reports) addBattle(r);
-    if (cardsChanged || reports.length) renderBattles();
+    const fighting = (state.battles || []).some((b) => involves(b, me));
+    if (fighting || reports.length || clock.wasFighting) renderBattles();
+    clock.wasFighting = fighting;
+    // Battles that just began against us.
+    const seen = clock.seenBattles || (clock.seenBattles = new Set());
+    const started = (state.battles || []).filter((b) => !seen.has(b.id) && (b.def.force === me || (b.kind !== "siege" && b.att.force === me)));
+    for (const b of state.battles || []) seen.add(b.id);
     const fresh = state.log.filter((e) => e.n > clock.seenN);
     clock.seenN = state.logN || clock.seenN;
     const big = month || reports.length || fresh.some((e) => e.kind === "war" || e.kind === "fall" || e.kind === "mine" || e.kind === "threat") ||
@@ -751,7 +777,7 @@
     if (s.court && courtNew) { pause("헌제의 소식"); showCourt(); return; }
     const threat = fresh.find((e) => e.kind === "threat");
     if (s.threat && threat) return pause(threat.text);
-    if (s.attacked && reports.some((r) => r.defender === me)) return pause(`${S.josa(reports.find((r) => r.defender === me).to, "이", "가")} 공격받았습니다`);
+    if (s.attacked && started.length) return pause(`${battleTitle(started[0])}이 시작되었습니다`);
     const bad = fresh.find((e) => e.kind === "warn" || (e.kind === "fall" && e.text.includes(state.forces[me].name)));
     if (s.bad && bad) return pause(bad.text);
     if (s.month && month) return pause(`${state.year}년 ${state.month}월`);
@@ -764,24 +790,45 @@
     p.scrollTop = top;
   }
 
+  // Finished battles stay on the map as cards until dismissed.
   function addBattle(report) {
-    battles.unshift({ id: (battles.length ? Math.max(...battles.map((b) => b.id)) : 0) + 1, report, shown: 1 });
-    if (battles.length > 6) battles.pop();
+    battles.unshift({ id: (battles.length ? Math.max(...battles.map((b) => b.id)) : 0) + 1, report });
+    if (battles.length > 4) battles.pop();
+  }
+  const involves = (b, me) => b.att.force === me || b.def.force === me;
+  function battleTitle(b) {
+    const where = S.placeName(state, b.place);
+    if (b.kind === "siege") return `${where} 공방전`;
+    return `${where} 앞 ${b.water ? "수전" : "야전"}`;
+  }
+  function bar(label, troops, troops0, morale) {
+    const pct = Math.max(0, Math.min(100, Math.round((troops / Math.max(1, troops0)) * 100)));
+    return `<div class="bside"><span>${label}</span><span class="bbar"><i style="width:${pct}%"></i></span><b>${fmt(Math.max(0, troops))}</b><span class="hint">사기 ${Math.round(morale)}</span></div>`;
   }
   function renderBattles() {
-    const me = state && state.playerForce;
-    $("#battles").innerHTML = battles.map((b) => {
-      const r = b.report;
-      const done = b.shown >= r.lines.length;
-      const attacking = r.attacker === me;
-      const won = attacking ? r.attackerWon : !r.attackerWon;
-      const title = attacking ? `${r.to} 공격` : `${r.to} 방어전`;
-      const lines = r.lines.slice(Math.max(0, b.shown - 3), b.shown);
-      return `<div class="bcard${done ? (won ? " win" : " lose") : ""}" data-action="battleOpen" data-b="${b.id}">` +
-        `<div class="bh"><span>⚔ ${title}</span><button data-action="battleClose" data-b="${b.id}" title="닫기">×</button></div>` +
-        `<div class="bl">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
-        (done ? `<div class="bs">${won ? "승리" : "패배"}</div>` : "") + `</div>`;
-    }).join("");
+    if (!state) return;
+    const me = state.playerForce;
+    const live = (state.battles || []).filter((b) => involves(b, me)).map((b) => {
+      const t = S.place(state, b.place);
+      const dTroops = b.kind === "siege" ? t.troops : b.def.troops;
+      const dMax = b.kind === "siege" ? Math.max(b.def.troops0, t.troops) : b.def.troops0;
+      const attacking = b.att.force === me;
+      return `<div class="bcard live" data-action="battleLive" data-b="${b.id}">` +
+        `<div class="bh"><span>⚔ ${battleTitle(b)} · ${b.day}일째</span>` +
+        (attacking ? `<button data-action="retreat" data-b="${b.id}" title="퇴각 명령">퇴각</button>` : "") + `</div>` +
+        bar(S.forceName(state, b.att.force), b.att.troops, b.att.troops0, b.att.morale) +
+        bar(S.forceName(state, b.def.force), dTroops, dMax, b.def.morale) +
+        `<div class="bl"><div>${b.last}</div></div></div>`;
+    });
+    const done = battles.map((x) => {
+      const r = x.report;
+      const won = r.attacker === me ? r.attackerWon : !r.attackerWon;
+      const title = r.kind === "siege" ? `${r.to} 공방전` : `${r.to} 앞 ${r.kind === "water" ? "수전" : "야전"}`;
+      return `<div class="bcard ${won ? "win" : "lose"}" data-action="battleOpen" data-b="${x.id}">` +
+        `<div class="bh"><span>⚔ ${title} (${r.days}일)</span><button data-action="battleClose" data-b="${x.id}" title="닫기">×</button></div>` +
+        `<div class="bl"><div>${r.lines[r.lines.length - 1]}</div></div><div class="bs">${won ? "승리" : "패배"}</div></div>`;
+    });
+    $("#battles").innerHTML = live.join("") + done.join("");
   }
 
   function showClockSettings() {
@@ -964,6 +1011,11 @@
     speed: (d) => { clock.settings.speed = +d.s; saveClockSettings(); renderClock(); },
     clockSettings: () => state && showClockSettings(),
     battleOpen: (d) => { const b = battles.find((x) => x.id === +d.b); if (b) showReport(b.report); },
+    battleLive: (d) => {
+      const b = S.battleOf(state, +d.b);
+      if (b) showReport({ from: b.from, to: battleTitle(b), lines: b.log, captured: [], live: true });
+    },
+    retreat: (d) => result(S.retreat(state, +d.b)),
     battleClose: (d) => { const i = battles.findIndex((x) => x.id === +d.b); if (i >= 0) battles.splice(i, 1); renderBattles(); },
     start: (d) => start(d.force),
     continue: () => {
@@ -1057,7 +1109,10 @@
     if (id && id.endsWith("N") && $("#" + id.slice(0, -1))) $("#" + id.slice(0, -1)).value = ev.target.value;
     if (modalOnInput) modalOnInput();
   });
-  document.addEventListener("change", () => modalOnInput && modalOnInput());
+  document.addEventListener("change", (ev) => {
+    if (ev.target.id === "defPolicy" && state) { result(S.setDefensePolicy(state, ev.target.dataset.place, ev.target.value)); return; }
+    if (modalOnInput) modalOnInput();
+  });
   $("#modal").addEventListener("click", (ev) => {
     if (ev.target.id === "modal" && state) closeModal();
   });

@@ -323,6 +323,7 @@
     if (!state.day) state.day = 1;
     if (!state.aiDays) planAIDays(state);
     S.runMarches(state, onEvent);
+    S.runBattles(state, onEvent);
     if (state.over) return null;
     for (const [fid, d] of Object.entries(state.aiDays)) {
       if (d !== state.day || !state.forces[fid].alive) continue;
