@@ -21,6 +21,8 @@
     "qianwei|yuexi": 1.4, "yuexi|yizhoujun": 1.4, "yuexi|zangke": 1.2,
     "hongnong|jingzhao": 1.2, // 동관
     "henan|hongnong": 1.2, // 함곡관
+    "daijun|shanggu": 1.3, "daijun|yanmen": 1.3, // 연산과 항산 사이 골짜기
+    "youbeiping|liaoxi": 1.5, // 노룡새, 조조의 오환 정벌길
     "hedong|shangdang": 1.3, "shangdang|taiyuan": 1.3, // 태항산
   };
   const key = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
