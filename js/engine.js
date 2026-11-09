@@ -148,6 +148,7 @@
       Object.assign(c, over);
       c.manpower = Math.round(S.manpowerMax(c) * 0.6);
     }
+    S.courtInit(state, scenario.hanFavor);
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
     return state;
   };
@@ -433,10 +434,11 @@
   S.searchChance = (o) => Math.min(100, Math.round(25 + o.wit / 2));
 
   S.recruitChance = function (state, recruiter, target) {
-    if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2), 5, 95);
+    const court = S.courtRecruitBonus(state, recruiter, target);
+    if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2 + court), 5, 95);
     if (target.status === "captive") {
       if (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id) return 0;
-      return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6), 3, 90);
+      return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6 + court), 3, 90);
     }
     return 0;
   };
@@ -935,6 +937,7 @@
       for (const o of Object.values(state.officers)) rollDeath(state, o);
     }
     runPacts(state);
+    S.runCourt(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
     S.checkOver(state);
   };
@@ -1114,6 +1117,9 @@
       }
     }
     if (!state.start) state.start = { year: state.year, month: state.month };
+    const sc = state.scenario === S.SCENARIO_191.id ? S.SCENARIO_191 : {};
+    if (state.emperor === undefined) state.emperor = sc.emperor || null;
+    if (!state.han) S.courtInit(state, state.emperor && state.emperor === sc.emperor ? sc.hanFavor : undefined);
     return state;
   };
 

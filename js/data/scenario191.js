@@ -20,6 +20,7 @@
     // Both are kept as playable forces allied to their patrons.
     // 헌제 was held at 장안 by 동탁.
     emperor: "jingzhao",
+    hanFavor: 15, // 동탁 burned 낙양 and dragged the court west
     alliances: [["sunjian", "yuanshu"], ["liubei", "gongsunzan"]],
     // Cities whose starting state differs from the defaults.
     cityState: {

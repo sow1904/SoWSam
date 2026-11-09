@@ -531,6 +531,7 @@
     for (const r of defenses) {
       html += `<h3>${r.from} → ${r.to} 전투</h3><div class="report">${r.lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
     }
+    html += courtPending();
     html += `<div class="footer"><button class="primary" data-action="close">확인</button></div>`;
     openModal(html);
   }
@@ -549,7 +550,7 @@
     const rows = Object.values(state.forces).filter((f) => f.alive)
       .map((f) => ({ f, t: S.totals(state, f.id) }))
       .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
-      .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.id === state.playerForce ? " (나)" : ""}</td>` +
+      .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.emperor ? " (황제)" : ""}${f.id === state.playerForce ? " (나)" : ""}</td>` +
         `<td>${S.regime(state, f.id).label}</td><td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
         `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td>` +
         `<td>${S.allies(state, f.id).map((a) => state.forces[a].name).join(", ") || "-"}</td><td>${diplomacyCell(f.id)}</td></tr>`).join("");
@@ -560,6 +561,70 @@
       `전쟁 피로는 전사자·패전·대규모 징병으로 오르고 평화로울 때 내려갑니다. 30을 넘으면 치안이 떨어지고, 60을 넘으면 민란이 일어날 수 있습니다. ` +
       `체제는 영토의 호족 세력(인구 가중 평균)으로 정해집니다. 55 이상은 호족연합형, 25 이하는 중앙집권형, 그 사이는 부곡형입니다.</p>` +
       `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`, true);
+  }
+
+  // ---------- the Han court ----------
+  function courtPending() {
+    const han = state.han;
+    if (!han || !han.pending || han.holder !== state.playerForce) return "";
+    const p = han.pending;
+    if (p.type === "abdicate") {
+      return `<h3>선양 조서</h3><p>헌제가 제위를 물려주겠다고 합니다. 받으면 황제에 오르고 한 왕조는 끝납니다. ` +
+        `한조중시 무장의 충성이 15, 한조이용 무장의 충성이 4 떨어집니다. 사양하면 헌제의 우호도가 5 오릅니다.</p>` +
+        `<div class="links"><button class="primary" data-action="abdicate" data-yes="1">선양을 받는다</button>` +
+        `<button data-action="abdicate">사양한다</button></div>`;
+    }
+    const c = state.cities[state.emperor];
+    const can = S.canPayDemand(state, p);
+    return `<h3>헌제의 청</h3><p>헌제가 ${S.josa(p.label, "을", "를")} 청합니다: <b>${S.demandCargo(p)}</b> ` +
+      `(${c.name} 보유: 금 ${fmt(c.gold)}, 군량 ${fmt(c.food)})</p>` +
+      `<p class="hint">들어주면 우호도 +${S.COURT.accept}, 거절하거나 이번 달 안에 답하지 않으면 우호도 -${S.COURT.refuse}.</p>` +
+      `<div class="links"><button class="primary" data-action="demand" data-yes="1"${can ? "" : " disabled"}>바친다</button>` +
+      `<button data-action="demand">거절한다</button></div>`;
+  }
+
+  function showCourt() {
+    S.syncCourt(state);
+    const han = state.han;
+    const me = state.playerForce;
+    let html = `<h2>황실</h2>`;
+    if (!state.emperor) {
+      html += `<p class="hint">이 시나리오에는 헌제가 없습니다.</p>`;
+    } else if (han.ended) {
+      html += `<p>한 왕조는 ${han.endedYear}년 헌제가 ${S.forceName(state, han.endedBy)}에 제위를 물려주며 막을 내렸습니다.</p>`;
+    } else {
+      const c = state.cities[state.emperor];
+      const h = han.holder;
+      html += `<div class="stats">` + stat("헌제의 거처", c.name) + stat("옹립 세력", h ? S.forceName(state, h) : "없음 (공백지)") +
+        stat("헌제의 우호도", `${han.favor} ${S.favorLabel(han.favor)}`) +
+        (h ? stat("옹립 세력 영토", `${Math.round(S.cityShare(state, h) * 100)}%`) : "") + `</div>`;
+      html += courtPending();
+      if (h === me) {
+        const dist = S.reachable(state, state.emperor);
+        const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
+        html += `<h3>천도</h3><p class="hint">헌제를 아군 영토로 이어진 다른 도시로 옮깁니다. ${c.name}의 금 ${S.COURT.moveCost}이 들고, ` +
+          `헌제의 우호도가 3 떨어집니다. 한 번 옮기면 ${S.COURT.moveCooldown}개월 동안 다시 옮길 수 없습니다.</p>` +
+          (dests.length ? `<div class="row"><label>새 도읍</label><select id="ctDest">${dests.map((d) =>
+            `<option value="${d}">${state.cities[d].name} (${dist[d]}칸)</option>`).join("")}</select>` +
+            `<button data-action="moveEmperor">천도</button></div>` : `<p class="hint">옮길 수 있는 도시가 없습니다.</p>`);
+      }
+    }
+    const emperors = Object.values(state.forces).filter((f) => f.alive && f.emperor);
+    html += `<h3>황제</h3><p>${emperors.length ? emperors.map((f) => `${f.name} (${f.emperorYear}년${f.hanHeir ? ", 한 황실 계승" : ""})`).join(", ") : "아직 황제를 칭한 군주가 없습니다."}</p>`;
+    const can = S.canProclaim(state, me);
+    if (!state.forces[me].emperor) {
+      const heir = S.isHanHeir(state, me);
+      html += `<p class="hint">${heir
+        ? "한 왕조가 끝났으므로, 한조를 중시하는 군주는 한 황실을 잇는다는 명분으로 칭제할 수 있습니다. 무장의 충성이 떨어지지 않습니다."
+        : "칭제하면 한조중시 무장의 충성이 25, 한조이용 무장의 충성이 8 떨어지고, 한조를 중시하는 군주와의 동맹이 끊깁니다."} ` +
+        `황제가 되면 한조무관·이용 인재를 등용하기 조금 쉬워집니다. 도시 ${S.COURT.proclaimCities}개 이상이 필요하고, 헌제를 모시는 동안에는 칭제할 수 없습니다.</p>` +
+        `<div class="links"><button data-action="proclaim"${can.ok ? "" : " disabled"}>칭제</button>${can.ok ? "" : ` <span class="hint">${can.msg}</span>`}</div>`;
+    }
+    html += `<p class="hint">헌제를 모시는 세력은 한조중시 인재를 등용하기 쉽고(우호도 40 이상), 우호도가 50 이상이면 한조중시 무장의 충성이 조금씩 오릅니다. ` +
+      `헌제는 석 달마다 금이나 군량을 청하기도 합니다. 우호도가 ${S.COURT.abdicateFavor} 이상이고 영토가 ${S.COURT.abdicateShare * 100}% 이상이면 선양을 받을 수 있습니다. ` +
+      `우호도가 30 밑이면, 강한 세력에게서는 한조중시 군주에게 밀서를 보내고 약한 세력에게서는 달아날 수 있습니다.</p>` +
+      `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`;
+    openModal(html, true);
   }
 
   function diplomacyCell(fid) {
@@ -611,6 +676,17 @@
     close: closeModal,
     title: showTitle,
     forces: () => state && showForces(),
+    court: () => state && showCourt(),
+    demand: (d) => { if (result(S.answerDemand(state, !!d.yes))) showCourt(); },
+    abdicate: (d) => {
+      if (d.yes && !confirm("선양을 받아 황제에 오를까요? 한 왕조가 끝납니다.")) return;
+      if (result(S.answerAbdication(state, !!d.yes))) showCourt();
+    },
+    moveEmperor: () => { if (result(S.moveEmperor(state, state.playerForce, $("#ctDest").value))) showCourt(); },
+    proclaim: () => {
+      if (!confirm("황제를 칭할까요?")) return;
+      if (result(S.proclaim(state, state.playerForce))) showCourt();
+    },
     proposePact: (d) => { if (result(S.proposePact(state, state.playerForce, d.force))) showForces(); },
     breakPact: (d) => {
       if (!confirm(`${state.forces[d.force].name}군과의 동맹을 파기할까요? 내 모든 도시의 치안이 5 떨어집니다.`)) return;

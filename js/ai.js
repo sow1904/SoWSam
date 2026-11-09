@@ -80,7 +80,7 @@
     for (const c of S.citiesOf(state, fid)) {
       for (const t of attackable(state, c)) {
         const defense = t.troops * (1 + t.wall / 2000) + 500;
-        const score = c.troops / defense + (t.owner ? 0 : 0.3);
+        const score = c.troops / defense + (t.owner ? 0 : 0.3) + S.courtPull(state, fid, t);
         if (!best || score > best.score) best = { target: t.id, stage: c.id, score };
       }
     }
@@ -103,12 +103,13 @@
     let best = null;
     for (const t of targets) {
       const est = S.estimate(state, c.id, t.id, ids, troops);
-      const bonus = t.owner ? 0 : 0.2; // vacant cities are easy pickings
-      if (!best || est.ratio + bonus > best.score) best = { t, score: est.ratio + bonus, est };
+      const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
+      const bonus = (t.owner ? 0 : 0.2) + pull; // vacant cities are easy pickings
+      if (!best || est.ratio + bonus > best.score) best = { t, score: est.ratio + bonus, est, pull };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
-    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40) return;
+    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull) return;
     if (!S.chance(state, 45)) return;
     const r = S.attack(state, c.id, best.t.id, ids, troops);
     if (r.ok) {
@@ -252,6 +253,7 @@
     state._plans[fid] = planCampaign(state, fid);
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
     seekAlly(state, fid);
+    S.courtAI(state, fid);
   };
 
   // Now and then a computer force sends an envoy to another computer force.
