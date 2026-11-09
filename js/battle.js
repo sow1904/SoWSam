@@ -25,10 +25,13 @@
   const WATER = {};
   for (const [a, b] of [
     // 장강
-    ["jiujiang", "danyang"], ["lujiang", "danyang"], ["guangling", "danyang"], ["guangling", "wujun"], ["nanjun", "jiangxia"],
-    ["nanjun", "wuling"], ["jiangxia", "changsha"], ["jiangxia", "yuzhang"], ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["bajun", "nanjun"],
+    ["jiujiang", "danyang"], ["lujiang", "danyang"], ["guangling", "danyang"], ["guangling", "wujun"], ["wujun", "kuaiji"],
+    ["nanjun", "jiangxia"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["jiangxia", "changsha"], ["jiangxia", "yuzhang"],
+    ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["bajun", "nanjun"],
     // 황하
-    ["henan", "henei"], ["henei", "chenliu"], ["dongjun", "weijun"], ["jibei", "pingyuan"], ["hedong", "hongnong"], ["hongnong", "zuopingyi"],
+    ["henan", "henei"], ["henan", "hedong"], ["henei", "chenliu"], ["chenliu", "dongjun"], ["dongjun", "jiyin"], ["dongjun", "weijun"],
+    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["qinghe", "dongping"], ["qinghe", "jibei"],
+    ["jibei", "pingyuan"], ["pingyuan", "jinan"], ["jinan", "lean"], ["lean", "qiguo"],
     // 한수
     ["nanyang", "nanjun"],
   ]) WATER[S.roadKey(a, b)] = true;

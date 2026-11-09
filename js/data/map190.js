@@ -230,16 +230,16 @@
   // Roads between neighbouring commanderies, including the main passes and
   // river routes (함곡·동관, 분수, 장강 삼협, 회수, 금우도·미창도, 음평도, 야랑도).
   const roads = [
-    ["henan", "henei"], ["henan", "hedong"], ["henan", "hongnong"], ["henan", "chenliu"], ["henan", "yingchuan"], ["henan", "nanyang"], ["henei", "yingchuan"], ["henei", "chenliu"],
+    ["henan", "henei"], ["henan", "hedong"], ["henan", "hongnong"], ["henan", "chenliu"], ["henei", "chenliu"],
     ["henei", "dongjun"], ["henei", "weijun"], ["henei", "shangdang"], ["hedong", "hongnong"], ["hedong", "shangdang"], ["hedong", "xihe"],
-    ["hedong", "taiyuan"], ["hongnong", "zuopingyi"], ["hongnong", "nanyang"], ["hongnong", "jingzhao"], ["jingzhao", "zuopingyi"], ["jingzhao", "youfufeng"],
+    ["hedong", "taiyuan"], ["hongnong", "zuopingyi"], ["hongnong", "nanyang"], ["hongnong", "jingzhao"], ["jingzhao", "youfufeng"],
     ["zuopingyi", "beidi"], ["youfufeng", "hanyang"], ["youfufeng", "anding"], ["youfufeng", "hanzhong"], ["yingchuan", "runan"], ["yingchuan", "chenguo"],
     ["yingchuan", "chenliu"], ["yingchuan", "nanyang"], ["runan", "chenguo"], ["runan", "nanyang"], ["runan", "jiangxia"], ["runan", "jiujiang"],
     ["liangguo", "peiguo"], ["liangguo", "chenguo"], ["liangguo", "chenliu"], ["liangguo", "shanyang"], ["liangguo", "jiyin"], ["peiguo", "shanyang"],
-    ["peiguo", "jiujiang"], ["peiguo", "pengcheng"], ["chenguo", "chenliu"], ["luguo", "dongping"], ["luguo", "rencheng"], ["luguo", "taishan"],
+    ["peiguo", "jiujiang"], ["peiguo", "pengcheng"], ["chenguo", "chenliu"], ["luguo", "rencheng"], ["luguo", "taishan"],
     ["luguo", "langya"], ["chenliu", "dongjun"], ["chenliu", "jiyin"], ["dongjun", "dongping"], ["dongjun", "jiyin"], ["dongjun", "weijun"],
     ["dongjun", "qinghe"], ["dongping", "rencheng"], ["dongping", "taishan"], ["dongping", "jibei"], ["rencheng", "shanyang"], ["rencheng", "pengcheng"],
-    ["taishan", "jibei"], ["taishan", "langya"], ["taishan", "jinan"], ["jibei", "qinghe"], ["jibei", "jinan"], ["jibei", "pingyuan"],
+    ["taishan", "jibei"], ["taishan", "jinan"], ["jibei", "qinghe"], ["jibei", "jinan"], ["jibei", "pingyuan"],
     ["shanyang", "jiyin"], ["shanyang", "pengcheng"], ["weijun", "zhaoguo"], ["weijun", "shangdang"], ["julu", "changshan"], ["julu", "anping"],
     ["julu", "qinghe"], ["julu", "zhaoguo"], ["changshan", "zhongshan"], ["changshan", "anping"], ["changshan", "taiyuan"], ["zhongshan", "anping"],
     ["zhongshan", "hejian"], ["zhongshan", "zhuo"], ["zhongshan", "daijun"], ["anping", "hejian"], ["anping", "qinghe"], ["anping", "pingyuan"],
@@ -249,17 +249,21 @@
     ["shangdang", "taiyuan"], ["taiyuan", "xihe"], ["taiyuan", "yanmen"], ["xihe", "shangjun"], ["shangjun", "wuyuan"], ["shangjun", "shuofang"],
     ["shangjun", "beidi"], ["wuyuan", "yunzhong"], ["wuyuan", "shuofang"], ["yunzhong", "dingxiang"], ["dingxiang", "yanmen"], ["longxi", "hanyang"],
     ["longxi", "jincheng"], ["hanyang", "wudu"], ["hanyang", "anding"], ["wudu", "hanzhong"], ["wudu", "guanghan"], ["jincheng", "wuwei"],
-    ["anding", "beidi"], ["wuwei", "zhangye"], ["zhangye", "jiuquan"], ["jiuquan", "dunhuang"], ["hanzhong", "bajun"], ["hanzhong", "guanghan"],
+    ["anding", "beidi"], ["wuwei", "zhangye"], ["zhangye", "jiuquan"], ["jiuquan", "dunhuang"], ["hanzhong", "guanghan"],
     ["bajun", "guanghan"], ["bajun", "shujun"], ["bajun", "qianwei"], ["bajun", "zangke"], ["bajun", "nanjun"], ["guanghan", "shujun"],
     ["shujun", "qianwei"], ["qianwei", "yuexi"], ["zangke", "yizhoujun"], ["zangke", "yulin"], ["yuexi", "yizhoujun"], ["yuexi", "yongchang"],
     ["yizhoujun", "yongchang"], ["yizhoujun", "jiaozhi"], ["nanyang", "nanjun"], ["nanjun", "jiangxia"], ["nanjun", "wuling"], ["jiangxia", "changsha"],
     ["jiangxia", "lujiang"], ["jiangxia", "yuzhang"], ["changsha", "wuling"], ["changsha", "lingling"], ["changsha", "guiyang"], ["changsha", "yuzhang"],
     ["lingling", "guiyang"], ["lingling", "cangwu"], ["guiyang", "nanhai"], ["guiyang", "cangwu"], ["jiujiang", "danyang"], ["jiujiang", "lujiang"],
-    ["jiujiang", "guangling"], ["jiujiang", "xiapi"], ["danyang", "lujiang"], ["danyang", "kuaiji"], ["danyang", "wujun"], ["danyang", "guangling"],
+    ["jiujiang", "guangling"], ["jiujiang", "xiapi"], ["danyang", "lujiang"], ["danyang", "wujun"], ["danyang", "guangling"],
     ["lujiang", "yuzhang"], ["kuaiji", "wujun"], ["wujun", "guangling"], ["donghai", "langya"], ["donghai", "pengcheng"], ["donghai", "xiapi"],
-    ["langya", "qiguo"], ["langya", "beihai"], ["pengcheng", "xiapi"], ["guangling", "xiapi"], ["qiguo", "beihai"], ["qiguo", "jinan"],
+    ["langya", "beihai"], ["pengcheng", "xiapi"], ["guangling", "xiapi"], ["qiguo", "beihai"], ["qiguo", "jinan"],
     ["qiguo", "lean"], ["beihai", "donglai"], ["jinan", "lean"], ["jinan", "pingyuan"], ["nanhai", "cangwu"], ["cangwu", "yulin"],
     ["yulin", "hepu"], ["hepu", "jiaozhi"], ["jiaozhi", "jiuzhen"], ["jiuzhen", "rinan"],
+    // Roads that end at a stronghold: the stronghold guards them as well.
+    ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"],
+    ["jingzhao", "beidi"], ["zuopingyi", "hedong"], ["dongping", "jiyin"], ["taishan", "rencheng"], ["qinghe", "dongping"],
+    ["pingyuan", "lean"], ["luguo", "pengcheng"], ["donghai", "guangling"], ["nanjun", "changsha"],
   ];
 
   // The painted terrain map (assets/map/terrain.jpg, 2048 x 2048). It is a

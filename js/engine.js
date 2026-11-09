@@ -184,10 +184,16 @@
     if (!S.MAP) throw new Error("unknown map " + id);
     S.MAP_SIZE = S.MAP.terrain ? { w: S.MAP.terrain.w, h: S.MAP.terrain.h } : { w: 2060, h: 1840 };
     ADJ = {};
-    for (const [a, b] of S.MAP.roads) {
-      (ADJ[a] = ADJ[a] || []).push(b);
-      (ADJ[b] = ADJ[b] || []).push(a);
-    }
+    // Neighbouring commanderies. A road that ends at a stronghold makes its
+    // city a neighbour of the cities the stronghold's own road joins.
+    const sites = (S.FORT_SITES && S.FORT_SITES[id]) || {};
+    const ends = (x) => (S.MAP.cities[x] ? [x] : sites[x] ? [sites[x][2], sites[x][3]] : []);
+    const join = (a, b) => {
+      if (a === b) return;
+      if (!(ADJ[a] = ADJ[a] || []).includes(b)) ADJ[a].push(b);
+      if (!(ADJ[b] = ADJ[b] || []).includes(a)) ADJ[b].push(a);
+    };
+    for (const [a, b] of S.MAP.roads) for (const x of ends(a)) for (const y of ends(b)) join(x, y);
   };
   S.neighbors = (cid) => ADJ[cid] || [];
 

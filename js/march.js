@@ -14,7 +14,7 @@
     "youfufeng|hanzhong": 1.6, // 포사도
     "wudu|hanzhong": 1.4,
     "hanzhong|guanghan": 1.5, // 금우도
-    "hanzhong|bajun": 1.5, // 미창도
+    "bajun|jiameng": 1.5, // 미창도에서 가맹관으로
     "wudu|guanghan": 1.8, // 음평도
     "bajun|nanjun": 1.4, // 장강 삼협
     "bajun|zangke": 1.5, // 야랑도
@@ -81,6 +81,8 @@
       rough[key(a, b)] = r;
     };
     for (const [a, b] of S.MAP.roads) {
+      // A road to a stronghold that is not yet built leads nowhere.
+      if ([a, b].some((id) => !S.MAP.cities[id] && !(state.forts && state.forts[id] && state.forts[id].built))) continue;
       const r = ROUGH_KEYED[key(a, b)] || 1;
       const [la, lo] = S.nodeLL(state, a);
       const forts = (onRoad[key(a, b)] || []).slice().sort((p, q) => greatCircle(la, lo, p.lat, p.lon) - greatCircle(la, lo, q.lat, q.lon));
