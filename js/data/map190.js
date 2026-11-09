@@ -251,7 +251,7 @@
     ["longxi", "jincheng"], ["hanyang", "wudu"], ["hanyang", "anding"], ["wudu", "hanzhong"], ["wudu", "guanghan"], ["jincheng", "wuwei"],
     ["anding", "beidi"], ["wuwei", "zhangye"], ["zhangye", "jiuquan"], ["jiuquan", "dunhuang"], ["hanzhong", "guanghan"],
     ["bajun", "guanghan"], ["bajun", "shujun"], ["bajun", "qianwei"], ["bajun", "zangke"], ["bajun", "nanjun"], ["guanghan", "shujun"],
-    ["shujun", "qianwei"], ["qianwei", "yuexi"], ["zangke", "yizhoujun"], ["zangke", "yulin"], ["yuexi", "yizhoujun"], ["yuexi", "yongchang"],
+    ["shujun", "qianwei"], ["qianwei", "yuexi"], ["zangke", "yizhoujun"], ["zangke", "yulin"], ["yuexi", "yizhoujun"],
     ["yizhoujun", "yongchang"], ["yizhoujun", "jiaozhi"], ["nanyang", "nanjun"], ["nanjun", "jiangxia"], ["nanjun", "wuling"], ["jiangxia", "changsha"],
     ["jiangxia", "lujiang"], ["jiangxia", "yuzhang"], ["changsha", "wuling"], ["changsha", "lingling"], ["changsha", "guiyang"], ["changsha", "yuzhang"],
     ["lingling", "guiyang"], ["lingling", "cangwu"], ["guiyang", "nanhai"], ["guiyang", "cangwu"], ["jiujiang", "danyang"], ["jiujiang", "lujiang"],
@@ -262,8 +262,8 @@
     ["yulin", "hepu"], ["hepu", "jiaozhi"], ["jiaozhi", "jiuzhen"], ["jiuzhen", "rinan"],
     // Roads that end at a stronghold: the stronghold guards them as well.
     ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"], ["danyang", "hefei"],
-    ["wuling", "lingling"],
-    ["jingzhao", "beidi"], ["zuopingyi", "hedong"], ["dongping", "jiyin"], ["taishan", "rencheng"], ["qinghe", "dongping"],
+    ["wuling", "lingling"], ["yuexi", "zangke"],
+    ["jingzhao", "zuopingyi"], ["zuopingyi", "hedong"], ["dongping", "jiyin"], ["taishan", "rencheng"], ["qinghe", "dongping"],
     ["pingyuan", "lean"], ["luguo", "pengcheng"], ["donghai", "guangling"], ["nanjun", "changsha"],
   ];
 
@@ -306,7 +306,7 @@
     // A place missing here falls back to the warp above.
     pos: {
       henan: [1136, 624], henei: [1179, 594], hedong: [1048, 590], hongnong: [1065, 638],
-      jingzhao: [914, 676], zuopingyi: [990, 620], youfufeng: [853, 647], yingchuan: [1235, 708],
+      jingzhao: [914, 676], youfufeng: [853, 647], yingchuan: [1235, 708],
       runan: [1261, 809], liangguo: [1341, 710], peiguo: [1442, 682], chenguo: [1292, 762],
       luguo: [1490, 574], chenliu: [1259, 645], dongjun: [1268, 579], dongping: [1349, 558],
       rencheng: [1436, 589], taishan: [1449, 530], jibei: [1389, 509], shanyang: [1392, 628],
@@ -318,7 +318,7 @@
       shangdang: [1132, 517], taiyuan: [1124, 370], xihe: [1055, 390], shangjun: [1006, 346],
       wuyuan: [1021, 137], yunzhong: [1096, 134], dingxiang: [1139, 186], yanmen: [1160, 254],
       shuofang: [880, 134], longxi: [681, 535], hanyang: [716, 619], wudu: [651, 724],
-      jincheng: [619, 470], anding: [863, 566], beidi: [929, 623], wuwei: [514, 333], zhangye: [366, 243],
+      jincheng: [619, 470], anding: [863, 566], wuwei: [514, 333], zhangye: [366, 243],
       jiuquan: [230, 172], dunhuang: [40, 120], hanzhong: [792, 776], bajun: [740, 1090],
       guanghan: [610, 929], shujun: [580, 980], qianwei: [560, 1048], zangke: [742, 1343],
       yuexi: [425, 1224], yizhoujun: [423, 1489], yongchang: [177, 1471], nanyang: [1130, 789], xiangyang: [1125, 895],

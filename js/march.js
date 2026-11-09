@@ -18,7 +18,7 @@
     "wudu|guanghan": 1.8, // 음평도
     "bajun|nanjun": 1.4, // 장강 삼협
     "bajun|zangke": 1.5, // 야랑도
-    "qianwei|yuexi": 1.4, "yuexi|yizhoujun": 1.4, "yuexi|yongchang": 1.5,
+    "qianwei|yuexi": 1.4, "yuexi|yizhoujun": 1.4, "yuexi|zangke": 1.5,
     "hongnong|jingzhao": 1.2, // 동관
     "henan|hongnong": 1.2, // 함곡관
     "hedong|shangdang": 1.3, "shangdang|taiyuan": 1.3, // 태항산
