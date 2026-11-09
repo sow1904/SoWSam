@@ -17,11 +17,11 @@
   // id: [name, province, seat, lat, lon, size, gentry]
   const cities = {
     // 사례
-    henan:      ["하남", "sili", "낙양", 34.68, 112.60, 4, 25],
+    henan:      ["낙양", "sili", "낙양", 34.68, 112.60, 4, 25],
     henei:      ["하내", "sili", "회", 35.15, 113.30, 4, 45],
     hedong:     ["하동", "sili", "안읍", 35.10, 111.25, 3, 45],
     hongnong:   ["홍농", "sili", "홍농", 34.62, 110.90, 2, 40],
-    jingzhao:   ["경조", "sili", "장안", 34.28, 108.90, 4, 35],
+    jingzhao:   ["장안", "sili", "장안", 34.28, 108.90, 4, 35],
     zuopingyi:  ["좌풍익", "sili", "고릉", 34.85, 109.70, 2, 35],
     youfufeng:  ["우부풍", "sili", "괴리", 34.40, 107.80, 2, 40],
     // 예주
@@ -86,7 +86,7 @@
     hanzhong:   ["한중", "yi", "남정", 33.10, 107.00, 3, 40],
     bajun:      ["파군", "yi", "강주", 29.56, 106.55, 4, 55],
     guanghan:   ["광한", "yi", "낙", 31.25, 104.50, 3, 60],
-    shujun:     ["촉군", "yi", "성도", 30.66, 104.06, 5, 70],
+    shujun:     ["성도", "yi", "성도", 30.66, 104.06, 5, 70],
     qianwei:    ["건위", "yi", "무양", 29.90, 103.85, 3, 55],
     zangke:     ["장가", "yi", "고란", 26.60, 106.70, 2, 50],
     yuexi:      ["월수", "yi", "공도", 27.90, 102.25, 2, 40],
@@ -143,7 +143,12 @@
     const t = S.MAP && S.MAP.terrain;
     if (!t) return S.projectPlain(lat, lon);
     if (!t.warp) t.warp = S.makeWarp(t.anchors);
-    return t.warp(lat, lon);
+    const [x, y] = t.warp(lat, lon);
+    const sp = t.spread;
+    const d = sp ? Math.hypot(x - sp.x, y - sp.y) : Infinity;
+    if (d >= (sp ? sp.r : 0)) return [x, y];
+    const f = 1 + (sp.k - 1) * (1 - d / sp.r);
+    return [Math.round(sp.x + (x - sp.x) * f), Math.round(sp.y + (y - sp.y) * f)];
   };
   // Where a city or stronghold is drawn: set by hand, or projected.
   S.placeXY = (id, lat, lon) => (S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon);
@@ -286,10 +291,15 @@
       [660, 1800, 21.03, 105.85], // 홍하 삼각주
       [560, 480, 36.06, 103.83], // 금성 부근의 황하
     ],
-    // Places set by hand: off the picture, or on the wrong bank after the warp.
+    // The picture packs the north China plain tightly; spread places out
+    // from its middle, most at the centre and not at all at the rim.
+    spread: { x: 1330, y: 470, r: 380, k: 1.35 },
+    // Places set by hand: off the picture, in the sea, or on the wrong bank of a river.
     pos: {
       dunhuang: [40, 120], lelang: [1990, 260], rinan: [690, 1990], donglai: [1650, 440],
-      henei: [1215, 512], weijun: [1255, 440], nanyang: [1185, 800], runan: [1295, 722],
+      liaoxi: [1610, 95], hepu: [990, 1668], hongnong: [1100, 575],
+      henei: [1215, 512], weijun: [1255, 440], qinghe: [1300, 395], pingyuan: [1352, 383],
+      nanyang: [1185, 800], runan: [1280, 730], chenguo: [1330, 700],
     },
   };
 

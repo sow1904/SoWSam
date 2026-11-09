@@ -970,7 +970,7 @@
         const wait = han.movedAt != null ? han.movedAt + S.COURT.moveCooldown - S.monthsElapsed(state) : 0;
         const mf = S.COURT.moveFavor;
         html += `<h3>천도</h3><p class="hint">헌제를 아군 영토로 이어진 다른 도시로 옮깁니다. ${c.name}의 금 ${S.COURT.moveCost}이 듭니다. ` +
-          `헌제는 고향 하남(낙양)을 떠나기 싫어합니다. 하남을 떠나면 우호도 ${mf.leave}, 하남으로 돌아오면 +${mf.back}, 그 밖의 천도는 ${mf.other}입니다. ` +
+          `헌제는 고향 낙양을 떠나기 싫어합니다. 낙양을 떠나면 우호도 ${mf.leave}, 낙양으로 돌아오면 +${mf.back}, 그 밖의 천도는 ${mf.other}입니다. ` +
           `한 번 옮기면 ${S.COURT.moveCooldown}개월 동안 다시 옮길 수 없고, 헌제를 새로 맞이한 세력은 바로 천도할 수 있습니다.` +
           (wait > 0 ? ` <b>${wait}개월 뒤에 천도할 수 있습니다.</b>` : "") + `</p>` +
           (dests.length ? `<div class="row"><label>새 도읍</label><select id="ctDest">${dests.map((d) =>

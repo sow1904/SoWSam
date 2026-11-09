@@ -1024,6 +1024,7 @@
     for (const c of Object.values(state.cities)) {
       const m = S.MAP.cities[c.id];
       [c.x, c.y] = S.placeXY(c.id, m[3], m[4]);
+      c.name = m[0]; // names may be revised (하남 -> 낙양)
     }
     for (const f of Object.values(state.forts)) [f.x, f.y] = S.placeXY(f.id, f.lat, f.lon);
     // Older saves used 통솔/무력/지력/정치.
