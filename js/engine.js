@@ -438,7 +438,8 @@
     if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2 + court), 5, 95);
     if (target.status === "captive") {
       if (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id) return 0;
-      return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6 + court), 3, 90);
+      const trait = S.hasTrait(target, "의리") ? -25 : S.hasTrait(target, "변심") ? 15 : 0;
+      return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6 + court + trait), 3, 90);
     }
     return 0;
   };
@@ -585,7 +586,9 @@
     if (t.status !== "serving" || S.isRuler(state, t) || isKin(state, t)) return 0;
     const g = S.cityWit(state, t.city);
     const wit = Math.max(t.wit, g ? g.wit : 0);
-    return clamp(Math.round(20 + o.plot * 0.7 - wit * 0.5 - (t.loyalty - 50) * 0.4), 3, 85);
+    const trait = { 의리: -20, 변심: 15, 야심: 10, 무욕: -5 };
+    const mod = S.traitsOf(t).reduce((s, k) => s + (trait[k] || 0), 0);
+    return clamp(Math.round(20 + o.plot * 0.7 - wit * 0.5 - (t.loyalty - 50) * 0.4 + mod), 3, 85);
   };
   S.schemeEffect = {
     rumor: (o) => ({ order: 8 + Math.floor(o.plot / 8), consent: 3 + Math.floor(o.plot / 25) }),
@@ -717,13 +720,19 @@
     const def = sideStats(defenders, defForce ? 40 : 35);
     let A = troops, D = t.troops;
     const A0 = A, D0 = Math.max(D, 1);
-    let aMorale = 1, dMorale = 1;
+    // A bold commander lifts his men's spirits.
+    let aMorale = S.hasTrait(S.best(attackers, "cmd"), "과감") ? 1.05 : 1;
+    let dMorale = defenders.length && S.hasTrait(S.best(defenders, "cmd"), "과감") ? 1.05 : 1;
     say(`${S.forceName(state, atkForce)} ${A}명이 ${t.name}(${S.forceName(state, defForce)}, 수비 ${D}명)을(를) 공격합니다.`);
 
     // Duel between the strongest warriors, when both sides have one.
-    if (defenders.length && S.chance(state, 30)) {
-      const a = S.best(attackers, "war");
-      const d = S.best(defenders, "war");
+    // Bold warriors seek a duel; a cautious defender stays behind the walls.
+    const duelA = defenders.length && S.best(attackers, "war");
+    const duelD = defenders.length && S.best(defenders, "war");
+    const duelPct = defenders.length ? 30 + (S.hasTrait(duelA, "과감") ? 15 : 0) + (S.hasTrait(duelD, "과감") ? 15 : 0) - (S.hasTrait(duelD, "신중") ? 20 : 0) : 0;
+    if (defenders.length && S.chance(state, duelPct)) {
+      const a = duelA;
+      const d = duelD;
       if (a.war >= 70 || d.war >= 70) {
         const roll = (a.war - d.war) / 2 + (rand(state) - 0.5) * 40;
         if (Math.abs(roll) < 4) say(`일기토! ${a.name}과(와) ${d.name}이(가) 맞붙었으나 승부가 나지 않았습니다.`);
@@ -739,7 +748,9 @@
       if (!S.chance(state, S.ruseAttempt(p))) return 0;
       const w = them.length ? S.best(them, "wit") : null;
       const name = names[Math.floor(rand(state) * names.length)];
-      if (!S.chance(state, S.ruseChance(p, w))) {
+      const lead = them.length ? S.best(them, "cmd") : null;
+      const temper = S.hasTrait(lead, "신중") ? -15 : S.hasTrait(lead, "과감") ? 10 : 0;
+      if (!S.chance(state, clamp(S.ruseChance(p, w) + temper, 5, 95))) {
         say(w ? `${p.name}의 ${name}! 그러나 ${S.josa(w.name, "이", "가")} 간파했습니다.` : `${p.name}의 ${S.josa(name, "이", "가")} 실패했습니다.`);
         return 0;
       }
@@ -867,6 +878,10 @@
   S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200));
   S.upkeep = (c) => Math.ceil(c.troops / 100);
 
+  // Traits: who walks away, and how fast loyalty wears down.
+  S.leaveThreshold = (o) => (S.hasTrait(o, "의리") ? 25 : S.hasTrait(o, "변심") ? 50 : S.hasTrait(o, "야심") ? 45 : 40);
+  S.loyaltyDrift = (o) => S.traitsOf(o).reduce((m, k) => m * ({ 야심: 2, 무욕: 0.5, 의리: 0.5, 변심: 1.5 }[k] || 1), 1);
+
   S.endMonth = function (state) {
     const harvest = state.month === 9;
     for (const c of Object.values(state.cities)) {
@@ -906,13 +921,14 @@
       o.done = false;
       o.rewarded = false;
       if (o.status !== "serving" || S.isRuler(state, o)) continue;
-      if (o.loyalty < 40 && S.chance(state, (40 - o.loyalty) / 2)) {
+      const leaveAt = S.leaveThreshold(o);
+      if (o.loyalty < leaveAt && S.chance(state, (leaveAt - o.loyalty) / 2)) {
         const f = o.force;
         o.status = "free";
         o.force = null;
         o.hidden = false;
         S.addLog(state, `${o.name}이(가) ${S.forceName(state, f)}을(를) 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
-      } else if (S.chance(state, 10 + Math.max(0, state.forces[o.force].weariness - 50) / 2)) {
+      } else if (S.chance(state, (10 + Math.max(0, state.forces[o.force].weariness - 50) / 2) * S.loyaltyDrift(o))) {
         o.loyalty = Math.max(0, o.loyalty - 1);
       }
     }
@@ -990,6 +1006,9 @@
     const threat = Object.keys(state.forces).some((f) => f !== from && f !== to && state.forces[f].alive &&
       !S.allied(state, to, f) && touches(state, to, f) && S.forcePower(state, f) > theirs);
     if (threat) p += 15;
+    const toRuler = state.officers[state.forces[to].ruler];
+    if (S.hasTrait(toRuler, "야심")) p -= 10;
+    if (S.hasTrait(toRuler, "무욕")) p += 10;
     return clamp(Math.round(p), 5, 85);
   };
   // The player sends an envoy with a gift from their richest city.

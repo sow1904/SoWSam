@@ -15,7 +15,9 @@
     abdicateShare: 0.3, // share of all cities needed for 선양
     abdicateFavor: 70,
     moveCost: 500,
-    moveCooldown: 12,
+    moveCooldown: 12, // per holder; resets when the emperor changes hands
+    home: "henan", // 낙양: he would rather not leave it
+    moveFavor: { leave: -10, back: 10, other: -3 },
     proclaimCities: 8,
     demandChance: 60, // each quarter
     accept: 8, // favour for granting a request
@@ -64,6 +66,7 @@
     if (h === han.holder) return;
     han.pending = null;
     han.holder = h;
+    han.movedAt = null; // a new keeper may move the court at once
     if (!h) return;
     const before = han.favor;
     han.favor = S.COURT.baseFavor[rulerOf(state, h).han] + (before < 30 ? S.COURT.rescueBonus : 0);
@@ -198,11 +201,15 @@
     from.gold -= S.COURT.moveCost;
     state.emperor = cid;
     han.movedAt = t;
-    addFavor(state, -3);
-    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} 헌제를 모시고 ${from.name}에서 ${state.cities[cid].name}(으)로 천도했습니다.`;
+    addFavor(state, S.moveFavorDelta(from.id, cid));
+    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} 헌제를 모시고 ${from.name}에서 ${state.cities[cid].name}(으)로 천도했습니다.` +
+      (cid === S.COURT.home ? " 헌제가 고향 낙양으로 돌아와 기뻐합니다." : from.id === S.COURT.home ? " 헌제가 낙양을 떠나며 슬퍼합니다." : "");
     if (fid !== state.playerForce) S.addLog(state, msg, "info");
     return { ok: true, msg };
   };
+
+  S.moveFavorDelta = (fromId, toId) => (toId === S.COURT.home ? S.COURT.moveFavor.back
+    : fromId === S.COURT.home ? S.COURT.moveFavor.leave : S.COURT.moveFavor.other);
 
   // ---------- escape and secret letters ----------
   S.escapeChance = (state) => {
@@ -305,7 +312,7 @@
       if (mine) {
         han.pending = { type: "abdicate" };
         S.addLog(state, "헌제가 제위를 물려주겠다는 조서를 내렸습니다.", "sys");
-      } else if (ruler.han !== "H") {
+      } else if (ruler.han !== "H" && !S.hasTrait(ruler, "무욕")) {
         abdicate(state, h);
       } else {
         addFavor(state, 5); // a loyalist declines
@@ -337,23 +344,53 @@
   };
 
   // ---------- computer forces ----------
+  // 한조중시 keepers hold 낙양 and bring him home when they can; 한조이용
+  // keepers carry him off to the safest interior city as soon as the front
+  // nears; 한조무관 keepers do not bother.
+  function moveCourtAI(state, fid, ruler) {
+    if (ruler.han === "N") return;
+    const home = S.COURT.home;
+    const here = state.cities[state.emperor];
+    const enemyNear = (c) => S.neighbors(c.id).reduce((s, n) => s + (state.cities[n].owner !== fid ? state.cities[n].troops : 0), 0);
+    const exposed = (c) => S.neighbors(c.id).some((n) => state.cities[n].owner !== fid);
+    const reach = S.reachable(state, state.emperor);
+    const safest = () => {
+      const safe = Object.keys(reach).map((id) => state.cities[id]).filter((c) => c.size >= 3 && !exposed(c));
+      return safe.length ? safe.reduce((a, b) => (b.size > a.size ? b : a)).id : null;
+    };
+    if (ruler.han === "H") {
+      if (here.id === home) {
+        // Leave 낙양 only when it is about to fall.
+        if (enemyNear(here) > here.troops * 2 && S.chance(state, 20)) {
+          const to = safest();
+          if (to) S.moveEmperor(state, fid, to);
+        }
+      } else if (home in reach && enemyNear(state.cities[home]) < state.cities[home].troops * 1.5) {
+        if (S.chance(state, 30)) S.moveEmperor(state, fid, home);
+      } else if (exposed(here) && S.chance(state, 15)) {
+        const to = safest();
+        if (to) S.moveEmperor(state, fid, to);
+      }
+      return;
+    }
+    if (exposed(here)) {
+      const to = safest();
+      if (to) S.moveEmperor(state, fid, to);
+    }
+  }
+
   S.courtAI = function (state, fid) {
     const han = state.han;
     if (!han) return;
     const ruler = rulerOf(state, fid);
-    // Keep the emperor away from the front.
-    if (!han.ended && S.emperorHolder(state) === fid && ruler.han !== "N" && S.chance(state, 15)) {
-      const exposed = (c) => S.neighbors(c.id).some((n) => state.cities[n].owner !== fid);
-      if (exposed(state.cities[state.emperor])) {
-        const safe = Object.keys(S.reachable(state, state.emperor)).map((id) => state.cities[id]).filter((c) => c.size >= 3 && !exposed(c));
-        if (safe.length) S.moveEmperor(state, fid, safe.reduce((a, b) => (b.size > a.size ? b : a)).id);
-      }
-    }
+    if (!han.ended && S.emperorHolder(state) === fid) moveCourtAI(state, fid, ruler);
     if (!S.canProclaim(state, fid).ok) return;
     const n = S.citiesOf(state, fid).length;
     let p = 0;
     if (ruler.han === "N" && n >= 12) p = 2;
     else if (han.ended && n >= (ruler.han === "H" ? 8 : 12)) p = 5;
+    if (S.hasTrait(ruler, "야심")) p *= 2;
+    if (S.hasTrait(ruler, "무욕") && !S.isHanHeir(state, fid)) p = 0;
     if (p && S.chance(state, p)) S.proclaim(state, fid);
   };
 })(globalThis.SAM = globalThis.SAM || {});

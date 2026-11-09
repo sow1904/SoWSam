@@ -164,13 +164,14 @@
       const crown = S.isRuler(state, o) && o.status === "serving" ? "♛ " : "";
       return `<tr class="${cls}"${attrs}><td>${crown}${o.name}</td><td>${S.age(state, o)}</td>${S.ABILITY_KEYS.map((k) => `<td>${o[k]}</td>`).join("")}` +
         `<td class="han-${o.han}">${S.HAN_NAMES[o.han].slice(2)}</td>` +
+        `<td class="traits">${S.traitsOf(o).map((t) => `<span class="trait" title="${S.TRAIT_HELP[t]}">${t}</span>`).join(" ")}</td>` +
         (opts.loyalty ? `<td>${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +
         (opts.extra ? `<td>${opts.extra(o)}</td>` : "") +
         (opts.status ? `<td>${status}</td>` : "") + `</tr>`;
     }).join("");
-    return `<table><tr><th>이름</th><th>나이</th>${S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("")}<th>한조</th>` +
+    return `<div class="otable"><table><tr><th>이름</th><th>나이</th>${S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("")}<th>한조</th><th>성격</th>` +
       (opts.loyalty ? `<th>충성</th>` : "") + (opts.extraHead ? `<th>${opts.extraHead}</th>` : "") +
-      (opts.status ? `<th>상태</th>` : "") + `</tr>${rows}</table>`;
+      (opts.status ? `<th>상태</th>` : "") + `</tr>${rows}</table></div>`;
   }
 
   function renderPanel() {
@@ -602,10 +603,14 @@
       if (h === me) {
         const dist = S.reachable(state, state.emperor);
         const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
-        html += `<h3>천도</h3><p class="hint">헌제를 아군 영토로 이어진 다른 도시로 옮깁니다. ${c.name}의 금 ${S.COURT.moveCost}이 들고, ` +
-          `헌제의 우호도가 3 떨어집니다. 한 번 옮기면 ${S.COURT.moveCooldown}개월 동안 다시 옮길 수 없습니다.</p>` +
+        const wait = han.movedAt != null ? han.movedAt + S.COURT.moveCooldown - S.monthsElapsed(state) : 0;
+        const mf = S.COURT.moveFavor;
+        html += `<h3>천도</h3><p class="hint">헌제를 아군 영토로 이어진 다른 도시로 옮깁니다. ${c.name}의 금 ${S.COURT.moveCost}이 듭니다. ` +
+          `헌제는 고향 하남(낙양)을 떠나기 싫어합니다. 하남을 떠나면 우호도 ${mf.leave}, 하남으로 돌아오면 +${mf.back}, 그 밖의 천도는 ${mf.other}입니다. ` +
+          `한 번 옮기면 ${S.COURT.moveCooldown}개월 동안 다시 옮길 수 없고, 헌제를 새로 맞이한 세력은 바로 천도할 수 있습니다.` +
+          (wait > 0 ? ` <b>${wait}개월 뒤에 천도할 수 있습니다.</b>` : "") + `</p>` +
           (dests.length ? `<div class="row"><label>새 도읍</label><select id="ctDest">${dests.map((d) =>
-            `<option value="${d}">${state.cities[d].name} (${dist[d]}칸)</option>`).join("")}</select>` +
+            `<option value="${d}">${state.cities[d].name} (${dist[d]}칸, 우호도 ${(S.moveFavorDelta(state.emperor, d) > 0 ? "+" : "") + S.moveFavorDelta(state.emperor, d)})</option>`).join("")}</select>` +
             `<button data-action="moveEmperor">천도</button></div>` : `<p class="hint">옮길 수 있는 도시가 없습니다.</p>`);
       }
     }
@@ -647,7 +652,7 @@
       return `<button class="forcecard" style="border-left-color:${f.color}" data-action="start" data-force="${f.id}">` +
         `<b>${f.name}</b><div>도시 ${t.cities} · 무장 ${t.officers} · 병력 ${fmt(t.troops)}</div>` +
         `<div>${S.citiesOf(preview, f.id).map((c) => c.name).join(", ")}</div>` +
-        `<div>${S.ABILITY_KEYS.map((k) => S.ABILITY_SHORT[k] + r[k]).join(" ")} · ${S.HAN_NAMES[r.han]}</div></button>`;
+        `<div>${S.ABILITY_KEYS.map((k) => S.ABILITY_SHORT[k] + r[k]).join(" ")} · ${S.HAN_NAMES[r.han]}${S.traitsOf(r).length ? " · " + S.traitsOf(r).join(" ") : ""}</div></button>`;
     }).join("");
     openModal(`<div class="title-hero"><h1>SoWSam 삼국지</h1><p>${S.SCENARIO_191.title} — ${S.SCENARIO_191.desc}</p></div>` +
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +

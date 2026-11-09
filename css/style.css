@@ -106,6 +106,9 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { color: var(--muted); font-weight: 500; text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line); }
 td { text-align: right; padding: 3px 4px; border-bottom: 1px dotted var(--line); }
 th:first-child, td:first-child { text-align: left; }
+.otable { overflow-x: auto; }
+.otable th, .otable td { white-space: nowrap; }
+.trait { display: inline-block; padding: 0 4px; margin-left: 2px; border: 1px solid var(--line); border-radius: 3px; font-size: 11px; cursor: help; }
 tr.done td { color: var(--muted); }
 tr.pick { cursor: pointer; }
 tr.pick:hover td { background: var(--panel2); }

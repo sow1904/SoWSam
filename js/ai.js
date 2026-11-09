@@ -109,7 +109,10 @@
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
-    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull) return;
+    // The ruler's temperament sets how sure a win must look.
+    const ruler = state.officers[state.forces[c.owner].ruler];
+    const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
+    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve) return;
     if (!S.chance(state, 45)) return;
     const r = S.attack(state, c.id, best.t.id, ids, troops);
     if (r.ok) {
