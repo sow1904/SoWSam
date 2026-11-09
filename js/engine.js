@@ -531,6 +531,110 @@
     return { ok: true, msg: `${names.map((o) => o.name).join(", ")}이(가) ${t.name}(으)로 이동했습니다.${cargo ? " (" + cargo + ")" : ""}` };
   };
 
+  // Officers alone travel to any own city reachable through own territory.
+  S.reachable = function (state, cid) {
+    const owner = state.cities[cid].owner;
+    const dist = { [cid]: 0 };
+    const queue = [cid];
+    while (queue.length) {
+      const id = queue.shift();
+      for (const n of S.neighbors(id)) {
+        if (!(n in dist) && state.cities[n].owner === owner) { dist[n] = dist[id] + 1; queue.push(n); }
+      }
+    }
+    delete dist[cid];
+    return dist;
+  };
+  S.relocate = function (state, cid, targetCid, oids) {
+    const t = state.cities[targetCid];
+    if (!t || !(targetCid in S.reachable(state, cid))) return fail("아군 영토로 이어진 도시로만 이동할 수 있습니다.");
+    if (!oids.length) return fail("이동할 무장을 골라 주세요.");
+    for (const id of oids) {
+      const [, , err] = act(state, id, cid);
+      if (err) return fail(err);
+    }
+    const list = oids.map((id) => state.officers[id]);
+    for (const o of list) { o.city = targetCid; o.done = true; }
+    return { ok: true, msg: `${list.map((o) => o.name).join(", ")}이(가) ${t.name}(으)로 이동했습니다.` };
+  };
+
+  // ---------- schemes ----------
+  // A schemer's 모략 against the best 지략 among the target city's officers.
+  S.COST.rumor = 100;
+  S.COST.discord = 150;
+  S.schemeTargets = (state, cid) => S.neighbors(cid).map((n) => state.cities[n])
+    .filter((t) => t.owner && t.owner !== state.cities[cid].owner && !S.allied(state, state.cities[cid].owner, t.owner));
+  S.cityWit = function (state, cid) {
+    const t = state.cities[cid];
+    const guards = S.serving(state, cid).filter((o) => o.force === t.owner);
+    return guards.length ? S.best(guards, "wit") : null;
+  };
+  // Kin of the ruler cannot be turned against the family.
+  const isKin = (state, o) => {
+    const k = S.CLAN[o.name];
+    const r = state.forces[o.force] && S.CLAN[state.officers[state.forces[o.force].ruler].name];
+    return !!(k && r && k.clan === r.clan);
+  };
+  S.rumorChance = function (state, o, cid) {
+    const g = S.cityWit(state, cid);
+    return clamp(Math.round(30 + o.plot * 0.7 - (g ? g.wit : 30) * 0.5), 5, 90);
+  };
+  S.discordChance = function (state, o, t) {
+    if (t.status !== "serving" || S.isRuler(state, t) || isKin(state, t)) return 0;
+    const g = S.cityWit(state, t.city);
+    const wit = Math.max(t.wit, g ? g.wit : 0);
+    return clamp(Math.round(20 + o.plot * 0.7 - wit * 0.5 - (t.loyalty - 50) * 0.4), 3, 85);
+  };
+  S.schemeEffect = {
+    rumor: (o) => ({ order: 8 + Math.floor(o.plot / 8), consent: 3 + Math.floor(o.plot / 25) }),
+    discord: (o) => 6 + Math.floor(o.plot / 8),
+  };
+  function schemeStart(state, oid, cid, targetCid, cost) {
+    const [o, c, err] = act(state, oid, cid);
+    if (err) return [null, null, null, err];
+    const t = state.cities[targetCid];
+    if (!t || !S.schemeTargets(state, cid).includes(t)) return [null, null, null, "인접한 적 도시만 노릴 수 있습니다."];
+    if (c.gold < cost) return [null, null, null, `금이 부족합니다. (필요 ${cost})`];
+    c.gold -= cost;
+    o.done = true;
+    return [o, c, t, null];
+  }
+  // Failed schemes may be seen through by the target city's sharpest mind.
+  function schemeFailed(state, o, t, what) {
+    const g = S.cityWit(state, t.id);
+    const seen = g && S.chance(state, g.wit / 2);
+    if (seen && t.owner === state.playerForce) S.addLog(state, `${S.josa(g.name, "이", "가")} ${S.forceName(state, o.force)} ${o.name}의 ${what}을(를) 간파했습니다.`, "info");
+    return { ok: true, success: false, msg: seen
+      ? `${S.josa(g.name, "이", "가")} ${o.name}의 ${what}을(를) 간파했습니다.`
+      : `${o.name}의 ${S.josa(what, "이", "가")} ${t.name}에서 먹혀들지 않았습니다.` };
+  }
+  // 유언비어: unsettle the people and the great families of an enemy city.
+  S.rumor = function (state, oid, cid, targetCid) {
+    const [o, , t, err] = schemeStart(state, oid, cid, targetCid, S.COST.rumor);
+    if (err) return fail(err);
+    if (!S.chance(state, S.rumorChance(state, o, targetCid))) return schemeFailed(state, o, t, "유언비어");
+    const e = S.schemeEffect.rumor(o);
+    const order = Math.min(t.order, e.order);
+    const consent = Math.min(t.consent, e.consent);
+    t.order -= order;
+    t.consent -= consent;
+    if (t.owner === state.playerForce) S.addLog(state, `${t.name}에 흉흉한 소문이 돌아 치안이 ${order}, 호족 협력이 ${consent} 떨어졌습니다.`, "warn");
+    return { ok: true, success: true, msg: `${o.name}의 유언비어로 ${t.name}의 치안이 ${order}, 호족 협력이 ${consent} 떨어졌습니다.` };
+  };
+  // 이간: shake an enemy officer's loyalty to their lord.
+  S.discord = function (state, oid, cid, targetId) {
+    const v = state.officers[targetId];
+    if (!v || v.status !== "serving") return fail("이간할 수 없는 대상입니다.");
+    if (S.isRuler(state, v) || isKin(state, v)) return fail(`${v.name}에게는 이간이 통하지 않습니다.`);
+    const [o, , t, err] = schemeStart(state, oid, cid, v.city, S.COST.discord);
+    if (err) return fail(err);
+    if (!S.chance(state, S.discordChance(state, o, v))) return schemeFailed(state, o, t, "이간");
+    const drop = Math.min(v.loyalty, S.schemeEffect.discord(o));
+    v.loyalty -= drop;
+    if (v.force === state.playerForce) S.addLog(state, `${S.josa(v.name, "이", "가")} 주군을 의심하는 소문에 흔들려 충성이 ${drop} 떨어졌습니다.`, "warn");
+    return { ok: true, success: true, msg: `${o.name}의 이간으로 ${S.forceName(state, v.force)} ${v.name}의 충성이 ${drop} 떨어졌습니다. (충성 ${v.loyalty})` };
+  };
+
   // ---------- manpower and war weariness ----------
   // Men of fighting age who can still be called up. Soldiers who die are gone
   // for good; the pool refills slowly from the population.
@@ -564,6 +668,9 @@
     return troops * (0.6 + st.cmd / 250) * (0.6 + train / 250) * (0.9 + st.war / 1000 + st.strat / 1000) * wallBonus;
   }
   const wallBonus = (c) => 1 + c.wall / 2000;
+  // How often a schemer tries a ruse in battle, and how often it works.
+  S.ruseAttempt = (p) => clamp(p.plot - 40, 0, 60);
+  S.ruseChance = (p, w) => clamp(Math.round(40 + (p.plot - (w ? w.wit : 30)) * 1.5), 10, 90);
 
   // Rough strength comparison used by the UI and the AI.
   S.estimate = function (state, fromCid, targetCid, oids, troops) {
@@ -622,6 +729,26 @@
         else { aMorale = 0.85; say(`일기토! ${d.name}이(가) ${a.name}을(를) 물리쳤습니다. 공격군의 사기가 떨어집니다.`); }
       }
     }
+
+    // Battle stratagems: each side's best 모략 tries a ruse; the other side's best 지략 may see through it.
+    const ruse = (us, them, names, foes) => {
+      if (!us.length) return 0;
+      const p = S.best(us, "plot");
+      if (!S.chance(state, S.ruseAttempt(p))) return 0;
+      const w = them.length ? S.best(them, "wit") : null;
+      const name = names[Math.floor(rand(state) * names.length)];
+      if (!S.chance(state, S.ruseChance(p, w))) {
+        say(w ? `${p.name}의 ${name}! 그러나 ${S.josa(w.name, "이", "가")} 간파했습니다.` : `${p.name}의 ${S.josa(name, "이", "가")} 실패했습니다.`);
+        return 0;
+      }
+      const loss = Math.round(foes * (0.03 + p.plot / 2000));
+      say(`${p.name}의 ${S.josa(name, "이", "가")} 적중했습니다! 적 ${loss}명이 쓰러지고 사기가 떨어집니다.`);
+      return loss;
+    };
+    const hitD = Math.min(D, ruse(attackers, defenders, ["화공", "매복", "위계", "야습"], D));
+    if (hitD) { D -= hitD; dMorale *= 0.92; }
+    const hitA = Math.min(A, ruse(defenders, attackers, ["야습", "매복", "역습"], A));
+    if (hitA) { A -= hitA; aMorale *= 0.92; }
 
     const wb = wallBonus(t) * gentryDefense(t);
     for (let round = 1; round <= 8 && A > 0 && D > 0; round++) {

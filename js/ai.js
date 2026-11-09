@@ -30,6 +30,32 @@
     return null;
   }
 
+  // Closest own city that borders an enemy, through own territory.
+  function nearestFront(state, c) {
+    const dist = S.reachable(state, c.id);
+    let best = null;
+    for (const [id, d] of Object.entries(dist)) {
+      if (enemyNeighbors(state, state.cities[id]).length && (!best || d < dist[best])) best = id;
+    }
+    return best;
+  }
+
+  // Try 이간 on the shakiest officer next door, else 유언비어 on the steadiest city.
+  function scheme(state, o, c) {
+    const targets = S.schemeTargets(state, c.id);
+    if (!targets.length) return;
+    let best = null;
+    for (const t of targets) {
+      for (const v of S.serving(state, t.id).filter((x) => x.force === t.owner)) {
+        const p = S.discordChance(state, o, v);
+        if (v.loyalty < 75 && p >= 35 && (!best || v.loyalty < best.loyalty)) best = v;
+      }
+    }
+    if (best) { S.discord(state, o.id, c.id, best.id); return; }
+    const t = targets.reduce((a, b) => (b.order > a.order ? b : a));
+    if (t.order > 40 && S.rumorChance(state, o, t.id) >= 40) S.rumor(state, o.id, c.id, t.id);
+  }
+
   // Distance-limited path step from one own city toward another.
   function stepToward(state, from, to) {
     const owner = state.cities[from].owner;
@@ -157,6 +183,12 @@
       const o = take(byDesc("wit"));
       S.search(state, o.id, c.id);
     }
+    // A cunning officer on the frontier spreads rumours or sows discord next door.
+    if (frontier && idle.length > 1 && c.gold > 600 && S.chance(state, 30)) {
+      const o = [...idle].sort(byDesc("plot"))[0];
+      if (o.plot >= 65) scheme(state, o, c);
+      if (o.done) idle = idle.filter((x) => x !== o);
+    }
     // Win over the great families when they grow reluctant.
     if (idle.length && c.gentry > 40 && c.consent < 45 && c.gold > 300) {
       S.woo(state, take(byDesc("speech")).id, c.id);
@@ -176,6 +208,14 @@
         const o = take((a, b) => b.war - a.war);
         const keep = 2000;
         S.move(state, c.id, to, [o.id], Math.max(0, Math.min(S.marchable(c), c.troops - keep)), Math.max(0, c.gold - 300), Math.max(0, c.food - 3000));
+      }
+    }
+    // Spare officers in the interior go where the fighting is.
+    if (!frontier && idle.length > 1) {
+      const to = nearestFront(state, c);
+      if (to) {
+        const go = [...idle].sort((a, b) => b.cmd + b.war - a.cmd - a.war).slice(0, idle.length - 1);
+        if (S.relocate(state, c.id, to, go.map((o) => o.id)).ok) idle = idle.filter((o) => !go.includes(o));
       }
     }
     // Frontier cities keep drafting while the treasury can pay the upkeep.

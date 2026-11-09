@@ -213,7 +213,8 @@
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` +
         cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("recruit", "등용") +
-        cmdButton("move", "이동") + cmdButton("attack", "출진") + cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
+        cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + cmdButton("scheme", "계략") +
+        cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
         `</div>`;
     }
     const servants = S.serving(state, c.id);
@@ -394,12 +395,44 @@
       const c = state.cities[selected];
       const dests = S.neighbors(c.id).filter((n) => state.cities[n].owner === c.owner);
       if (!dests.length) { toast("인접한 아군 도시가 없습니다."); return; }
-      openModal(`<h2>이동 · 수송</h2><p class="hint">무장과 함께 병사·금·군량을 인접한 아군 도시로 보냅니다.</p>` +
+      openModal(`<h2>수송</h2><p class="hint">무장과 함께 병사·금·군량을 인접한 아군 도시로 보냅니다.</p>` +
         `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${state.cities[d].name}</option>`).join("")}</select></div>` +
         checkList(S.idle(state, c.id)) +
         rangeRow("mvTroops", "병사", S.marchable(c)) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 이동하지 않습니다.</p>` : "") +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doMove">이동</button></div>`);
+    },
+    relocate() {
+      const c = state.cities[selected];
+      const dist = S.reachable(state, c.id);
+      const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b] || state.cities[a].name.localeCompare(state.cities[b].name));
+      if (!dests.length) { toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
+      const idle = S.idle(state, c.id);
+      if (!idle.length) { toast("이동할 수 있는 무장이 없습니다."); return; }
+      openModal(`<h2>이동</h2><p class="hint">무장만 아군 영토로 이어진 도시로 보냅니다. 거리에 상관없이 이번 달 안에 도착하고, 이동한 무장은 이번 달 행동을 마칩니다.</p>` +
+        `<div class="row"><label>목적지</label><select id="rlDest">${dests.map((d) => {
+          const t = state.cities[d];
+          return `<option value="${d}">${t.name} (${dist[d]}칸 · 무장 ${S.serving(state, d).length})</option>`;
+        }).join("")}</select></div>` +
+        checkList(idle) +
+        `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doRelocate">이동</button></div>`);
+    },
+    scheme() {
+      const c = state.cities[selected];
+      const targets = S.schemeTargets(state, c.id);
+      if (!targets.length) { toast("계략을 걸 인접한 적 도시가 없습니다. 동맹 세력과 공백지는 대상이 아닙니다."); return; }
+      openModal(`<h2>계략</h2><p class="hint">실행 무장의 모략과 대상 도시에서 지략이 가장 높은 무장이 겨룹니다. ` +
+        `유언비어는 금 ${S.COST.rumor}, 이간은 금 ${S.COST.discord}이 듭니다. (보유 금 ${c.gold})</p>` +
+        `<div class="row"><label>계략</label><select id="scKind"><option value="rumor">유언비어 — 치안·호족 협력 하락</option>` +
+        `<option value="discord">이간 — 무장의 충성 하락</option></select></div>` +
+        `<div class="row"><label>대상 도시</label><select id="scCity">${targets.map((t) =>
+          `<option value="${t.id}">${t.name} (${S.forceName(state, t.owner)})</option>`).join("")}</select></div>` +
+        `<div class="row" id="scTargetRow"><label>대상 무장</label><select id="scTarget"></select></div>` +
+        `<div id="scInfo" class="hint"></div><div id="scList"></div>` +
+        `<div class="footer"><button data-action="close">취소</button></div>`);
+      pending = { schemeCity: null };
+      modalOnInput = updateScheme;
+      updateScheme();
     },
     attack() {
       const c = state.cities[selected];
@@ -443,6 +476,36 @@
     const label = e.ratio >= 1.6 ? `<span class="good">압도적 우세</span>` : e.ratio >= 1.2 ? `<span class="good">우세</span>`
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
     el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label}`;
+  }
+
+  function updateScheme() {
+    const kind = $("#scKind").value;
+    const city = $("#scCity").value;
+    const discord = kind === "discord";
+    $("#scTargetRow").style.display = discord ? "" : "none";
+    if (pending.schemeCity !== city) {
+      pending.schemeCity = city;
+      const t = state.cities[city];
+      const foes = S.serving(state, city).filter((o) => o.force === t.owner).sort((a, b) => a.loyalty - b.loyalty);
+      $("#scTarget").innerHTML = foes.map((o) => `<option value="${o.id}">${o.name} (충성 ${o.loyalty} · 지략 ${o.wit}${S.isRuler(state, o) ? " · 군주" : ""})</option>`).join("");
+    }
+    const t = state.cities[city];
+    const guard = S.cityWit(state, city);
+    const victim = discord ? state.officers[$("#scTarget").value] : null;
+    $("#scInfo").innerHTML = `${t.name} 치안 ${t.order} · 호족 협력 ${Math.round(t.consent)} · 수비 지략 ${guard ? `${guard.name} ${guard.wit}` : "없음"}`;
+    const list = S.idle(state, selected).sort((a, b) => b.plot - a.plot);
+    if (discord && !victim) { $("#scList").innerHTML = `<p class="hint">이 도시에는 이간할 무장이 없습니다.</p>`; return; }
+    $("#scList").innerHTML = officerTable(list, {
+      pick: "doScheme", extraHead: "효과",
+      extra: (o) => {
+        if (!discord) {
+          const e = S.schemeEffect.rumor(o);
+          return `성공률 ${S.rumorChance(state, o, city)}% · 치안 -${e.order}, 협력 -${e.consent}`;
+        }
+        const p = S.discordChance(state, o, victim);
+        return p ? `성공률 ${p}% · 충성 -${S.schemeEffect.discord(o)}` : "통하지 않음 (군주·혈족)";
+      },
+    });
   }
 
   function showReport(report) {
@@ -597,6 +660,18 @@
     release: (d) => result(S.release(state, selected, d.oid)),
     doMove: () => {
       const r = S.move(state, selected, $("#mvDest").value, checked(), num("mvTroops"), num("mvGold"), num("mvFood"));
+      if (r.ok) closeModal();
+      result(r);
+    },
+    doRelocate: () => {
+      const r = S.relocate(state, selected, $("#rlDest").value, checked());
+      if (r.ok) closeModal();
+      result(r);
+    },
+    doScheme: (d) => {
+      const r = $("#scKind").value === "discord"
+        ? S.discord(state, d.oid, selected, $("#scTarget").value)
+        : S.rumor(state, d.oid, selected, $("#scCity").value);
       if (r.ok) closeModal();
       result(r);
     },
