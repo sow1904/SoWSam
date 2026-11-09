@@ -22,7 +22,7 @@
 
   // Links of the network that cross or follow a great river: a battle there is
   // fought on the water. A road split by a fort is listed by its pieces.
-  // A pass is never on the water: its garrison does not march out.
+  // A pass never marches out, so on a link to a pass only the other end meets an army.
   const WATER = {};
   for (const [a, b] of [
     // 장강
@@ -30,15 +30,15 @@
     ["nanjun", "jiangxia"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["jiangxia", "changsha"], ["jiangxia", "yuzhang"],
     ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["danyang", "hefei"], // 유수구
     // 황하
-    ["henan", "henei"], ["henan", "hedong"], ["henei", "chenliu"], ["chenliu", "dongjun"], ["dongjun", "jiyin"], ["dongjun", "weijun"],
-    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["qinghe", "dongping"], ["qinghe", "jibei"],
+    ["henan", "henei"], ["henan", "hedong"], ["henei", "dongjun"], ["dongjun", "qinghe"], ["dongjun", "weijun"],
+    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["jingzhao", "zuopingyi"], ["zuopingyi", "tongguan"], ["qinghe", "dongping"], ["qinghe", "jibei"],
     ["jibei", "pingyuan"], ["pingyuan", "jinan"], ["jinan", "lean"], ["lean", "qiguo"],
     // 한수: 번성에서 양양으로 건넌다
     ["nanyang", "xiangyang"],
   ]) WATER[S.roadKey(a, b)] = true;
   const isPass = (state, id) => S.isFort(state, id) && state.forts[id].kind === "pass";
   S.isWater = (a, b) => !!WATER[S.roadKey(a, b)];
-  S.waterLink = (state, a, b) => !isPass(state, a) && !isPass(state, b) && S.isWater(a, b);
+  S.waterLink = (state, a, b) => S.isWater(a, b);
 
   const crewOf = (state, ids, force) => ids.map((id) => state.officers[id]).filter((o) => o && o.status === "serving" && o.force === force);
   const has = (list, k) => list.some((o) => S.hasSkill(o, k));
