@@ -7,7 +7,7 @@
 (function (S) {
   const clamp = S.clamp;
 
-  S.SPEED = { officer: 45, cargo: 25, army: 20 }; // km per day
+  S.SPEED = { officer: 45, cargo: 25, army: 20, cavalry: 28 }; // km per day
   S.ROAD_FACTOR = 1.3; // roads wind; straight-line distance is too short
   // Mountain roads and gorges, by how much longer they take.
   const ROUGH = {
@@ -29,6 +29,15 @@
   S.roadKey = key;
   const ROUGH_KEYED = {};
   for (const [k, v] of Object.entries(ROUGH)) ROUGH_KEYED[key(...k.split("|"))] = v;
+  // How rough a link of the network is: a piece of road split by a stronghold
+  // is as rough as the road it belongs to.
+  S.linkRough = function (state, a, b) {
+    const f = (state && state.forts && (state.forts[a] || state.forts[b])) || null;
+    if (!f) return ROUGH_KEYED[key(a, b)] || 1;
+    const city = f.id === a ? b : a;
+    if (!S.MAP.cities[city]) return 1;
+    return Math.max(1, ...f.road.filter((x) => x !== city).map((x) => ROUGH_KEYED[key(city, x)] || 1));
+  };
 
   function greatCircle(la1, lo1, la2, lo2) {
     const R = 6371, rad = Math.PI / 180;
@@ -261,8 +270,8 @@
     if (!own.length || !state.forces[m.force].alive) return; // the force is gone; the men scatter
     const here = S.place(state, from);
     const to = own.reduce((a, b) => (Math.hypot(b.x - here.x, b.y - here.y) < Math.hypot(a.x - here.x, a.y - here.y) ? b : a));
-    S.launch(state, { kind: "return", force: m.force, path: [from, to.id], km: S.nodeKm(state, from, to.id), speed: m.troops ? "army" : "officer",
-      officers: team.map((o) => o.id), troops: m.troops, train: m.train, gold: m.gold, food: m.food, origin: from, target: to.id });
+    S.launch(state, { kind: "return", force: m.force, path: [from, to.id], km: S.nodeKm(state, from, to.id), speed: m.troops ? S.unitSpeed(m.unit) : "officer",
+      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, origin: from, target: to.id });
     if (m.force === state.playerForce) S.addLog(state, `${here.name}에 갈 수 없게 되어 ${S.ro(to.name)} 방향을 돌립니다.`, "warn");
   }
   // A beaten army falls back the way it came.
@@ -270,8 +279,8 @@
     const team = crew(state, m);
     release(state, m);
     if (!survivors && !team.length) return;
-    S.launch(state, { kind: "return", force: m.force, path: m.path.slice().reverse(), speed: "army",
-      officers: team.map((o) => o.id), troops: survivors, train: m.train, origin: m.target, target: m.origin });
+    S.launch(state, { kind: "return", force: m.force, path: m.path.slice().reverse(), speed: S.unitSpeed(m.unit),
+      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, origin: m.target, target: m.origin });
   };
 
   function arrive(state, m, onEvent) {

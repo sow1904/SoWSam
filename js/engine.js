@@ -688,17 +688,18 @@
   S.ruseChance = (p, w) => clamp(Math.round(40 + (p.plot - (w ? w.wit : 30)) * 1.5), 10, 90);
 
   // Rough strength comparison used by the UI and the AI.
-  S.estimate = function (state, fromCid, targetCid, oids, troops) {
+  S.estimate = function (state, fromCid, targetCid, oids, troops, unit) {
     const from = S.place(state, fromCid);
     const t = S.place(state, targetCid);
     const att = sideStats(oids.map((id) => state.officers[id]), 30);
     const def = sideStats(S.serving(state, targetCid).filter((o) => o.force === t.owner), t.owner ? 40 : 35);
-    const a = power(troops, att, from.train, 1);
-    const d = power(t.troops, def, t.train, wallBonus(t) * gentryDefense(t));
+    const gu = S.garrisonUnit(t);
+    const a = power(troops, att, from.train, 1) * S.unitMul(unit, gu, "siegeA", 1);
+    const d = power(t.troops, def, t.train, wallBonus(t) * gentryDefense(t)) * S.unitMul(gu, unit, "siegeD", 1);
     return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
   };
 
-  S.attack = function (state, cid, targetCid, oids, troops) {
+  S.attack = function (state, cid, targetCid, oids, troops, unit) {
     const c = S.place(state, cid);
     const t = S.place(state, targetCid);
     const way = c && S.attackTargets(state, cid).find((x) => x.id === targetCid);
@@ -711,23 +712,26 @@
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
     }
+    unit = unit || S.DEFAULT_UNIT;
+    if (!S.canRaise(state, c.owner, unit)) return fail("그 병종은 아직 쓸 수 없습니다.");
     troops = Math.floor(troops);
     if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
       return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
     }
-    const days = way.days;
+    const speed = S.unitSpeed(unit);
+    const days = S.travelDays(way.km, speed);
     const foodNeed = S.marchFood(troops, days);
     if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
     c.troops -= troops;
     c.food -= foodNeed;
-    const m = S.launch(state, { kind: "army", force: c.owner, path: way.path, km: way.km, speed: "army",
-      officers: oids, troops, train: c.train, origin: cid, target: targetCid });
+    const m = S.launch(state, { kind: "army", force: c.owner, path: way.path, km: way.km, speed,
+      officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
     const names = oids.map((id) => state.officers[id].name).join(", ");
     if (t.owner === state.playerForce && c.owner !== state.playerForce) {
-      S.addLog(state, `${S.forceName(state, c.owner)} ${troops}명이 ${c.name}에서 ${S.ro(t.name)} 진군하고 있습니다. (${days}일 뒤 도착)`, "threat");
+      S.addLog(state, `${S.forceName(state, c.owner)} ${S.unitName(unit)} ${troops}명이 ${c.name}에서 ${S.ro(t.name)} 진군하고 있습니다. (${days}일 뒤 도착)`, "threat");
     }
     S.planDefense(state, m);
-    return { ok: true, march: m, msg: `${names}의 군단 ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
+    return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };
 
   // Rations for the march: a tenth of the men up front, plus the days on the road.

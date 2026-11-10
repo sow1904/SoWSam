@@ -103,10 +103,11 @@
     const ids = team.map((o) => o.id);
     let best = null;
     for (const t of targets) {
-      const est = S.estimate(state, c.id, t.id, ids, troops);
+      const unit = pickUnit(state, c, t);
+      const est = S.estimate(state, c.id, t.id, ids, troops, unit);
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull; // vacant cities are easy pickings
-      if (!best || est.ratio + bonus > best.score) best = { t, score: est.ratio + bonus, est, pull };
+      if (!best || est.ratio + bonus > best.score) best = { t, unit, score: est.ratio + bonus, est, pull };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
@@ -115,7 +116,25 @@
     const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
     if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve) return;
     if (!S.chance(state, 45)) return;
-    S.attack(state, c.id, best.t.id, ids, troops);
+    S.attack(state, c.id, best.t.id, ids, troops, best.unit);
+  }
+
+  // The unit type for an attack: good against the walls, and not easily
+  // beaten if the garrison marches out to meet it on the last stretch of road.
+  function pickUnit(state, c, t) {
+    const way = S.attackTargets(state, c.id).find((x) => x.id === t.id);
+    const P = way ? way.path[way.path.length - 2] : c.id;
+    const where = S.waterLink(state, P, t.id) ? "water" : "field";
+    const rough = S.linkRough(state, P, t.id);
+    const gu = S.garrisonUnit(t);
+    let best = null;
+    for (const u of S.raisable(state, c.owner)) {
+      const walls = S.unitMul(u, gu, "siegeA", 1) / S.unitMul(gu, u, "siegeD", 1);
+      const field = S.unitMul(u, gu, where, rough) / S.unitMul(gu, u, where, rough);
+      const v = walls * Math.sqrt(field) * (S.unitOf(u).fast ? 1.05 : 1) * (0.9 + S.rand(state) * 0.2);
+      if (!best || v > best.v) best = { u, v };
+    }
+    return best ? best.u : S.DEFAULT_UNIT;
   }
 
   // Put spare officers and hired clerks on the four domestic posts.

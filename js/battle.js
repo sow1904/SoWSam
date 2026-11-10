@@ -200,24 +200,25 @@
     const old = (state.battles || []).find((x) => x.kind === "siege" && x.place === m.target && x.att.force === m.force);
     if (old) {
       old.att.train = Math.round((old.att.train * old.att.troops + m.train * m.troops) / Math.max(1, old.att.troops + m.troops));
+      if (m.troops > old.att.troops) old.att.unit = m.unit; // one type per army: the larger body sets it
       old.att.troops += m.troops;
       old.att.troops0 += m.troops;
       old.att.rations += m.troops / 10;
       old.att.officers.push(...ids);
       hold(state, old, ids);
-      say(old, `${S.forceName(state, m.force)} 원군 ${m.troops}명이 도착해 포위에 가세했습니다.`);
+      say(old, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 도착해 포위에 가세했습니다.`);
       return old;
     }
     const atk = crewOf(state, ids, m.force);
     const defs = S.serving(state, m.target).filter((o) => o.force === t.owner);
     const b = newBattle(state, {
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
-      att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(atk),
+      att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk),
         rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
-    say(b, `${S.forceName(state, m.force)} ${m.troops}명이 ${t.name}(${S.forceName(state, t.owner)}, 수비 ${t.troops}명)을 에워쌌습니다.`);
+    say(b, `${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명이 ${t.name}(${S.forceName(state, t.owner)}, 수비 ${S.unitName(S.garrisonUnit(t))} ${t.troops}명)을 에워쌌습니다.`);
     if (t.troops <= 0 && !defs.length) { say(b, `${t.name}에는 지키는 병사가 없습니다.`); b.ending = "capture"; }
     else duel(state, b, atk, defs, (side) => { b[side].morale -= 15; });
     return b;
@@ -244,8 +245,9 @@
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     // With a relief army in the field the besiegers must split their men.
     const split = b.relief ? 0.7 : 1;
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * moraleMul(A.morale) * split;
-    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * moraleMul(b.def.morale);
+    const gu = S.garrisonUnit(t);
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split;
+    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale);
     let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd());
     let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd());
     lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습", "땅굴"]);
@@ -308,6 +310,7 @@
     t.retainers = fort ? 0 : Math.floor(remainingD * 0.3);
     t.consent = Math.min(t.consent, 30);
     t.train = A.train;
+    t.unit = A.unit;
     t.gold = Math.floor(t.gold / 2);
     t.food = Math.floor(t.food / 2) + Math.floor(A.rations || 0);
     t.order = Math.max(10, t.order - 20);
@@ -329,7 +332,7 @@
     }
     return out;
   };
-  S.relieve = function (state, cid, targetId, oids, troops) {
+  S.relieve = function (state, cid, targetId, oids, troops, unit) {
     const c = S.place(state, cid);
     const way = c && S.reliefTargets(state, cid).find((x) => x.id === targetId);
     if (!way) return fail("포위당한 아군 도시나 거점에만 원군을 보낼 수 있습니다.");
@@ -339,16 +342,20 @@
       const o = state.officers[id];
       if (!o || o.status !== "serving" || o.city !== cid || o.force !== c.owner || o.done || o.transit || S.postOf(state, o)) return fail("이곳에서 쉬고 있는 무장만 보낼 수 있습니다.");
     }
+    unit = unit || S.DEFAULT_UNIT;
+    if (!S.canRaise(state, c.owner, unit)) return fail("그 병종은 아직 쓸 수 없습니다.");
     troops = Math.floor(troops);
     if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) return fail(`원군 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다.`);
-    const food = S.marchFood(troops, way.days);
+    const speed = S.unitSpeed(unit);
+    const days = S.travelDays(way.km, speed);
+    const food = S.marchFood(troops, days);
     if (c.food < food) return fail(`군량이 부족합니다. (필요 ${food})`);
     c.troops -= troops;
     c.food -= food;
-    const m = S.launch(state, { kind: "relief", force: c.owner, path: way.path, km: way.km, speed: "army",
-      officers: oids, troops, train: c.train, origin: cid, target: targetId, battle: way.battle });
+    const m = S.launch(state, { kind: "relief", force: c.owner, path: way.path, km: way.km, speed,
+      officers: oids, troops, unit, train: c.train, origin: cid, target: targetId, battle: way.battle });
     const names = oids.map((id) => state.officers[id].name).join(", ");
-    const msg = `${names}의 원군 ${troops}명이 ${S.ro(S.placeName(state, targetId))} 떠났습니다. ${way.days}일 뒤 도착합니다.`;
+    const msg = `${names}의 원군 ${S.unitName(unit)} ${troops}명이 ${S.ro(S.placeName(state, targetId))} 떠났습니다. ${days}일 뒤 도착합니다.`;
     if (c.owner !== state.playerForce) S.addLog(state, `${S.forceName(state, c.owner)}의 ${msg}`, "info");
     return { ok: true, march: m, msg };
   };
@@ -359,15 +366,16 @@
     const ids = m.officers.filter((id) => { const o = state.officers[id]; return o && o.status === "serving" && o.force === m.force; });
     S.releaseMarch(state, m);
     if (b.relief) {
+      if (m.troops > b.relief.troops) b.relief.unit = m.unit;
       b.relief.troops += m.troops;
       b.relief.troops0 += m.troops;
       b.relief.officers.push(...ids);
     } else {
       const rel = crewOf(state, ids, m.force);
-      b.relief = { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(rel), origin: m.origin, path: m.path };
+      b.relief = { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(rel), origin: m.origin, path: m.path };
     }
     hold(state, b, ids);
-    say(b, `${S.forceName(state, m.force)} 원군 ${m.troops}명이 ${S.placeName(state, m.origin)}에서 달려왔습니다!`);
+    say(b, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 ${S.placeName(state, m.origin)}에서 달려왔습니다!`);
     return true;
   };
   // The relief army fights the besiegers in the open and hunts for their supply.
@@ -375,8 +383,8 @@
     const R = b.relief, A = b.att;
     const rel = crewOf(state, R.officers, R.force);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const rPow = S.power(R.troops, S.sideStats(rel, 35), R.train, 1) * skillMul(rel, false) * moraleMul(R.morale) * S.HOME_GROUND;
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * moraleMul(A.morale) * 0.3;
+    const rPow = S.power(R.troops, S.sideStats(rel, 35), R.train, 1) * S.unitMul(R.unit, A.unit, "field", 1) * skillMul(rel, false) * moraleMul(R.morale) * S.HOME_GROUND;
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, R.unit, "field", 1) * moraleMul(A.morale) * 0.3;
     const lossA = Math.min(A.troops, Math.round(rPow * S.BATTLE_RATE.field * 0.6 * rnd()));
     const lossR = Math.min(R.troops, Math.round(aPow * S.BATTLE_RATE.field * rnd()));
     A.troops -= lossA;
@@ -404,8 +412,8 @@
       for (const o of crewOf(state, R.officers, R.force)) o.city = b.place;
       return;
     }
-    S.launch(state, { kind: "return", force: R.force, path: R.path.slice().reverse(), speed: "army",
-      officers: crewOf(state, R.officers, R.force).map((o) => o.id), troops: R.troops, train: R.train, origin: b.place, target: R.origin });
+    S.launch(state, { kind: "return", force: R.force, path: R.path.slice().reverse(), speed: S.unitSpeed(R.unit),
+      officers: crewOf(state, R.officers, R.force).map((o) => o.id), troops: R.troops, unit: R.unit, train: R.train, origin: b.place, target: R.origin });
   }
 
   // Computer forces decide whether to send relief to a besieged place: when
@@ -436,7 +444,7 @@
       const raidOdds = 1 - Math.pow(1 - daily, 15);
       const direct = best.spare + t.troops >= b.att.troops * nerve;
       const raidWorth = raidOdds >= 0.45 * nerve && best.spare >= b.att.troops * 0.3;
-      if (direct || raidWorth) S.relieve(state, best.c.id, b.place, team.map((o) => o.id), best.spare);
+      if (direct || raidWorth) S.relieve(state, best.c.id, b.place, team.map((o) => o.id), best.spare, S.bestUnitVs(state, fid, b.att.unit, "field", 1));
     }
   };
 
@@ -450,15 +458,16 @@
     S.releaseMarch(state, sortie);
     const atk = crewOf(state, atkIds, m.force), dfs = crewOf(state, defIds, sortie.force);
     const water = !!sortie.water;
+    const rough = S.linkRough(state, sortie.path[0], sortie.path[1]);
     const b = newBattle(state, {
-      kind: water ? "water" : "field", place: m.target, x: pos.x, y: pos.y, from: S.placeName(state, m.origin), water,
+      kind: water ? "water" : "field", place: m.target, x: pos.x, y: pos.y, from: S.placeName(state, m.origin), water, rough,
       march: m, sortie,
-      att: { force: m.force, officers: atkIds, troops: m.troops, troops0: m.troops, train: m.train, morale: startMorale(atk), supply: newSupply() },
-      def: { force: sortie.force, officers: defIds, troops: sortie.troops, troops0: sortie.troops, train: sortie.train, morale: startMorale(dfs), supply: newSupply() },
+      att: { force: m.force, officers: atkIds, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk), supply: newSupply() },
+      def: { force: sortie.force, officers: defIds, troops: sortie.troops, troops0: sortie.troops, unit: sortie.unit, train: sortie.train, morale: startMorale(dfs), supply: newSupply() },
     });
     hold(state, b, atkIds.concat(defIds));
     const chief = dfs.length ? S.best(dfs, "cmd").name : "수비군";
-    say(b, `${S.josa(chief, "이", "가")} ${b.def.troops}명을 이끌고 나와 ${S.forceName(state, m.force)} ${m.troops}명을 ${water ? "강 위에서" : "길에서"} 맞받아칩니다.`);
+    say(b, `${S.josa(chief, "이", "가")} ${S.unitName(sortie.unit)} ${b.def.troops}명을 이끌고 나와 ${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명을 ${water ? "강 위에서" : rough > 1 ? "험한 산길에서" : "길에서"} 맞받아칩니다.`);
     surprise(state, b, dfs, atk);
     duel(state, b, atk, dfs, (side) => { b[side].morale -= 15; });
     return b;
@@ -469,8 +478,9 @@
     b.day++;
     const atk = crewOf(state, A.officers, A.force), dfs = crewOf(state, D.officers, D.force);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * skillMul(atk, b.water) * moraleMul(A.morale);
-    const dPow = S.power(D.troops, S.sideStats(dfs, 35), D.train, 1) * skillMul(dfs, b.water) * moraleMul(D.morale) * S.HOME_GROUND;
+    const where = b.water ? "water" : "field";
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, D.unit, where, b.rough) * skillMul(atk, b.water) * moraleMul(A.morale);
+    const dPow = S.power(D.troops, S.sideStats(dfs, 35), D.train, 1) * S.unitMul(D.unit, A.unit, where, b.rough) * skillMul(dfs, b.water) * moraleMul(D.morale) * S.HOME_GROUND;
     let lossD = Math.round(aPow * S.BATTLE_RATE.field * rnd());
     let lossA = Math.round(dPow * S.BATTLE_RATE.field * rnd());
     const names = b.water ? ["화공", "야습", "위계"] : ["매복", "화공", "야습", "위계"];
@@ -511,17 +521,17 @@
       const n = chase(D);
       say(b, `요격군이 무너져 ${n}명을 더 잃고 물러납니다. ${S.forceName(state, A.force)}이 진군을 이어 갑니다.`);
       report.attackerWon = true;
-      S.launch(state, { kind: "army", force: A.force, path: m.path, skip: at, km: total - at, speed: "army",
-        officers: crewOf(state, A.officers, A.force).map((o) => o.id), troops: A.troops, train: A.train, origin: m.origin, target: m.target });
+      S.launch(state, { kind: "army", force: A.force, path: m.path, skip: at, km: total - at, speed: S.unitSpeed(A.unit),
+        officers: crewOf(state, A.officers, A.force).map((o) => o.id), troops: A.troops, unit: A.unit, train: A.train, origin: m.origin, target: m.target });
     } else {
       const n = chase(A);
       say(b, b.retreatOrder ? `${S.forceName(state, A.force)}이 명에 따라 물러나며 ${n}명을 잃었습니다.` : `${S.forceName(state, A.force)}이 무너져 ${n}명을 더 잃고 물러납니다.`);
-      S.launch(state, { kind: "return", force: A.force, path: m.path.slice().reverse(), skip: total - at, km: at, speed: "army",
-        officers: crewOf(state, A.officers, A.force).map((o) => o.id), troops: A.troops, train: A.train, origin: m.target, target: m.origin });
+      S.launch(state, { kind: "return", force: A.force, path: m.path.slice().reverse(), skip: total - at, km: at, speed: S.unitSpeed(A.unit),
+        officers: crewOf(state, A.officers, A.force).map((o) => o.id), troops: A.troops, unit: A.unit, train: A.train, origin: m.target, target: m.origin });
     }
     const leg = S.legKm(state, s.path[0], s.path[1]);
-    S.launch(state, { kind: "return", force: D.force, path: s.path.slice().reverse(), skip: leg - s.km, km: s.km, speed: "army",
-      officers: crewOf(state, D.officers, D.force).map((o) => o.id), troops: D.troops, train: D.train, origin: s.target, target: s.origin });
+    S.launch(state, { kind: "return", force: D.force, path: s.path.slice().reverse(), skip: leg - s.km, km: s.km, speed: S.unitSpeed(D.unit),
+      officers: crewOf(state, D.officers, D.force).map((o) => o.id), troops: D.troops, unit: D.unit, train: D.train, origin: s.target, target: s.origin });
   }
 
   // ---------- the defender's choice: meet them on the road, or hold the walls ----------
@@ -541,6 +551,9 @@
     const pool = S.serving(state, id).filter((o) => o.force === t.owner && !S.postOf(state, o));
     const P = m.path[m.path.length - 2];
     const water = S.waterLink(state, P, id);
+    const rough = S.linkRough(state, P, id);
+    const where = water ? "water" : "field";
+    const unit = S.garrisonUnit(t);
     const troops = Math.max(0, Math.min(S.marchable(t) - Math.max(1000, Math.round(t.troops * 0.2)), t.troops));
     if (!pool.length || troops < 1000) return null;
     const score = (o) => o.cmd + o.war / 2 + (S.hasSkill(o, water ? "수전" : "야전") ? 20 : 0);
@@ -548,8 +561,8 @@
     if (team.length === pool.length && pool.length > 1) team.pop(); // someone stays to hold the walls
     const atk = crewOf(state, m.officers, m.force);
     // The defenders know the ground they fight on.
-    const ours = S.power(troops, S.sideStats(team, 35), t.train, 1) * skillMul(team, water) * S.HOME_GROUND;
-    const theirs = S.power(m.troops, S.sideStats(atk, 30), m.train, 1) * skillMul(atk, water);
+    const ours = S.power(troops, S.sideStats(team, 35), t.train, 1) * S.unitMul(unit, m.unit, where, rough) * skillMul(team, water) * S.HOME_GROUND;
+    const theirs = S.power(m.troops, S.sideStats(atk, 30), m.train, 1) * S.unitMul(m.unit, unit, where, rough) * skillMul(atk, water);
     const chief = S.best(team, "cmd");
     const sp = S.surpriser(team, water);
     const surprisePct = sp ? S.surpriseChance(sp, atk) : 0;
@@ -560,26 +573,43 @@
     if (has(pool, "수성")) need += 0.2;
     const policy = S.defensePolicy(state, id);
     if (policy === "intercept") need -= 0.4;
-    return { team, troops, water, ratio: ours / Math.max(1, theirs), need, policy, P, surprise: sp ? { name: sp.name, pct: surprisePct } : null };
+    return { team, troops, unit, water, ratio: ours / Math.max(1, theirs), need, policy, P, surprise: sp ? { name: sp.name, pct: surprisePct } : null };
   };
+  // A governor left to it arms the garrison for what is coming: for a fight
+  // on the road if the place can march out, otherwise for the walls.
+  // Whether the governor reads the enemy in time rests on the sharpest mind there.
+  function rearm(state, t, m) {
+    const here = S.serving(state, t.id).filter((o) => o.force === t.owner);
+    if (!here.length || !S.chance(state, clamp(top(here, "wit"), 20, 90))) return;
+    const P = m.path[m.path.length - 2];
+    const where = S.waterLink(state, P, t.id) ? "water" : "field";
+    const edge = (u, a, d) => S.unitMul(u, m.unit, d, 1) / S.unitMul(m.unit, u, a, 1);
+    const unit = isPass(state, t.id) || S.besieged(state, t.id)
+      ? S.raisable(state, t.owner).reduce((a, u) => (edge(u, "siegeA", "siegeD") > edge(a, "siegeA", "siegeD") ? u : a))
+      : S.bestUnitVs(state, t.owner, m.unit, where, S.linkRough(state, P, t.id));
+    if (unit === S.garrisonUnit(t)) return;
+    t.unit = unit;
+    if (t.owner === state.playerForce) S.addLog(state, `${t.name}의 태수가 다가오는 ${S.unitName(m.unit)}에 맞서 수비 병종을 ${S.unitName(unit)}으로 바꿨습니다.`, "sys");
+  }
   S.planDefense = function (state, m) {
     const t = S.place(state, m.target);
     if (m.kind !== "army" || !t.owner || t.owner === m.force || m.path.length < 2) return;
+    if (S.defensePolicy(state, m.target) === "auto") rearm(state, t, m);
     if (S.defensePolicy(state, m.target) === "hold") return;
     const odds = S.interceptOdds(state, m.target, m);
     if (!odds || odds.ratio < odds.need) return;
     // Meet halfway along the last stretch of road.
     const L = S.legKm(state, odds.P, m.target);
     const total = (m.skip || 0) + m.km;
-    const meet = m.start + Math.ceil((total - L / 2 - (m.skip || 0)) / S.SPEED.army);
+    const meet = m.start + Math.ceil((total - L / 2 - (m.skip || 0)) / S.SPEED[m.speed || "army"]);
     const now = S.today(state);
     if (meet <= now) return;
     t.troops -= odds.troops;
     const s = S.launch(state, { kind: "sortie", force: t.owner, path: [m.target, odds.P], km: L / 2, days: meet - now, speed: "army",
-      officers: odds.team.map((o) => o.id), troops: odds.troops, train: t.train, origin: m.target, target: m.target, vs: m.id, water: odds.water });
+      officers: odds.team.map((o) => o.id), troops: odds.troops, unit: odds.unit, train: t.train, origin: m.target, target: m.target, vs: m.id, water: odds.water });
     m.intercept = s.id;
     const names = odds.team.map((o) => o.name).join(", ");
-    const msg = `${t.name}의 ${S.josa(names, "이", "가")} ${odds.troops}명을 이끌고 ${S.forceName(state, m.force)}을 요격하러 나섰습니다.`;
+    const msg = `${t.name}의 ${S.josa(names, "이", "가")} ${S.unitName(odds.unit)} ${odds.troops}명을 이끌고 ${S.forceName(state, m.force)}을 요격하러 나섰습니다.`;
     if (t.owner === state.playerForce) S.addLog(state, msg, "sys");
     else if (m.force === state.playerForce) S.addLog(state, msg, "threat");
   };
@@ -595,8 +625,8 @@
     const leg = S.legKm(state, s.path[0], s.path[1]);
     const ids = s.officers.filter((id) => state.officers[id] && state.officers[id].transit === s.id);
     S.releaseMarch(state, s);
-    S.launch(state, { kind: "return", force: s.force, path: s.path.slice().reverse(), skip: leg - s.km, km: s.km, speed: "army",
-      officers: ids, troops: s.troops, train: s.train, origin: s.target, target: s.origin });
+    S.launch(state, { kind: "return", force: s.force, path: s.path.slice().reverse(), skip: leg - s.km, km: s.km, speed: S.unitSpeed(s.unit),
+      officers: ids, troops: s.troops, unit: s.unit, train: s.train, origin: s.target, target: s.origin });
   };
 
   // ---------- ending and running ----------
@@ -619,7 +649,7 @@
           ? `${S.josa(S.placeName(state, b.place), "이", "가")} 동맹인 ${S.forceName(state, S.place(state, b.place).owner)}의 손에 들어가 포위를 풀고 물러납니다.`
           : `공격 실패. ${S.forceName(state, A.force)}이 ${A.troops}명을 이끌고 물러납니다.`);
         letGo(state, b, A.officers);
-        S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train }, A.troops);
+        S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train, unit: A.unit }, A.troops);
       }
       if (b.relief) endRelief(state, b, report.attackerWon ? "home" : "enter");
       const t = S.place(state, b.place);
