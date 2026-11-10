@@ -344,15 +344,18 @@
     const c = state.cities[selected];
     const own = mine(c);
     const ally = S.allied(state, state.playerForce, c.owner) ? " · 동맹" : "";
-    let html = `<h2>${c.name}<span class="badge" style="background:${forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>`;
+    const cap = S.isCapital(state, c.id) ? `<span class="capstar" title="${S.forceName(state, c.owner)} ${S.capitalLabel(state, c.owner)}">☆</span>` : "";
+    let html = `<h2>${c.name}${cap}<span class="badge" style="background:${forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>`;
     const ph = c.owner ? S.provinceHold(state, c.prov, c.owner) : null;
-    const titles = [S.isCapital(state, c.id) && `<b>${S.forceName(state, c.owner)} ${S.capitalLabel(state, c.owner)}</b>`,
-      c.id === state.emperor && !(state.han && state.han.ended) && "<b>한 수도</b>"].filter(Boolean);
-    html += `<p class="hint">${titles.length ? titles.join(" · ") + " · " : ""}${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
-      (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") +
-      (S.regionLabel(c.prov) ? ` · 특산 ${S.regionLabel(c.prov)}` : "") +
-      (S.specialsHere(c).length ? ` · 특수 병종 ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}` : "") +
-      (S.specialLand("louchuan", c) ? " · 장강 수군(누선)" : "") + `</p>`;
+    const lines = [
+      c.id === state.emperor && !(state.han && state.han.ended) && "<b>한 수도</b> (헌제의 거처)",
+      `${S.PROVINCES[c.prov]}${ph ? ` (보유 군 ${ph.held}/${ph.total})` : ""}`,
+      `치소 ${c.seat}`,
+      S.regionLabel(c.prov) && `특산 ${S.regionLabel(c.prov)}`,
+      S.specialsHere(c).length && `특수 병종 ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}`,
+      S.specialLand("louchuan", c) && "장강 수군(누선)",
+    ].filter(Boolean);
+    html += `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
     html += `<div class="stats">` +
       stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
@@ -421,18 +424,20 @@
   function delegateRow(c) {
     const cur = S.delegateOf(state, c) || "";
     const opts = [["", "직접 다스림"]].concat(Object.entries(S.DELEGATE).map(([k, v]) => [k, `위임: ${v}`]));
-    return `<div class="row"><label>통치</label><select id="delegate" data-place="${c.id}">` +
+    const tip = helpTip("위임하면 매달 1일에 태수가 담당 배치, 관리 고용, 등용, 회유, 징병, 훈련, 포상을 알아서 합니다. " +
+      "내정 중시는 담당에 무장을 많이 두고 병력은 지킬 만큼만, 군비 확장은 무장을 남겨 징병과 훈련에 힘씁니다. " +
+      "출진, 수송, 이동, 계략, 연구, 포로 처리는 하지 않으며, 직접 명령도 그대로 내릴 수 있습니다.");
+    return `<div class="row"><label>통치${tip}</label><select id="delegate" data-place="${c.id}">` +
       opts.map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
-      `</select></div><p class="hint">위임하면 매달 1일에 태수가 담당 배치, 관리 고용, 등용, 회유, 징병, 훈련, 포상을 알아서 합니다. ` +
-      `내정 중시는 담당에 무장을 많이 두고 병력은 지킬 만큼만, 군비 확장은 무장을 남겨 징병과 훈련에 힘씁니다. ` +
-      `출진, 수송, 이동, 계략, 연구, 포로 처리는 하지 않으며, 직접 명령도 그대로 내릴 수 있습니다.</p>`;
+      `</select></div>`;
   }
   function policyRow(id) {
     const cur = S.defensePolicy(state, id);
-    return `<div class="row"><label>방어 방침</label><select id="defPolicy" data-place="${id}">` +
+    const tip = helpTip("적 군단이 오면 태수가 요격과 농성 중 하나를 고릅니다. 태수에게 맡기면 야전에 강하고 과감한 장수는 나가 싸우고, " +
+      "신중하거나 수성에 강한 장수는 성을 지킵니다. 요격 우선이면 더 쉽게 나가고, 농성이면 나가지 않습니다.");
+    return `<div class="row"><label>방어 방침${tip}</label><select id="defPolicy" data-place="${id}">` +
       Object.entries(S.DEFENSE_POLICY).map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
-      `</select></div><p class="hint">적 군단이 오면 태수가 요격과 농성 중 하나를 고릅니다. 태수에게 맡기면 야전에 강하고 과감한 장수는 나가 싸우고, ` +
-      `신중하거나 수성에 강한 장수는 성을 지킵니다. 요격 우선이면 더 쉽게 나가고, 농성이면 나가지 않습니다.</p>`;
+      `</select></div>`;
   }
   // Unit types (병종): one number box per type a place can send out.
   function unitRows(prefix, place, part) {
@@ -460,8 +465,8 @@
 
   function garrisonRow(id) {
     const p = S.place(state, id);
-    return `<div class="row"><label>수비 병력</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>` +
-      `<p class="hint">성은 이 병력이 모두 함께 지킵니다. 요격하러 나갈 때는 다가오는 적에게 유리한 병종을 골라 내보냅니다.</p>`;
+    const tip = helpTip("성은 이 병력이 모두 함께 지킵니다. 요격하러 나갈 때는 다가오는 적에게 유리한 병종을 골라 내보냅니다.");
+    return `<div class="row"><label>수비 병력${tip}</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>`;
   }
   function battleList(id) {
     const list = S.battlesAt(state, id);

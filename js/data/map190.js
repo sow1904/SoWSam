@@ -266,6 +266,7 @@
     ["jingzhao", "zuopingyi"], ["zuopingyi", "hedong"], ["dongping", "jiyin"], ["qinghe", "dongping"],
     ["pingyuan", "lean"], ["luguo", "pengcheng"], ["donghai", "guangling"], ["nanjun", "changsha"],
     ["anping", "bohai"], ["julu", "zhongshan"], ["hanyang", "jincheng"], ["hanyang", "wuwei"], ["peiguo", "runan"],
+    ["liaoxi", "xuantu"],
   ];
 
   // The painted terrain map (assets/map/terrain.jpg, 2048 x 2048). It is a

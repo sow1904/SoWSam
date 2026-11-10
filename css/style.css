@@ -235,3 +235,5 @@ tr.pick:hover td { background: var(--panel2); }
   cursor: help; vertical-align: middle;
 }
 .help:hover { color: var(--accent); border-color: var(--accent); }
+.capstar { color: var(--accent); font-size: 18px; }
+.cinfo { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 8px; }
