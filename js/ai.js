@@ -143,7 +143,7 @@
   function pickDraft(state, c) {
     const foes = S.links(state, c.id).map((n) => S.place(state, n)).filter((p) => p && p.owner && p.owner !== c.owner);
     let best = null;
-    for (const k of S.raisable(state, c.owner)) {
+    for (const k of S.raisableAt(state, c)) {
       if (S.armable(c, k) < 300) continue;
       const edge = foes.length ? foes.reduce((s, p) => s + S.unitEdge(k, S.garrisonUnit(p), "field", 1), 0) / foes.length : 1;
       const v = Math.pow(edge, 2) * (0.5 + S.rand(state)) * (1 + (S.unitOf(k).tier - 1) * 0.3);

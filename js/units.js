@@ -11,10 +11,11 @@
 //
 // Ships are not chosen: a battle on a great river is fought in whatever
 // ships a side has. 몽충 by default; 투함 when a naval specialist (수전) leads
-// or with 조선 technology; 누선 for a force holding part of 형주 or 양주.
+// or with 조선 technology; 누선 instead of 투함 for a force holding a city on
+// the Yangzi.
 //
-// Later types in a line wait for technology (js/tech.js); special ones will
-// wait for holding certain lands. Drafting spends wood, iron and horses
+// Later types in a line wait for technology (js/tech.js). Special types come
+// from certain lands (S.SPECIAL below). Drafting spends wood, iron and horses
 // (js/resources.js), one per soldier for each item in a type's cost.
 (function (S) {
   S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", navy: "수군" };
@@ -31,6 +32,9 @@
     heavyfoot: { name: "중보병", line: "sword", tier: 2, atk: 1.1, def: 1.15, cost: { iron: 3 } },
     mountain: { name: "산악병", line: "sword", tier: 2, special: true, atk: 1.05, def: 1, rough: 1.35, cost: { iron: 2 } },
     rattan: { name: "등갑병", line: "sword", tier: 2, special: true, atk: 1, def: 1.3, fireWeak: true, cost: { wood: 2 } },
+    // 보도병: heavy armour and a two-handed blade, no shield; made to cut
+    // down horsemen, but open to arrows.
+    bodao: { name: "보도병", line: "sword", tier: 3, special: true, atk: 1.15, def: 1.2, antiHorse: 1.4, noShield: true, cost: { iron: 3 } },
     archer: { name: "궁병", line: "bow", tier: 1, atk: 1, def: 0.9, cost: { wood: 1 } },
     crossbow: { name: "노병", line: "bow", tier: 2, atk: 1.15, def: 0.9, cost: { wood: 1, iron: 1 } },
     repeater: { name: "연노병", line: "bow", tier: 3, special: true, atk: 1.3, def: 0.9, cost: { wood: 1, iron: 1 } },
@@ -186,12 +190,46 @@
     return out;
   };
 
+  // Special types and the lands they come from. Most are local soldiers,
+  // drafted only in those cities (troops can then go anywhere). 연노병 and
+  // 보도병 are inventions: researched in the capital once the force holds a
+  // city there (js/tech.js), then drafted in any city. 누선 is not drafted:
+  // it is the fleet of a force holding a city on the Yangzi (S.fleet).
+  //   cities: exact commanderies; prov: a whole province
+  // why: 무릉만 and 산월 were the hill peoples south of the river line; 남중
+  // is the far south of 익주; elephants came up through 교주; 오환 riders
+  // served 유주; the Yangzi fleets were built from 남양 down to 오.
+  S.SPECIAL = {
+    mountain: { cities: ["wuling", "lingling", "guiyang", "yuzhang", "kuaiji"], label: "무릉, 영릉, 계양, 예장, 회계" },
+    rattan: { cities: ["zangke", "yuexi", "yizhoujun", "yongchang"], label: "남중(장가, 월수, 익주군, 영창)" },
+    elephant: { prov: "jiao", label: "교주" },
+    raider: { prov: "you", label: "유주" },
+    louchuan: { cities: ["nanyang", "nanjun", "jiangxia", "changsha", "lujiang", "jiujiang", "danyang", "wujun"], label: "장강(남양, 남군, 강하, 장사, 여강, 구강, 단양, 오군)" },
+    repeater: { prov: "yi", research: "repeater", label: "익주" },
+    bodao: { prov: "yi", research: "bodao", label: "익주" },
+  };
+  S.specialLand = (id, c) => {
+    const s = S.SPECIAL[id];
+    return !!s && !!c && (s.cities ? s.cities.includes(c.id) : c.prov === s.prov);
+  };
+  S.holdsSpecialLand = (state, fid, id) => !!fid && S.citiesOf(state, fid).some((c) => S.specialLand(id, c));
+  // Local special types drafted in a city.
+  S.specialsHere = (c) => Object.keys(S.SPECIAL).filter((id) => !S.SPECIAL[id].research && S.UNITS[id].line !== "navy" && S.specialLand(id, c));
+
   // Which land types a force can draft: up to its technology in the line
-  // (js/tech.js). Special types will need certain lands.
+  // (js/tech.js); special types by their lands or research.
   S.canRaise = (state, fid, id) => {
     const u = S.UNITS[id];
-    return !!u && u.line !== "navy" && !u.special && u.tier <= (S.lineLevel ? S.lineLevel(state, fid, u.line) : 1);
+    if (!u || u.line === "navy") return false;
+    if (u.special) {
+      const s = S.SPECIAL[id];
+      return !!s && (s.research ? S.techLevel(state, fid, s.research) >= 2 : S.holdsSpecialLand(state, fid, id));
+    }
+    return u.tier <= (S.lineLevel ? S.lineLevel(state, fid, u.line) : 1);
   };
+  // ...and in this city: local special types only in their lands.
+  S.canRaiseAt = (state, c, id) => S.canRaise(state, c.owner, id) && (!S.UNITS[id].special || !!S.SPECIAL[id].research || S.specialLand(id, c));
+  S.raisableAt = (state, c) => Object.keys(S.UNITS).filter((id) => S.canRaiseAt(state, c, id));
   S.raisable = (state, fid) => Object.keys(S.UNITS).filter((id) => S.canRaise(state, fid, id));
   // An army marches at the pace of its slowest part.
   S.unitSpeed = (spec) => (Object.keys(S.mixOf(spec)).every((k) => S.unitOf(k).fast) ? "cavalry" : "army");
@@ -207,10 +245,13 @@
   };
 
   // The ships a side fights in on a great river: 투함 under a naval
-  // specialist or with 조선 technology, else 몽충.
-  // TODO: 누선 for a force holding part of 형주 or 양주.
-  S.fleet = (state, fid, officers) =>
-    officers.some((o) => S.hasSkill(o, "수전")) || (S.lineLevel && S.lineLevel(state, fid, "navy") >= 2) ? "douhan" : "mengchong";
+  // specialist or with 조선 technology, else 몽충. A force that would sail
+  // 투함 and holds a city on the Yangzi builds 누선 instead.
+  S.fleet = (state, fid, officers) => {
+    const big = officers.some((o) => S.hasSkill(o, "수전")) || (S.lineLevel && S.lineLevel(state, fid, "navy") >= 2);
+    if (!big) return "mengchong";
+    return S.holdsSpecialLand(state, fid, "louchuan") ? "louchuan" : "douhan";
+  };
 
   // One type's multiplier on what it deals, against a foe type.
   //   where: "water" | "field" | "siegeA" | "siegeD"; rough: the road's roughness (1 = easy)
@@ -221,6 +262,9 @@
     // Behind walls the lines meet less squarely, so matchups count for less.
     const siege = where === "siegeA" || where === "siegeD";
     if (f) m *= (siege ? Math.sqrt(S.lineMatch(u.line, f.line)) : S.lineMatch(u.line, f.line)) / f.def;
+    // 보도병 cut down horsemen; without shields they take arrows harder.
+    if (f && u.antiHorse && f.line === "horse") m *= u.antiHorse;
+    if (f && f.noShield && u.line === "bow") m *= 1.2;
     if (rough > 1 && where !== "water") {
       if (MOUNTED[u.line]) m *= 0.8;
       if (u.rough) m *= u.rough;

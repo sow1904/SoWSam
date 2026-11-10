@@ -396,7 +396,7 @@
     const [o, c, err] = act(state, oid, cid);
     if (err) return fail(err);
     unit = unit || S.DEFAULT_UNIT;
-    if (!S.canRaise(state, c.owner, unit)) return fail(`${S.unitName(unit)}은 아직 징병할 수 없습니다.`);
+    if (!S.canRaiseAt(state, c, unit)) return fail(`${c.name}에서는 ${S.unitName(unit)}을 징병할 수 없습니다.`);
     const men = S.preview.draft(state, c, o);
     if (men < 100) return fail("동원할 수 있는 장정이 없습니다. 병역 인구가 회복되기를 기다려야 합니다.");
     const amount = Math.min(men, S.armable(c, unit));

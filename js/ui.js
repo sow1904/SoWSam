@@ -279,7 +279,9 @@
       c.id === state.emperor && !(state.han && state.han.ended) && "<b>한 수도</b>"].filter(Boolean);
     html += `<p class="hint">${titles.length ? titles.join(" · ") + " · " : ""}${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
       (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") +
-      (S.regionLabel(c.prov) ? ` · 특산 ${S.regionLabel(c.prov)}` : "") + `</p>`;
+      (S.regionLabel(c.prov) ? ` · 특산 ${S.regionLabel(c.prov)}` : "") +
+      (S.specialsHere(c).length ? ` · 특수 병종 ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}` : "") +
+      (S.specialLand("louchuan", c) ? " · 장강 수군(누선)" : "") + `</p>`;
     html += `<div class="stats">` +
       stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
@@ -518,13 +520,13 @@
   const commands = {
     draft() {
       const c = state.cities[selected];
-      const units = S.raisable(state, c.owner);
+      const units = S.raisableAt(state, c);
       const cur = pending && pending.cmd === "draft" && units.includes(pending.unit) ? pending.unit : units[0];
       pending = { cmd: "draft", unit: cur };
       const list = S.idle(state, c.id).sort((a, b) => b.cmd - a.cmd);
       const rows = units.map((k) => `<tr><td>${S.unitName(k)}</td><td>${S.UNIT_LINES[S.unitOf(k).line]}</td><td>${S.costText(k, 1)}</td><td>${fmt(S.armable(c, k))}</td></tr>`).join("");
       openModal(`<h2>징병</h2><p class="hint">병사는 한 병종으로 뽑고, 한 명마다 아래 자원이 듭니다. 뽑는 수는 무장의 용병, 병역 인구, 그리고 이 도시의 자원으로 무장시킬 수 있는 수 가운데 가장 작은 값입니다. ` +
-        `자원은 다른 도시에서 수송해 올 수 있습니다.</p>` +
+        `자원은 다른 도시에서 수송해 올 수 있습니다. 특수 병종은 그 지역의 도시에서만 뽑습니다(연노병과 보도병은 연구한 뒤 어디서나).</p>` +
         `<table><tr><th>병종</th><th>계열</th><th>1명당</th><th>무장 가능</th></tr>${rows}</table>` +
         `<div class="row"><label>뽑을 병종</label><select id="dfUnit">${units.map((k) => `<option value="${k}"${k === cur ? " selected" : ""}>${S.unitName(k)}</option>`).join("")}</select></div>` +
         officerTable(list, { pick: "doDraft", extraHead: "효과", extra: (o) => {
@@ -549,17 +551,18 @@
       const c = state.cities[selected];
       const fid = c.owner;
       const fields = Object.keys(S.TECH);
-      const open = fields.filter((k) => S.techLevel(state, fid, k) < S.techMax(k));
+      const open = fields.filter((k) => !S.techBlock(state, fid, k));
       const rows = fields.map((k) => {
         const lv = S.techLevel(state, fid, k), max = S.techMax(k);
         const t = (state.forces[fid].tech || {})[k];
-        const next = lv < max ? `${t ? t.pts : 0}/${S.techNeed(lv)} → ${S.techUnlocks(k, lv + 1).join(", ") || "-"}` : "완료";
+        const blk = S.techBlock(state, fid, k);
+        const next = lv < max ? `${t ? t.pts : 0}/${S.techNeed(lv)} → ${S.techUnlocks(k, lv + 1).join(", ") || "-"}` + (blk ? ` (${blk})` : "") : "완료";
         return `<tr><td>${S.TECH[k].name}</td><td>${lv}/${max}</td><td>${next}</td></tr>`;
       }).join("");
-      if (!open.length) { toast("연구할 수 있는 기술을 모두 올렸습니다."); return; }
+      if (!open.length) { toast("지금 연구할 수 있는 기술이 없습니다."); return; }
       const list = S.idle(state, c.id).sort((a, b) => b.wit - a.wit);
       openModal(`<h2>연구</h2><p class="hint">무장 한 명이 한 달 동안 금 ${S.TECH_COST}을 들여 기술을 연구합니다. 지략이 높을수록 많이 나아갑니다. ` +
-        `기술은 세력 전체의 것이고, 단계가 오르면 그 계열의 상위 병종을 쓸 수 있습니다. 조선 기술이 2단계면 강 위에서 투함으로 싸웁니다.</p>` +
+        `기술은 세력 전체의 것이고, 단계가 오르면 그 계열의 상위 병종을 쓸 수 있습니다. 조선 기술이 2단계면 강 위에서 투함으로 싸웁니다. 연노와 보도는 익주의 도시를 가지고, 궁노나 도검이 2단계여야 연구할 수 있습니다.</p>` +
         `<table><tr><th>기술</th><th>단계</th><th>다음 단계</th></tr>${rows}</table>` +
         `<div class="row"><label>연구할 기술</label><select id="rsField">${open.map((k) => `<option value="${k}">${S.TECH[k].name}</option>`).join("")}</select></div>` +
         officerTable(list, { pick: "doResearch", extraHead: "진척", extra: (o) => `+${S.researchPoints(o)}` }) +

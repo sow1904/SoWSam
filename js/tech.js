@@ -1,7 +1,9 @@
 // Technology (기술). Each force has a level in each field, raised by research
 // (연구): an officer spends a month and some gold, and the force gains
 // points in the field; enough points raise the level. Military fields unlock
-// the later unit types of a line (창병, 중보병, 노병, 중기병, 투함).
+// the later unit types of a line (창병, 중보병, 노병, 중기병, 투함). Special
+// fields (연노, 보도) open one special unit type each: they need a city in its
+// land and the line's second level first.
 // Domestic fields will join the same table later.
 (function (S) {
   const fail = (msg) => ({ ok: false, msg });
@@ -13,12 +15,16 @@
     bow: { name: "궁노", group: "군사", line: "bow" },
     horse: { name: "기마", group: "군사", line: "horse" },
     navy: { name: "조선", group: "군사", line: "navy" },
+    // unit: the special type it opens; after: [field, level] needed first
+    repeater: { name: "연노", group: "특수", unit: "repeater", after: ["bow", 2] },
+    bodao: { name: "보도", group: "특수", unit: "bodao", after: ["sword", 2] },
   };
   S.TECH_COST = 150; // gold per month of research
   // Points to go from level lv to lv + 1.
   S.techNeed = (lv) => 400 * lv;
   // The highest level a field can reach: the last unit it unlocks.
   S.techMax = function (field) {
+    if (S.TECH[field].unit) return 2;
     const line = S.TECH[field].line;
     return Math.max(1, ...Object.values(S.UNITS).filter((u) => u.line === line && !u.special).map((u) => u.tier));
   };
@@ -41,7 +47,21 @@
     return field ? S.techLevel(state, fid, field) : 1;
   };
   // What the next level of a field brings.
-  S.techUnlocks = (field, lv) => Object.values(S.UNITS).filter((u) => u.line === S.TECH[field].line && !u.special && u.tier === lv).map((u) => u.name);
+  S.techUnlocks = (field, lv) => S.TECH[field].unit
+    ? (lv === 2 ? [S.UNITS[S.TECH[field].unit].name] : [])
+    : Object.values(S.UNITS).filter((u) => u.line === S.TECH[field].line && !u.special && u.tier === lv).map((u) => u.name);
+
+  // Why a force cannot study a field now, or null if it can.
+  S.techBlock = function (state, fid, k) {
+    const t = S.TECH[k];
+    if (S.techLevel(state, fid, k) >= S.techMax(k)) return "완료";
+    if (t.unit) {
+      if (!S.holdsSpecialLand(state, fid, t.unit)) return `${S.SPECIAL[t.unit].label}의 도시 필요`;
+      const [f, lv] = t.after;
+      if (S.techLevel(state, fid, f) < lv) return `${S.TECH[f].name} ${lv}단계 필요`;
+    }
+    return null;
+  };
 
   // Points an officer adds in a month: 지략 for now (a 학식 stat may take over).
   S.researchPoints = (o) => Math.round(10 + o.wit / 3);
@@ -56,6 +76,8 @@
     if (S.postOf(state, o)) return fail(`${S.josa(o.name, "은", "는")} 담당 업무 중입니다.`);
     const t = entry(state, c.owner, field);
     if (t.lv >= S.techMax(field)) return fail(`${S.TECH[field].name} 기술은 이미 끝까지 올랐습니다.`);
+    const blk = S.techBlock(state, c.owner, field);
+    if (blk) return fail(`${S.TECH[field].name} 기술은 아직 연구할 수 없습니다. (${blk})`);
     if (c.gold < S.TECH_COST) return fail(`금이 부족합니다. (필요 ${S.TECH_COST})`);
     c.gold -= S.TECH_COST;
     o.done = true;
@@ -88,7 +110,7 @@
   function researchOnce(state, c, idle) {
     if (!idle.length || c.gold < 400) return null;
     const fid = c.owner;
-    const open = Object.keys(S.TECH).filter((k) => S.techLevel(state, fid, k) < S.techMax(k));
+    const open = Object.keys(S.TECH).filter((k) => !S.techBlock(state, fid, k));
     if (!open.length) return null;
     const use = {};
     const count = (spec, w) => { for (const [line, v] of Object.entries(S.lineShares(spec))) use[line] = (use[line] || 0) + v * w; };
