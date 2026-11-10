@@ -40,6 +40,19 @@
     renderLog();
   }
 
+  const WEARINESS_HELP = [
+    "전쟁 피로(0~100): 세력 전체 백성이 전쟁에 지친 정도입니다.",
+    "단계: 20 미만 안정, 40 미만 피로, 60 미만 염전, 그 이상 한계",
+    "",
+    "오르는 경우: 전사자(세력 인구에 비해 많을수록), 공격 실패 +3, 도시를 빼앗김 +5, 많은 징병",
+    "내리는 경우: 매달 저절로(피로가 높을수록 빨리), 공격 성공 -2, 방어 성공 -1",
+    "",
+    "효과:",
+    "· 징병으로 모이는 병사가 줄고, 호족 협력이 떨어짐",
+    "· 30 초과: 매달 모든 도시의 치안이 떨어짐",
+    "· 50 초과: 무장 충성이 더 빨리 떨어짐",
+    "· 60 초과: 치안 25 미만 도시에서 민란(병사와 인구 감소)",
+  ].join("\n");
   function renderStatus() {
     const f = state.forces[state.playerForce];
     const t = S.totals(state, state.playerForce);
@@ -50,7 +63,7 @@
       `<span>체제 <b>${S.regime(state, state.playerForce).label}</b></span>` +
       `<span>도시 <b>${t.cities}</b></span><span>무장 <b>${t.officers}</b></span>` +
       `<span>병력 <b>${fmt(t.troops)}</b></span><span>병역 인구 <b>${fmt(t.manpower)}</b></span>` +
-      `<span>전쟁 피로 <b class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} (${S.wearinessLabel(f.weariness)})</b></span><span>금 <b>${fmt(t.gold)}</b></span><span>군량 <b>${fmt(t.food)}</b></span>`;
+      `<span>전쟁 피로 <b class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} (${S.wearinessLabel(f.weariness)})</b>${helpTip(WEARINESS_HELP)}</span><span>금 <b>${fmt(t.gold)}</b></span><span>군량 <b>${fmt(t.food)}</b></span>`;
   }
 
   // ---------- map view (zoom and pan on the SVG viewBox) ----------
