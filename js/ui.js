@@ -275,6 +275,8 @@
     return rows.length ? `<h3>길 위</h3><div class="road-list">${rows.join("")}</div>` : "";
   }
 
+  // A small "?" that shows its text when the pointer rests on it.
+  const helpTip = (text) => `<span class="help" title="${text.replace(/"/g, "&quot;")}">?</span>`;
   function stat(label, value) {
     return `<div><span>${label}</span><b>${value}</b></div>`;
   }
@@ -332,14 +334,13 @@
       (own ? stat("월 수지", signed(S.balance(c))) : "") +
       `</div>` +
       `<h3>자원</h3><div class="stats">` +
-      S.RES_KEYS.map((k) => stat(S.RESOURCES[k], `${fmt(c.res[k])}/${fmt(S.resCap(c, k))}`) + stat("월 생산", "+" + S.resYield(c, k))).join("") +
+      S.RES_KEYS.map((k) => stat(S.RESOURCES[k], `${fmt(c.res[k])}/${fmt(S.resCap(c, k))}/+${S.resYield(c, k)}`)).join("") +
       `</div>` +
-      `<h3>호족</h3><div class="stats">` +
+      `<h3>호족${own ? helpTip("호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. " +
+        `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.`) : ""}</h3><div class="stats">` +
       stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
       stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString()) +
-      `</div>` +
-      (own ? `<p class="hint">호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. ` +
-        `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.</p>` : "");
+      `</div>`;
     // Everything above stays in view; from here on the panel scrolls.
     const head = html;
     html = roadList(c) + battleList(c.id);

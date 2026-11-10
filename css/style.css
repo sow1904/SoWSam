@@ -221,3 +221,10 @@ tr.pick:hover td { background: var(--panel2); }
 #map.terrain .city text.troops { font-size: 8.5px; }
 #map.terrain .fort text { font-size: 9.5px; }
 #map.terrain .fort text.troops { font-size: 8px; }
+
+.help {
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px;
+  border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font-size: 11px; font-weight: 700;
+  cursor: help; vertical-align: middle;
+}
+.help:hover { color: var(--accent); border-color: var(--accent); }
