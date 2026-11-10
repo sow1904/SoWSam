@@ -348,9 +348,9 @@
   function unitOptions(fid, cur) {
     return S.raisable(state, fid).map((u) => `<option value="${u}"${u === cur ? " selected" : ""}>${S.unitName(u)} (${S.UNIT_LINES[S.unitOf(u).line]})</option>`).join("");
   }
-  const UNIT_HINT = `창은 기병을, 기병은 궁병과 검병을, 검은 창을, 궁은 창을 이깁니다. 방패는 화살과 검을 막지만 공격이 약합니다. ` +
-    `성을 칠 때는 검이, 성을 지킬 때는 궁이 강하고 기병은 성에서 약합니다. 기병은 빨리 행군하지만 험한 산길에서 약해집니다. ` +
-    `수군(몽충)은 큰 강 위에서만 힘을 씁니다.`;
+  const UNIT_HINT = `창은 기병을, 기병은 궁병을, 검(검과 방패를 든 보병)은 창과 궁을, 궁은 창을 이기고, 궁기병은 보병을 멀리서 괴롭힙니다. ` +
+    `궁은 성을 칠 때도 지킬 때도 강하고, 기병은 성에서 약합니다. 기병은 빨리 행군하지만 험한 산길에서 약해집니다. ` +
+    `큰 강 위에서는 병종과 상관없이 배로 싸웁니다. 몽충이 기본이고, 수전 특기 무장이 있으면 투함입니다.`;
   function garrisonRow(id) {
     const p = S.place(state, id);
     const auto = S.defensePolicy(state, id) === "auto";
@@ -708,11 +708,14 @@
     const P = way ? way.path[way.path.length - 2] : selected;
     const where = S.waterLink(state, P, t.id) ? "water" : "field";
     const rough = S.linkRough(state, P, t.id);
-    const gu = S.garrisonUnit(t);
-    const field = S.unitMul(unit, gu, where, rough) / S.unitMul(gu, unit, where, rough);
-    const ground = where === "water" ? "강 위" : rough > 1 ? "험한 산길" : "길";
+    const water = where === "water";
+    // On a river both sides fight in ships: 투함 under a naval specialist, else 몽충.
+    const ours = water ? S.fleet(state, state.playerForce, ids.map((id) => state.officers[id])) : unit;
+    const theirs = water ? S.fleet(state, t.owner, S.serving(state, t.id).filter((o) => o.force === t.owner)) : S.garrisonUnit(t);
+    const field = S.unitEdge(ours, theirs, where, rough);
+    const ground = water ? "강 위" : rough > 1 ? "험한 산길" : "길";
     el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label} <span class="hint">(공성, 병종 반영)</span><br>` +
-      `요격당하면(${ground}): ${S.unitName(unit)} 대 ${S.unitName(gu)} ${edgeLabel(field)}<br>` +
+      `요격당하면(${ground}): ${S.unitName(ours)} 대 ${S.unitName(theirs)} ${edgeLabel(field)}<br>` +
       `<span class="hint">${days}일 뒤 도착 · 군량 ${S.marchFood(num("atTroops"), days)} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 

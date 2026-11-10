@@ -121,20 +121,22 @@
 
   // The unit type for an attack: good against the walls, and not easily
   // beaten if the garrison marches out to meet it on the last stretch of road.
+  // Not always the single best: a better fit is only likelier to be chosen,
+  // so the enemy cannot count on one answer.
   function pickUnit(state, c, t) {
     const way = S.attackTargets(state, c.id).find((x) => x.id === t.id);
     const P = way ? way.path[way.path.length - 2] : c.id;
     const where = S.waterLink(state, P, t.id) ? "water" : "field";
     const rough = S.linkRough(state, P, t.id);
     const gu = S.garrisonUnit(t);
-    let best = null;
-    for (const u of S.raisable(state, c.owner)) {
+    const list = S.raisable(state, c.owner).map((u) => {
       const walls = S.unitMul(u, gu, "siegeA", 1) / S.unitMul(gu, u, "siegeD", 1);
-      const field = S.unitMul(u, gu, where, rough) / S.unitMul(gu, u, where, rough);
-      const v = walls * Math.sqrt(field) * (S.unitOf(u).fast ? 1.05 : 1) * (0.9 + S.rand(state) * 0.2);
-      if (!best || v > best.v) best = { u, v };
-    }
-    return best ? best.u : S.DEFAULT_UNIT;
+      const field = where === "water" ? 1 : S.unitEdge(u, gu, where, rough); // on a river both sides fight in ships
+      return { u, w: Math.pow(walls * field, 2) };
+    });
+    let roll = S.rand(state) * list.reduce((s, x) => s + x.w, 0);
+    for (const x of list) if ((roll -= x.w) <= 0) return x.u;
+    return list.length ? list[list.length - 1].u : S.DEFAULT_UNIT;
   }
 
   // Put spare officers and hired clerks on the four domestic posts.

@@ -44,7 +44,10 @@
   const has = (list, k) => list.some((o) => S.hasSkill(o, k));
   const top = (list, k) => (list.length ? S.best(list, k)[k] : 30);
   const moraleMul = (m) => 0.6 + clamp(m, 0, 110) / 250;
-  const skillMul = (list, water) => (water ? (has(list, "수전") ? 1.2 : 0.85) : has(list, "야전") ? 1.15 : 1);
+  // 야전 helps on land. On a river the 수전 specialty shows in the ships (S.fleet).
+  const skillMul = (list, water) => (!water && has(list, "야전") ? 1.15 : 1);
+  // What a side fights as: its unit type, or its ships on a river.
+  const fightAs = (state, side, list, water) => (water ? S.fleet(state, side.force, list) : side.unit);
   const startMorale = (list) => (list.length && S.hasTrait(S.best(list, "cmd"), "과감") ? 105 : 100);
   const newSupply = () => ({ line: true, cut: 0, burnt: false });
   // Morale follows who got the better of the day: the side that lost more men
@@ -467,7 +470,8 @@
     });
     hold(state, b, atkIds.concat(defIds));
     const chief = dfs.length ? S.best(dfs, "cmd").name : "수비군";
-    say(b, `${S.josa(chief, "이", "가")} ${S.unitName(sortie.unit)} ${b.def.troops}명을 이끌고 나와 ${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명을 ${water ? "강 위에서" : rough > 1 ? "험한 산길에서" : "길에서"} 맞받아칩니다.`);
+    const dAs = S.unitName(fightAs(state, b.def, dfs, water)), aAs = S.unitName(fightAs(state, b.att, atk, water));
+    say(b, `${S.josa(chief, "이", "가")} ${dAs} ${b.def.troops}명을 이끌고 나와 ${S.forceName(state, m.force)} ${aAs} ${m.troops}명을 ${water ? "강 위에서" : rough > 1 ? "험한 산길에서" : "길에서"} 맞받아칩니다.`);
     surprise(state, b, dfs, atk);
     duel(state, b, atk, dfs, (side) => { b[side].morale -= 15; });
     return b;
@@ -479,8 +483,9 @@
     const atk = crewOf(state, A.officers, A.force), dfs = crewOf(state, D.officers, D.force);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     const where = b.water ? "water" : "field";
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, D.unit, where, b.rough) * skillMul(atk, b.water) * moraleMul(A.morale);
-    const dPow = S.power(D.troops, S.sideStats(dfs, 35), D.train, 1) * S.unitMul(D.unit, A.unit, where, b.rough) * skillMul(dfs, b.water) * moraleMul(D.morale) * S.HOME_GROUND;
+    const aU = fightAs(state, A, atk, b.water), dU = fightAs(state, D, dfs, b.water);
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(aU, dU, where, b.rough) * skillMul(atk, b.water) * moraleMul(A.morale);
+    const dPow = S.power(D.troops, S.sideStats(dfs, 35), D.train, 1) * S.unitMul(dU, aU, where, b.rough) * skillMul(dfs, b.water) * moraleMul(D.morale) * S.HOME_GROUND;
     let lossD = Math.round(aPow * S.BATTLE_RATE.field * rnd());
     let lossA = Math.round(dPow * S.BATTLE_RATE.field * rnd());
     const names = b.water ? ["화공", "야습", "위계"] : ["매복", "화공", "야습", "위계"];
@@ -561,8 +566,9 @@
     if (team.length === pool.length && pool.length > 1) team.pop(); // someone stays to hold the walls
     const atk = crewOf(state, m.officers, m.force);
     // The defenders know the ground they fight on.
-    const ours = S.power(troops, S.sideStats(team, 35), t.train, 1) * S.unitMul(unit, m.unit, where, rough) * skillMul(team, water) * S.HOME_GROUND;
-    const theirs = S.power(m.troops, S.sideStats(atk, 30), m.train, 1) * S.unitMul(m.unit, unit, where, rough) * skillMul(atk, water);
+    const oU = water ? S.fleet(state, t.owner, team) : unit, tU = water ? S.fleet(state, m.force, atk) : m.unit;
+    const ours = S.power(troops, S.sideStats(team, 35), t.train, 1) * S.unitMul(oU, tU, where, rough) * skillMul(team, water) * S.HOME_GROUND;
+    const theirs = S.power(m.troops, S.sideStats(atk, 30), m.train, 1) * S.unitMul(tU, oU, where, rough) * skillMul(atk, water);
     const chief = S.best(team, "cmd");
     const sp = S.surpriser(team, water);
     const surprisePct = sp ? S.surpriseChance(sp, atk) : 0;
@@ -584,7 +590,7 @@
     const P = m.path[m.path.length - 2];
     const where = S.waterLink(state, P, t.id) ? "water" : "field";
     const edge = (u, a, d) => S.unitMul(u, m.unit, d, 1) / S.unitMul(m.unit, u, a, 1);
-    const unit = isPass(state, t.id) || S.besieged(state, t.id)
+    const unit = isPass(state, t.id) || S.besieged(state, t.id) || where === "water"
       ? S.raisable(state, t.owner).reduce((a, u) => (edge(u, "siegeA", "siegeD") > edge(a, "siegeA", "siegeD") ? u : a))
       : S.bestUnitVs(state, t.owner, m.unit, where, S.linkRough(state, P, t.id));
     if (unit === S.garrisonUnit(t)) return;
