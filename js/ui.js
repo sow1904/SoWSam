@@ -431,7 +431,7 @@
   function delegateRow(c) {
     const cur = S.delegateOf(state, c) || "";
     const opts = [["", "직접 다스림"]].concat(Object.entries(S.DELEGATE).map(([k, v]) => [k, `위임: ${v}`]));
-    const tip = helpTip("위임하면 매달 1일에 태수가 담당 배치, 관리 고용, 등용, 회유, 징병, 훈련, 포상을 알아서 합니다. " +
+    const tip = helpTip("위임하면 매달 1일이 지나 2일로 넘어갈 때 태수가 담당 배치, 관리 고용, 등용, 회유, 징병, 훈련, 포상을 알아서 합니다. " +
       "내정 중시는 담당에 무장을 많이 두고 병력은 지킬 만큼만, 군비 확장은 무장을 남겨 징병과 훈련에 힘씁니다. " +
       "출진, 수송, 이동, 계략, 연구, 포로 처리는 하지 않으며, 직접 명령도 그대로 내릴 수 있습니다.");
     return `<div class="row"><label>통치${tip}</label><select id="delegate" data-place="${c.id}">` +

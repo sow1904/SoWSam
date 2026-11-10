@@ -430,6 +430,16 @@
     if (state.over) return null;
     if (!state.day) state.day = 1;
     if (!state.aiDays) planAIDays(state);
+    // The ruler gives his orders on the 1st first; the governors of delegated
+    // cities act as the 1st turns to the 2nd, once a month.
+    const stamp = state.year * 100 + state.month;
+    if (state.day === 1 && state.playerForce && state.governed !== stamp) {
+      state.governed = stamp;
+      for (const c of S.citiesOf(state, state.playerForce)) {
+        const did = S.govern(state, c);
+        if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
+      }
+    }
     S.runMarches(state, onEvent);
     S.runBattles(state, onEvent);
     if (state.over) return null;
@@ -443,13 +453,6 @@
     S.endMonth(state);
     state.day = 1;
     planAIDays(state);
-    // The player's delegated cities are run by their governors on the 1st.
-    if (state.playerForce && S.govern) {
-      for (const c of S.citiesOf(state, state.playerForce)) {
-        const did = S.govern(state, c);
-        if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
-      }
-    }
     return "month";
   };
   // A whole month at once (headless simulations).
