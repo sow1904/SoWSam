@@ -349,10 +349,10 @@
     const ph = c.owner ? S.provinceHold(state, c.prov, c.owner) : null;
     const lines = [
       c.id === state.emperor && !(state.han && state.han.ended) && "<b>한 수도</b> (헌제의 거처)",
-      `${S.PROVINCES[c.prov]}${ph ? ` (보유 군 ${ph.held}/${ph.total})` : ""}`,
-      `치소 ${c.seat}`,
-      S.regionLabel(c.prov) && `특산 ${S.regionLabel(c.prov)}`,
-      S.specialsHere(c).length && `특수 병종 ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}`,
+      `${S.PROVINCES[c.prov]}${ph ? ` (${ph.held}/${ph.total}군 보유)` : ""}`,
+      `치소: ${c.seat}${c.seat.endsWith("현") ? "" : "현"}`,
+      S.regionLabel(c.prov) && `특산: ${S.regionLabel(c.prov)}`,
+      S.specialsHere(c).length && `특수 병종: ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}`,
       S.specialLand("louchuan", c) && "장강 수군(누선)",
     ].filter(Boolean);
     html += `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
