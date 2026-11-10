@@ -54,13 +54,20 @@
     "· 50 초과: 무장 충성이 더 빨리 떨어짐",
     "· 60 초과: 치안 25 미만 도시에서 민란(병사와 인구 감소)",
   ].join("\n");
+  const CAPITAL_HELP = [
+    "세력 수도(칭제하면 황궁): 연구는 수도에서만 할 수 있습니다.",
+    `다른 아군 도시의 명령 창에서 금 ${S.CAPITAL.moveCost}을 들여 수도를 옮길 수 있고, 옮긴 뒤 ${S.CAPITAL.moveCooldown}개월 동안은 다시 옮길 수 없습니다.`,
+    "수도를 잃으면 다른 도시 일부가 적에게 항복하고, 충성 높은 무장은 새 수도로 향하며, 남은 가장 큰 도시가 새 수도가 됩니다.",
+  ].join("\n");
   function renderStatus() {
     const f = state.forces[state.playerForce];
     const t = S.totals(state, state.playerForce);
     const ruler = state.officers[f.ruler];
+    const cap = state.cities[S.capitalOf(state, state.playerForce)];
     $("#status").innerHTML =
       `<span><b>${state.year}년 ${state.month}월 ${state.day || 1}일</b></span>` +
       `<span style="color:${f.color}">■</span><span><b>${f.name}군</b> (군주 ${ruler.name})</span>` +
+      (cap ? `<span>${S.capitalLabel(state, state.playerForce)} <b>${cap.name}</b>${helpTip(CAPITAL_HELP)}</span>` : "") +
       `<span>체제 <b>${S.regime(state, state.playerForce).label}</b></span>` +
       `<span>도시 <b>${t.cities}</b></span><span>무장 <b>${t.officers}</b></span>` +
       `<span>병력 <b>${fmt(t.troops)}</b></span><span>병역 인구 <b>${fmt(t.manpower)}</b></span>` +
@@ -290,6 +297,9 @@
   }
 
   // A small "?" that shows its text when the pointer rests on it.
+  const COMMAND_HELP = "무장 한 명이 한 달에 한 번 명령을 실행합니다. 버튼을 누른 뒤 실행할 무장을 고릅니다.\n" +
+    "이미 명령한 무장, 담당 중인 무장, 길 위에 있는 무장은 고를 수 없습니다. 매달 1일에 다시 명령할 수 있습니다.\n" +
+    "포상은 무장의 명령을 쓰지 않습니다. 연구는 수도에서만 할 수 있습니다.";
   const helpTip = (text) => `<span class="help" title="${text.replace(/"/g, "&quot;")}">?</span>`;
   function stat(label, value) {
     return `<div><span>${label}</span><b>${value}</b></div>`;
@@ -384,7 +394,7 @@
     }
     if (own) html += postsTable(c);
     if (own) {
-      html += `<h3>명령</h3><div class="cmds">` +
+      html += `<h3>명령${helpTip(COMMAND_HELP)}</h3><div class="cmds">` +
         cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + (S.isCapital(state, c.id) ? cmdButton("research", "연구") : "") + cmdButton("recruit", "등용") +
         cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + cmdButton("scheme", "계략") +
         cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
@@ -455,9 +465,7 @@
     `큰 강 위에서는 병종과 상관없이 배로 싸웁니다. 몽충이 기본이고, 수전 특기 무장이 있으면 투함입니다.`;
   // Moving the force capital here.
   function capitalRow(c) {
-    if (S.isCapital(state, c.id)) {
-      return `<p class="hint">${S.capitalLabel(state, c.owner)}: 연구는 이곳에서만 합니다. 수도를 잃으면 다른 도시 일부가 적에게 항복하고, 남은 가장 큰 도시로 수도가 옮겨집니다.</p>`;
-    }
+    if (S.isCapital(state, c.id)) return "";
     const can = S.canMoveCapital(state, c.owner, c.id);
     return `<div class="links"><button data-action="moveCapital"${can.ok ? "" : " disabled"}>이곳으로 ${S.capitalLabel(state, c.owner)} 이전</button>` +
       ` <span class="hint">${can.ok ? `이 도시의 금 ${S.CAPITAL.moveCost}이 들고, ${S.CAPITAL.moveCooldown}개월 동안 다시 옮길 수 없습니다.` : can.msg}</span></div>`;
@@ -495,7 +503,7 @@
     html = roadList(f) + battleList(f.id);
     if (own) html += (f.kind === "pass" ? `<p class="hint">관문은 나가 싸우지 않고 지킵니다.</p>` : policyRow(f.id)) + garrisonRow(f.id);
     if (own) {
-      html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") +
+      html += `<h3>명령${helpTip(COMMAND_HELP)}</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") +
         (S.reliefTargets(state, f.id).length ? cmdButton("relieve", "원군") : "") + `</div>`;
     }
     const servants = S.serving(state, f.id);
@@ -530,9 +538,10 @@
     const ttRow = `<tr><td>둔전</td><td>호족 ${Math.round(c.gentry)}</td><td>${tt ? holderName(c, "tuntian") : "미실시"}</td>` +
       `<td>${tt ? tuntianText(S.postAbility(state, tt, "tuntian")) : "-"}</td>` +
       `<td><button data-action="post" data-kind="tuntian">변경</button></td></tr>`;
-    return `<h3>내정 담당</h3><table><tr><th>분야</th><th>수치</th><th>담당</th><th>월 변화</th><th></th></tr>${rows}${ttRow}</table>` +
-      `<p class="hint">담당관은 매달 자동으로 내정을 발전시킵니다. 공석이면 수치가 깎입니다. 담당 무장은 다른 명령을 할 수 없습니다. ` +
-      `둔전은 선택 정책입니다. 군량을 생산하고 호족 세력을 줄이지만, 실시하는 동안 호족 협력이 떨어집니다.</p>`;
+    const tip = helpTip("담당관은 매달 자동으로 내정을 발전시킵니다. 공석이면 수치가 깎입니다. 담당 무장은 다른 명령을 할 수 없습니다.\n" +
+      "무장을 임명한 날 바로 빼면 명령을 쓰지 않은 것으로 칩니다. 하루라도 지나면 그달에는 뺄 수 없고, 다음 달부터는 1일에 빼야 그달 명령을 할 수 있습니다.\n" +
+      "둔전은 선택 정책입니다. 군량을 생산하고 호족 세력을 줄이지만, 실시하는 동안 호족 협력이 떨어집니다.");
+    return `<h3>내정 담당${tip}</h3><table><tr><th>분야</th><th>수치</th><th>담당</th><th>월 변화</th><th></th></tr>${rows}${ttRow}</table>`;
   }
 
   function tuntianText(ability) {
@@ -1239,7 +1248,7 @@
         `<div>${S.citiesOf(preview, f.id).map((c) => c.name).join(", ")}</div>` +
         `<div>${S.ABILITY_KEYS.map((k) => S.ABILITY_SHORT[k] + r[k]).join(" ")} · ${S.HAN_NAMES[r.han]}${S.traitsOf(r).length ? " · " + S.traitsOf(r).join(" ") : ""}</div></button>`;
     }).join("");
-    openModal(`<div class="title-hero"><h1>SoWSam 삼국지</h1><p>${S.SCENARIO_191.title} — ${S.SCENARIO_191.desc}</p></div>` +
+    openModal(`<div class="title-hero"><h1>SoW 삼국지</h1><p>${S.SCENARIO_191.title} — ${S.SCENARIO_191.desc}</p></div>` +
       (saved && !saved.over ? `<div class="footer" style="justify-content:center;margin-bottom:12px"><button class="primary" data-action="continue">이어하기 (${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군)</button></div>` : "") +
       `<h3>수명</h3><div class="links">` +
       Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "real" ? " checked" : ""}> ${v}</label>`).join(" ") +

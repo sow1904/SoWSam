@@ -51,9 +51,16 @@ input, select {
 }
 .brand { font-weight: 800; font-size: 18px; color: var(--accent); letter-spacing: 1px; }
 .brand span { color: var(--ink); font-weight: 600; }
-#status { flex: 1; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+/* Brand and status share the first row; on a window too narrow for everything
+   at once, the buttons move to a row of their own instead of squeezing the status. */
+#status { flex: 1 1 0; min-width: 0; color: var(--muted); display: flex; gap: 4px 14px; flex-wrap: wrap; }
+@media (max-width: 1750px) { .actions { flex-basis: 100%; } }
+#status > span { white-space: nowrap; }
 #status b { color: var(--ink); }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.brand { white-space: nowrap; }
+/* The buttons stay on one line; when the window narrows they move below the status as a group. */
+.actions { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
+.actions button { white-space: nowrap; }
 #clock { display: flex; gap: 3px; padding-left: 8px; border-left: 1px solid var(--line); }
 #clock .spd.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 #clockPlay { min-width: 84px; }
