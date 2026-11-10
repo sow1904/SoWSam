@@ -31,7 +31,7 @@
     ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["danyang", "hefei"], // 유수구
     // 황하
     ["henan", "henei"], ["henan", "hedong"], ["henei", "dongjun"], ["dongjun", "qinghe"], ["dongjun", "weijun"],
-    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["jingzhao", "zuopingyi"], ["qinghe", "dongping"], ["qinghe", "jibei"],
+    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["qinghe", "dongping"], ["qinghe", "jibei"],
     ["jibei", "pingyuan"], ["pingyuan", "jinan"], ["jinan", "lean"], ["lean", "qiguo"],
     // 한수: 번성에서 양양으로 건넌다
     ["nanyang", "xiangyang"],
