@@ -983,9 +983,14 @@
       if (o.status !== "young" || S.age(state, o) < S.ADULT_AGE) continue;
       const f = o.joins && state.forces[o.joins];
       if (f && f.alive) {
-        // Join the family force: at home if it holds the city, else beside the ruler.
-        const home = state.cities[o.city];
-        if (!home || home.owner !== f.id) o.city = state.officers[f.ruler].city;
+        // Join the family force: at home if it holds the city, else where the
+        // ruler is based. The ruler may be on the road and that city lost
+        // meanwhile; then any city the force holds.
+        const owned = (id) => state.cities[id] && state.cities[id].owner === f.id;
+        if (!owned(o.city)) {
+          const rc = state.officers[f.ruler].city;
+          o.city = owned(rc) ? rc : (S.citiesOf(state, f.id)[0] || {}).id || o.city;
+        }
         o.status = "serving";
         o.force = f.id;
         o.hidden = false;
