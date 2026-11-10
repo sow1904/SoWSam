@@ -160,6 +160,7 @@
     }
     S.courtInit(state, scenario.hanFavor);
     S.initForts(state);
+    S.initCapitals(state);
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
     return state;
   };
@@ -779,6 +780,7 @@
       if (report) report.lines.push(msg);
       S.addLog(state, msg, "fall");
     }
+    S.capitalOf(state, fid);
   }
 
   // ---------- turn ----------
@@ -1064,6 +1066,7 @@
     const sc = state.scenario === S.SCENARIO_191.id ? S.SCENARIO_191 : {};
     if (state.emperor === undefined) state.emperor = sc.emperor || null;
     if (!state.han) S.courtInit(state, state.emperor && state.emperor === sc.emperor ? sc.hanFavor : undefined);
+    S.initCapitals(state);
     return state;
   };
 

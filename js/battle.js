@@ -320,6 +320,7 @@
     letGo(state, b, A.officers);
     for (const o of atk) o.city = b.place;
     report.attackerWon = true;
+    if (defForce && !fort && state.forces[defForce].capital === t.id && S.citiesOf(state, defForce).length) S.capitalFell(state, defForce, A.force, report);
     if (defForce) S.checkForce(state, defForce, report);
   }
 

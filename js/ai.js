@@ -203,7 +203,7 @@
     }
     // Research the arms the force fights with.
     const studied = S.researchAI(state, c, idle);
-    if (studied) idle = idle.filter((x) => x !== studied);
+    if (studied.length) idle = idle.filter((x) => !studied.includes(x));
     // A cunning officer on the frontier spreads rumours or sows discord next door.
     if (frontier && idle.length > 1 && c.gold > 600 && S.chance(state, 30)) {
       const o = [...idle].sort(byDesc("plot"))[0];
@@ -278,6 +278,7 @@
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
     seekAlly(state, fid);
     S.courtAI(state, fid);
+    S.capitalAI(state, fid);
   };
 
   // Keep frontline strongholds manned from the city behind them, call idle

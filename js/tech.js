@@ -51,6 +51,7 @@
     if (!S.TECH[field]) return fail("알 수 없는 기술입니다.");
     if (!o || !c || S.isFort(state, cid)) return fail("도시에서만 연구할 수 있습니다.");
     if (o.status !== "serving" || o.city !== cid || o.force !== c.owner) return fail("이 도시의 무장이 아닙니다.");
+    if (S.capitalOf(state, c.owner) !== cid) return fail(`연구는 ${S.capitalLabel(state, c.owner)}에서만 할 수 있습니다.`);
     if (o.done) return fail(`${S.josa(o.name, "은", "는")} 이번 달 이미 행동했습니다.`);
     if (S.postOf(state, o)) return fail(`${S.josa(o.name, "은", "는")} 담당 업무 중입니다.`);
     const t = entry(state, c.owner, field);
@@ -71,11 +72,21 @@
     return { ok: true, msg };
   };
 
-  // Computer forces: now and then a sharp mind in a well-off city studies
-  // the field of the arms the force fights with most,
-  // and keeps at a field once begun.
+  // Computer forces: the sharpest minds in the capital study the field of the
+  // arms the force fights with most, and keep at a field once begun.
+  // Returns the officers who studied.
   S.researchAI = function (state, c, idle) {
-    if (idle.length < 2 || c.gold < 400 || !S.chance(state, 50)) return null;
+    if (S.capitalOf(state, c.owner) !== c.id) return [];
+    const out = [];
+    for (let i = 0; i < 2; i++) {
+      const o = researchOnce(state, c, idle.filter((x) => !out.includes(x)));
+      if (!o) break;
+      out.push(o);
+    }
+    return out;
+  };
+  function researchOnce(state, c, idle) {
+    if (!idle.length || c.gold < 400) return null;
     const fid = c.owner;
     const open = Object.keys(S.TECH).filter((k) => S.techLevel(state, fid, k) < S.techMax(k));
     if (!open.length) return null;
@@ -94,6 +105,6 @@
     const o = idle.slice().sort((a, b) => b.wit - a.wit)[0];
     const r = S.research(state, o.id, c.id, field);
     return r.ok ? o : null;
-  };
+  }
 
 })(globalThis.SAM = globalThis.SAM || {});

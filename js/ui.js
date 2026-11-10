@@ -105,13 +105,14 @@
     window.addEventListener("resize", () => state && applyView());
   }
 
-  // City icons by size (1-5); the emperor's city shows the palace.
+  // City icons by size (1-5); the Han capital and an emperor's court show the palace.
   // Art: CroN (조조전 모드 클럽), see assets/CREDITS.md.
   const CITY_ICONS = {
     basic: [50, 58], town: [63, 70], city: [60, 68], metropolis: [71, 71], palace: [78, 73],
   };
   function cityIcon(c) {
-    if (c.id === state.emperor) return "palace";
+    if (c.id === state.emperor && !(state.han && state.han.ended)) return "palace";
+    if (c.owner && state.forces[c.owner].emperor && S.isCapital(state, c.id)) return "palace";
     return ["basic", "basic", "town", "city", "metropolis", "metropolis"][c.size] || "city";
   }
 
@@ -159,7 +160,7 @@
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.3}" rx="${w * 0.64}" ry="${w * 0.3}" fill="${forceColor(c.owner)}"/>` +
         `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.62}" width="${w}" height="${h}"/>` +
-        `<text class="name" x="${c.x}" y="${c.y + r + 13 * k}">${c.name}</text>` +
+        `<text class="name" x="${c.x}" y="${c.y + r + 13 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + r + 22 * k}">${fmt(c.troops)}</text></g>`;
     }
     svg += `<g id="marchLayer"></g>`;
@@ -274,7 +275,9 @@
     const ally = S.allied(state, state.playerForce, c.owner) ? " · 동맹" : "";
     let html = `<h2>${c.name}<span class="badge" style="background:${forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>`;
     const ph = c.owner ? S.provinceHold(state, c.prov, c.owner) : null;
-    html += `<p class="hint">${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
+    const titles = [S.isCapital(state, c.id) && `<b>${S.forceName(state, c.owner)} ${S.capitalLabel(state, c.owner)}</b>`,
+      c.id === state.emperor && !(state.han && state.han.ended) && "<b>한 수도</b>"].filter(Boolean);
+    html += `<p class="hint">${titles.length ? titles.join(" · ") + " · " : ""}${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
       (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") + `</p>`;
     html += `<div class="stats">` +
       stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
@@ -301,12 +304,12 @@
     if (own) html += postsTable(c);
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` +
-        cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("research", "연구") + cmdButton("recruit", "등용") +
+        cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + (S.isCapital(state, c.id) ? cmdButton("research", "연구") : "") + cmdButton("recruit", "등용") +
         cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + cmdButton("scheme", "계략") +
         cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
         (S.buildSites(state, c.id).length ? cmdButton("build", "축성") : "") +
         (S.reliefTargets(state, c.id).length ? cmdButton("relieve", "원군") : "") +
-        `</div>`;
+        `</div>` + capitalRow(c);
     }
     const servants = S.serving(state, c.id);
     html += `<h3>무장 (${servants.length})</h3>` + officerTable(servants, {
@@ -351,6 +354,16 @@
   const UNIT_HINT = `창은 기병을, 기병은 궁병을, 검(검과 방패를 든 보병)은 창과 궁을, 궁은 창을 이기고, 궁기병은 보병을 멀리서 괴롭힙니다. ` +
     `궁은 성을 칠 때도 지킬 때도 강하고, 기병은 성에서 약합니다. 기병은 빨리 행군하지만 험한 산길에서 약해집니다. ` +
     `큰 강 위에서는 병종과 상관없이 배로 싸웁니다. 몽충이 기본이고, 수전 특기 무장이 있으면 투함입니다.`;
+  // Moving the force capital here.
+  function capitalRow(c) {
+    if (S.isCapital(state, c.id)) {
+      return `<p class="hint">${S.capitalLabel(state, c.owner)}: 연구는 이곳에서만 합니다. 수도를 잃으면 다른 도시 일부가 적에게 항복하고, 남은 가장 큰 도시로 수도가 옮겨집니다.</p>`;
+    }
+    const can = S.canMoveCapital(state, c.owner, c.id);
+    return `<div class="links"><button data-action="moveCapital"${can.ok ? "" : " disabled"}>이곳으로 ${S.capitalLabel(state, c.owner)} 이전</button>` +
+      ` <span class="hint">${can.ok ? `이 도시의 금 ${S.CAPITAL.moveCost}이 들고, ${S.CAPITAL.moveCooldown}개월 동안 다시 옮길 수 없습니다.` : can.msg}</span></div>`;
+  }
+
   function garrisonRow(id) {
     const p = S.place(state, id);
     const auto = S.defensePolicy(state, id) === "auto";
@@ -970,11 +983,11 @@
       .map((f) => ({ f, t: S.totals(state, f.id) }))
       .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
       .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.emperor ? " (황제)" : ""}${f.id === state.playerForce ? " (나)" : ""}</td>` +
-        `<td>${S.regime(state, f.id).label}</td><td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
+        `<td>${S.regime(state, f.id).label}</td><td>${(state.cities[S.capitalOf(state, f.id)] || {}).name || "-"}</td><td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
         `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td>` +
         `<td>${Object.keys(S.TECH).filter((k) => S.techLevel(state, f.id, k) > 1).map((k) => S.TECH[k].name + S.techLevel(state, f.id, k)).join(" ") || "-"}</td>` +
         `<td>${S.allies(state, f.id).map((a) => state.forces[a].name).join(", ") || "-"}</td><td>${diplomacyCell(f.id)}</td></tr>`).join("");
-    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th><th>기술</th><th>동맹</th><th>외교</th></tr>${rows}</table>` +
+    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>수도</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th><th>기술</th><th>동맹</th><th>외교</th></tr>${rows}</table>` +
       `<p class="hint">동맹을 맺은 세력끼리는 서로 공격하지 않습니다. 동맹 제의에는 예물로 금 ${S.PACT_COST}이 들고, 같은 세력에는 한 달에 한 번만 제의할 수 있습니다. ` +
       `동맹을 파기하면 내 모든 도시의 치안이 5 떨어지고, ${S.PACT_COOLDOWN}개월 동안 다시 동맹을 맺을 수 없습니다. 컴퓨터 세력도 더 싸울 상대가 없거나 동맹이 훨씬 약해지면 동맹을 깰 수 있습니다.</p>` +
       `<p class="hint">병역 인구는 징병할 수 있는 장정 수입니다. 전사자는 돌아오지 않고, 인구에서 조금씩 회복됩니다. ` +
@@ -1015,7 +1028,7 @@
     } else {
       const c = state.cities[state.emperor];
       const h = han.holder;
-      html += `<div class="stats">` + stat("헌제의 거처", c.name) + stat("옹립 세력", h ? S.forceName(state, h) : "없음 (공백지)") +
+      html += `<div class="stats">` + stat("한 수도 (헌제의 거처)", c.name) + stat("옹립 세력", h ? S.forceName(state, h) : "없음 (공백지)") +
         stat("헌제의 우호도", `${han.favor} ${S.favorLabel(han.favor)}`) +
         (h ? stat("옹립 세력 영토", `${Math.round(S.cityShare(state, h) * 100)}%`) : "") + `</div>`;
       html += courtPending();
@@ -1106,6 +1119,11 @@
     abdicate: (d) => {
       if (d.yes && !confirm("선양을 받아 황제에 오를까요? 한 왕조가 끝납니다.")) return;
       if (result(S.answerAbdication(state, !!d.yes))) showCourt();
+    },
+    moveCapital: () => {
+      const c = state.cities[selected];
+      if (!confirm(`${S.capitalLabel(state, c.owner)}를 ${S.ro(c.name)} 옮길까요?`)) return;
+      result(S.moveCapital(state, state.playerForce, c.id));
     },
     moveEmperor: () => { if (result(S.moveEmperor(state, state.playerForce, $("#ctDest").value))) showCourt(); },
     proclaim: () => {
