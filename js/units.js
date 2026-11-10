@@ -21,26 +21,28 @@
 
   // atk/def scale what a side deals and how much it shrugs off; tier and
   // special decide when it can be raised; cost is what each soldier is
-  // drafted with (spears and swords are iron, bows wood, horses horses).
+  // drafted with: spears iron, swords more iron (shield and armour),
+  // bows wood, horses horses. 몽충 and 투함 are the ordinary fleet and cost
+  // nothing; the 누선 tower ship takes a lot of timber.
   S.UNITS = {
     jibing: { name: "극병", line: "spear", tier: 1, atk: 1, def: 1, cost: { iron: 1 } },
     spearman: { name: "창병", line: "spear", tier: 2, atk: 1.1, def: 1.1, cost: { iron: 1, wood: 1 } },
-    lightfoot: { name: "경보병", line: "sword", tier: 1, atk: 1, def: 1, cost: { iron: 1 } },
-    heavyfoot: { name: "중보병", line: "sword", tier: 2, atk: 1.1, def: 1.15, cost: { iron: 2 } },
-    mountain: { name: "산악병", line: "sword", tier: 2, special: true, atk: 1.05, def: 1, rough: 1.35, cost: { iron: 1 } },
+    lightfoot: { name: "경보병", line: "sword", tier: 1, atk: 1, def: 1, cost: { iron: 2 } },
+    heavyfoot: { name: "중보병", line: "sword", tier: 2, atk: 1.1, def: 1.15, cost: { iron: 3 } },
+    mountain: { name: "산악병", line: "sword", tier: 2, special: true, atk: 1.05, def: 1, rough: 1.35, cost: { iron: 2 } },
     rattan: { name: "등갑병", line: "sword", tier: 2, special: true, atk: 1, def: 1.3, fireWeak: true, cost: { wood: 2 } },
     archer: { name: "궁병", line: "bow", tier: 1, atk: 1, def: 0.9, cost: { wood: 1 } },
     crossbow: { name: "노병", line: "bow", tier: 2, atk: 1.15, def: 0.9, cost: { wood: 1, iron: 1 } },
     repeater: { name: "연노병", line: "bow", tier: 3, special: true, atk: 1.3, def: 0.9, cost: { wood: 1, iron: 1 } },
-    lighthorse: { name: "경기병", line: "horse", tier: 1, atk: 1.05, def: 0.95, fast: true, cost: { horse: 1, iron: 1 } },
-    heavyhorse: { name: "중기병", line: "horse", tier: 2, atk: 1.15, def: 1.1, fast: true, cost: { horse: 1, iron: 2 } },
+    lighthorse: { name: "경기병", line: "horse", tier: 1, atk: 1.05, def: 0.95, fast: true, cost: { horse: 1 } },
+    heavyhorse: { name: "중기병", line: "horse", tier: 2, atk: 1.15, def: 1.1, fast: true, cost: { horse: 1, iron: 1 } },
     elephant: { name: "상병", line: "horse", tier: 3, special: true, atk: 1.3, def: 1.2, cost: { iron: 1 } },
     horsearcher: { name: "궁기병", line: "horsebow", tier: 1, atk: 1, def: 0.9, fast: true, cost: { horse: 1, wood: 1 } },
     raider: { name: "돌기병", line: "horsebow", tier: 2, special: true, atk: 1.15, def: 0.95, fast: true, cost: { horse: 1, wood: 1 } },
     // ships
     mengchong: { name: "몽충", line: "navy", tier: 1, atk: 1, def: 1 },
     douhan: { name: "투함", line: "navy", tier: 2, atk: 1.15, def: 1.15 },
-    louchuan: { name: "누선", line: "navy", tier: 3, special: true, atk: 1.3, def: 1.3 },
+    louchuan: { name: "누선", line: "navy", tier: 3, special: true, atk: 1.3, def: 1.3, cost: { wood: 4 } },
   };
   S.DEFAULT_UNIT = "jibing";
 
