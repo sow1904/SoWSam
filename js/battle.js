@@ -315,6 +315,7 @@
     t.train = A.train;
     t.unit = A.unit;
     t.gold = Math.floor(t.gold / 2);
+    if (t.res) for (const k of S.RES_KEYS) t.res[k] = Math.floor(t.res[k] / 2);
     t.food = Math.floor(t.food / 2) + Math.floor(A.rations || 0);
     t.order = Math.max(10, t.order - 20);
     letGo(state, b, A.officers);

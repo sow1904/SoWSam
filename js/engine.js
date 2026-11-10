@@ -110,6 +110,7 @@
         retainers: 0,
       };
       state.cities[id].manpower = Math.round(S.manpowerMax(state.cities[id]) * 0.6);
+      S.initRes(state.cities[id]);
     }
     let n = 0;
     const addOfficer = (line, force, loyalty) => {
@@ -527,7 +528,7 @@
 
   // Send officers with troops, gold and food to another own city along roads
   // through own territory. The convoy travels at cargo speed.
-  S.move = function (state, cid, targetCid, oids, troops, gold, food) {
+  S.move = function (state, cid, targetCid, oids, troops, gold, food, res) {
     const c = S.place(state, cid);
     const t = S.place(state, targetCid);
     const claim = t && S.isFort(state, targetCid) && t.built && !t.owner && t.troops <= 0;
@@ -544,14 +545,17 @@
     troops = clamp(troops, 0, c.troops);
     gold = clamp(Math.floor(gold || 0), 0, c.gold);
     food = clamp(Math.floor(food || 0), 0, c.food);
+    const hasRes = res && S.RES_KEYS.some((k) => res[k] > 0);
+    if (hasRes && (!c.res || !t.res)) return fail("자원은 도시에서 도시로만 옮길 수 있습니다.");
     c.troops -= troops;
     c.gold -= gold;
     c.food -= food;
-    const speed = troops || gold || food ? "cargo" : "officer";
+    const goods = hasRes ? S.takeRes(c, res) : null;
+    const speed = troops || gold || food || goods ? "cargo" : "officer";
     const m = S.launch(state, { kind: "move", force: c.owner, path: route.path, km: route.km, speed,
-      officers: oids, troops, train: c.train, gold, food, origin: cid, target: targetCid });
+      officers: oids, troops, train: c.train, gold, food, res: goods, origin: cid, target: targetCid });
     const names = oids.map((id) => state.officers[id].name).join(", ");
-    const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`].filter(Boolean).join(", ");
+    const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`, goods && S.resText(goods)].filter(Boolean).join(", ");
     return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${m.arrive - m.start}일 뒤 도착합니다.${cargo ? " (" + cargo + ")" : ""}` };
   };
 
@@ -785,7 +789,7 @@
 
   // ---------- turn ----------
   // Monthly gold income and troop upkeep (1 gold per 100 soldiers).
-  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200));
+  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold"));
   S.upkeep = (c) => Math.ceil(c.troops / 100);
 
   // Traits: who walks away, and how fast loyalty wears down.
@@ -808,7 +812,7 @@
           const lost = loseTroops(c, Math.ceil(c.troops * 0.05));
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (harvest) c.food += Math.round((c.farm * 10 + c.pop / 50) * eff);
+        if (harvest) c.food += Math.round((c.farm * 10 + c.pop / 50) * eff * S.regionMul(c, "food"));
         c.food -= Math.ceil(c.troops / 50);
         if (c.food < 0) {
           c.food = 0;
@@ -816,7 +820,7 @@
           c.order = Math.max(0, c.order - 10);
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + (c.order - 30) / 4000));
+        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 4000) * S.regionMul(c, "pop")));
         wearinessEffects(state, c);
         runGentry(state, c);
       } else {
@@ -825,7 +829,10 @@
         if (c.troops < cap) c.troops = Math.min(cap, c.troops + 60);
       }
     }
-    for (const c of Object.values(state.cities)) returnManpower(c, S.manpowerRegen(c));
+    for (const c of Object.values(state.cities)) {
+      returnManpower(c, S.manpowerRegen(c));
+      S.produceRes(c);
+    }
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;
@@ -1032,6 +1039,7 @@
         c.retainers = 0;
       }
       if (!("tuntian" in c.posts)) c.posts.tuntian = null;
+      if (!c.res) S.initRes(c);
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.pacts) state.pacts = {};

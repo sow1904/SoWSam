@@ -278,7 +278,8 @@
     const titles = [S.isCapital(state, c.id) && `<b>${S.forceName(state, c.owner)} ${S.capitalLabel(state, c.owner)}</b>`,
       c.id === state.emperor && !(state.han && state.han.ended) && "<b>한 수도</b>"].filter(Boolean);
     html += `<p class="hint">${titles.length ? titles.join(" · ") + " · " : ""}${S.PROVINCES[c.prov]} · 치소 ${c.seat}` +
-      (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") + `</p>`;
+      (ph ? ` · ${S.forceName(state, c.owner)}이 ${S.PROVINCES[c.prov]} ${ph.total}개 군 중 ${ph.held}개 보유` : "") +
+      (S.regionLabel(c.prov) ? ` · 특산 ${S.regionLabel(c.prov)}` : "") + `</p>`;
     html += `<div class="stats">` +
       stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
@@ -287,6 +288,9 @@
       stat("농업", `${c.farm}/${c.farmMax}`) + stat("상업", `${c.trade}/${c.tradeMax}`) +
       stat("성벽", `${c.wall}/${c.wallMax}`) +
       (own ? stat("월 수지", signed(S.balance(c))) : "") +
+      `</div>` +
+      `<h3>자원</h3><div class="stats">` +
+      S.RES_KEYS.map((k) => stat(S.RESOURCES[k], `${fmt(c.res[k])}/${fmt(S.resCap(c, k))}`) + stat("월 생산", "+" + S.resYield(c, k))).join("") +
       `</div>` +
       `<h3>호족</h3><div class="stats">` +
       stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
@@ -589,11 +593,12 @@
       const dist = S.reachable(state, c.id, "cargo", true);
       const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
       if (!dests.length) { toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
-      openModal(`<h2>수송</h2><p class="hint">무장이 병사·금·군량을 이끌고 아군 영토를 지나 다른 아군 도시로 갑니다. ` +
+      openModal(`<h2>수송</h2><p class="hint">무장이 병사·금·군량·자원을 이끌고 아군 영토를 지나 다른 아군 도시로 갑니다. ` +
         `수송대는 하루 ${S.SPEED.cargo}km를 가고, 짐 없이 무장만 보내면 하루 ${S.SPEED.officer}km를 갑니다. 보낸 병사와 물자는 도착할 때까지 어느 도시에도 없습니다.</p>` +
         `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${placeLabel(d)} (${dist[d]}일)</option>`).join("")}</select></div>` +
         checkList(S.idle(state, c.id)) +
         rangeRow("mvTroops", "병사", S.marchable(c)) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
+        (c.res ? S.RES_KEYS.map((k) => rangeRow("mv_" + k, S.RESOURCES[k], c.res[k])).join("") : "") +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 이동하지 않습니다.</p>` : "") +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doMove">수송</button></div>`);
     },
@@ -1195,7 +1200,8 @@
     },
     release: (d) => result(S.release(state, selected, d.oid)),
     doMove: () => {
-      const r = S.move(state, selected, $("#mvDest").value, checked(), num("mvTroops"), num("mvGold"), num("mvFood"));
+      const r = S.move(state, selected, $("#mvDest").value, checked(), num("mvTroops"), num("mvGold"), num("mvFood"),
+        $("#mv_wood") ? Object.fromEntries(S.RES_KEYS.map((k) => [k, num("mv_" + k)])) : null);
       if (r.ok) closeModal();
       result(r);
     },

@@ -254,11 +254,12 @@
       c.train = Math.round((c.train * c.troops + m.train * m.troops) / (c.troops + m.troops));
       c.troops += m.troops;
     }
-    c.gold += m.gold;
-    c.food += m.food;
+    c.gold += m.gold || 0;
+    c.food += m.food || 0;
+    S.addRes(c, m.res);
     if (m.force === state.playerForce) {
       const who = team.map((o) => o.name).join(", ");
-      const cargo = [m.troops && `병사 ${m.troops}`, m.gold && `금 ${m.gold}`, m.food && `군량 ${m.food}`].filter(Boolean).join(", ");
+      const cargo = [m.troops && `병사 ${m.troops}`, m.gold && `금 ${m.gold}`, m.food && `군량 ${m.food}`, m.res && S.resText(m.res)].filter(Boolean).join(", ");
       S.addLog(state, `${who ? S.josa(who, "이", "가") + " " : ""}${c.name}에 도착했습니다.${cargo ? " (" + cargo + ")" : ""}`, "mine");
     }
   }
@@ -271,7 +272,7 @@
     const here = S.place(state, from);
     const to = own.reduce((a, b) => (Math.hypot(b.x - here.x, b.y - here.y) < Math.hypot(a.x - here.x, a.y - here.y) ? b : a));
     S.launch(state, { kind: "return", force: m.force, path: [from, to.id], km: S.nodeKm(state, from, to.id), speed: m.troops ? S.unitSpeed(m.unit) : "officer",
-      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, origin: from, target: to.id });
+      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, res: m.res, origin: from, target: to.id });
     if (m.force === state.playerForce) S.addLog(state, `${here.name}에 갈 수 없게 되어 ${S.ro(to.name)} 방향을 돌립니다.`, "warn");
   }
   S.reroute = reroute;
