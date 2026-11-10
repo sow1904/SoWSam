@@ -140,12 +140,15 @@
   };
 
   // ---------- proclaiming oneself emperor ----------
+  // Cities needed to proclaim: half for a ruler with the 칭제 specialty.
+  S.proclaimNeed = (state, fid) => (S.hasSkill(rulerOf(state, fid), "칭제") ? Math.ceil(S.COURT.proclaimCities / 2) : S.COURT.proclaimCities);
   S.canProclaim = function (state, fid) {
     const f = state.forces[fid];
     if (f.emperor) return fail("이미 황제입니다.");
     if (S.emperorHolder(state) === fid) return fail("헌제를 모시는 동안에는 칭제할 수 없습니다. 헌제의 선양을 기다려야 합니다.");
     const n = S.citiesOf(state, fid).length;
-    if (n < S.COURT.proclaimCities) return fail(`도시가 ${S.COURT.proclaimCities}개 이상 있어야 칭제할 수 있습니다. (현재 ${n}개)`);
+    const need = S.proclaimNeed(state, fid);
+    if (n < need) return fail(`도시가 ${need}개 이상 있어야 칭제할 수 있습니다. (현재 ${n}개)`);
     return { ok: true };
   };
   // After the Han has ended, a ruler who upholds it claims to continue the dynasty.
@@ -385,7 +388,8 @@
     const ruler = rulerOf(state, fid);
     if (!han.ended && S.emperorHolder(state) === fid) moveCourtAI(state, fid, ruler);
     if (!S.canProclaim(state, fid).ok) return;
-    const n = S.citiesOf(state, fid).length;
+    // The 칭제 specialty halves how big the realm must grow first.
+    const n = S.citiesOf(state, fid).length * (S.COURT.proclaimCities / S.proclaimNeed(state, fid));
     let p = 0;
     if (ruler.han === "N" && n >= 12) p = 2;
     else if (han.ended && n >= (ruler.han === "H" ? 8 : 12)) p = 5;
