@@ -5,6 +5,7 @@
   const $ = (sel) => document.querySelector(sel);
   let state = null;
   let selected = null;
+  let winOpen = false; // the command window for the selected place
   let modalOnInput = null;
 
   const fmt = (n) => (n >= 10000 ? (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "만" : String(n));
@@ -315,16 +316,31 @@
   }
 
   function renderPanel() {
-    const p = $("#panel");
-    p.classList.remove("split");
+    const p = $("#panelInfo");
+    const win = $("#cityWin");
+    // The summary goes in the panel; everything else in the command window.
+    const show = (head, body, title) => {
+      p.innerHTML = head;
+      const open = winOpen && body;
+      win.classList.toggle("hidden", !open);
+      if (open) {
+        win.innerHTML = `<div class="cwh"><b>${title}</b><button data-action="closeCity" title="닫기 (Esc)">×</button></div><div class="cwb">${body}</div>`;
+      }
+    };
     if (!selected) {
+      winOpen = false;
+      $("#cityWin").classList.add("hidden");
       p.innerHTML = `<h2>도시를 선택하세요</h2><p class="hint">지도에서 도시를 누르면 정보와 명령이 나옵니다. ` +
         `무장마다 한 달에 한 번 명령할 수 있습니다. 시간은 「▶ 진행」이나 스페이스 바로 흐르게 합니다.</p>` +
         `<h3>내 도시</h3><div class="links">${S.citiesOf(state, state.playerForce)
           .map((c) => `<button data-action="select" data-city="${c.id}">${c.name} (${S.idle(state, c.id).length})</button>`).join("")}</div>`;
       return;
     }
-    if (S.isFort(state, selected)) { p.innerHTML = fortPanel(state.forts[selected]); return; }
+    if (S.isFort(state, selected)) {
+      const [head, body] = fortPanel(state.forts[selected]);
+      show(head, body, `${state.forts[selected].name} 명령`);
+      return;
+    }
     const c = state.cities[selected];
     const own = mine(c);
     const ally = S.allied(state, state.playerForce, c.owner) ? " · 동맹" : "";
@@ -397,8 +413,7 @@
     }).join("")}</div>`;
     const sites = S.buildSites(state, c.id);
     if (sites.length) html += `<p class="hint">축성할 수 있는 터: ${sites.map((f) => f.name).join(", ")}. 축성 특기가 있는 무장이 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓습니다.</p>`;
-    p.classList.add("split");
-    p.innerHTML = `<div class="pfix">${head}</div><div class="pscroll">${html}</div>`;
+    show(head, html, `${c.name} ${own ? "명령" : "정보"}`);
   }
 
   // What the commander does when an enemy army comes: march out to meet it on
@@ -464,14 +479,15 @@
       html += `<p>${f.building ? `${S.forceName(state, f.building.force)}이 쌓고 있습니다.` : "아직 쌓지 않은 터입니다."} ` +
         `축성 특기가 있는 무장이 ${ends.join(", ")} 중 한 곳에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>`;
       html += `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
-      return html;
+      return [html, ""];
     }
     html += `<div class="stats">` + stat("병력", f.troops.toLocaleString()) + stat("훈련", f.train) +
       stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) + `</div>`;
     html += `<p class="hint">${f.kind === "pass" ? "지형이 험해 지키기 쉽습니다." : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다."} ` +
       `거점에는 백성과 내정이 없습니다. 지키는 병사는 한 달에 병사 50명당 군량 1을 먹고, 군량은 길로 이어진 아군 도시에서 채웁니다. ` +
       `적이 지키는 거점은 먼저 빼앗아야 그 너머로 갈 수 있습니다. 비어 있는 거점은 수송이나 이동으로 들어가면 차지합니다.</p>`;
-    html += roadList(f) + battleList(f.id);
+    const head = html;
+    html = roadList(f) + battleList(f.id);
     if (own) html += (f.kind === "pass" ? `<p class="hint">관문은 나가 싸우지 않고 지킵니다.</p>` : policyRow(f.id)) + garrisonRow(f.id);
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` + cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") +
@@ -484,7 +500,7 @@
       const nc = S.place(state, n);
       return `<button data-action="select" data-city="${n}" style="border-left:4px solid ${forceColor(nc.owner)}">${nc.name} ${fmt(nc.troops)}</button>`;
     }).join("")}</div>`;
-    return html;
+    return [head, html];
   }
 
   function signed(n) {
@@ -541,9 +557,26 @@
     if (clock.running && clock.settings.modal) { setRunning(false); clock.resumeOnClose = true; }
     renderClock();
   }
+  // The command window counts as an open window for the clock too.
+  const cityWinOpen = () => !$("#cityWin").classList.contains("hidden");
+  function openCity(id) {
+    selected = id;
+    winOpen = true;
+    if (clock.running && clock.settings.modal) { setRunning(false); clock.resumeOnClose = true; }
+    renderAll();
+  }
+  function closeCity() {
+    winOpen = false;
+    $("#cityWin").classList.add("hidden");
+    if (clock.resumeOnClose && state && !state.over && $("#modal").classList.contains("hidden")) setRunning(true);
+    if ($("#modal").classList.contains("hidden")) clock.resumeOnClose = false;
+    renderClock();
+  }
   function closeModal() {
     $("#modal").classList.add("hidden");
     modalOnInput = null;
+    // Keep waiting while the command window behind is still open.
+    if (cityWinOpen()) { renderClock(); return; }
     if (clock.resumeOnClose && state && !state.over) setRunning(true);
     clock.resumeOnClose = false;
     renderClock();
@@ -997,6 +1030,7 @@
     const taken = S.citiesOf(state, me).filter((c) => !held.has(c.id));
     if (s.captured && taken.length) {
       selected = taken[0].id;
+      winOpen = true;
       renderAll();
       centerOn(taken[0]);
       return pause(`${S.josa(taken[0].name, "을", "를")} 차지했습니다. 담당과 위임 방침을 정하세요`);
@@ -1014,8 +1048,7 @@
   }
 
   function keepScroll(fn) {
-    const p = $("#panel");
-    const box = () => [p, p.querySelector(".pfix"), p.querySelector(".pscroll")];
+    const box = () => [$("#panelInfo"), $("#cityWin .cwb")];
     const tops = box().map((el) => el && el.scrollTop);
     fn();
     box().forEach((el, i) => { if (el && tops[i] != null) el.scrollTop = tops[i]; });
@@ -1272,7 +1305,8 @@
       toast("스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.");
       centerOn(state.cities[selected]);
     },
-    select: (d) => { selected = d.city; renderAll(); },
+    select: (d) => openCity(d.city),
+    closeCity: () => closeCity(),
     cmd: (d) => (commands[d.cmd] ? commands[d.cmd]() : commands.simple(d.cmd)),
     post: (d) => commands.post(d.kind),
     doPost: (d) => {
@@ -1363,8 +1397,7 @@
       if (fn) fn(el.dataset);
     } else if (el.dataset.city && state) {
       if (dragged) return;
-      selected = el.dataset.city;
-      renderAll();
+      openCity(el.dataset.city);
     }
   });
   document.addEventListener("input", (ev) => {
@@ -1384,6 +1417,11 @@
   });
   document.addEventListener("keydown", (ev) => {
     if (!state || state.over || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
+    if (ev.code === "Escape") {
+      if (!$("#modal").classList.contains("hidden")) closeModal();
+      else if (cityWinOpen()) closeCity();
+      return;
+    }
     if (ev.code === "Space") {
       ev.preventDefault();
       if (!$("#modal").classList.contains("hidden")) return;
