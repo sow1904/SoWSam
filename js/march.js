@@ -250,6 +250,7 @@
     const team = crew(state, m);
     release(state, m);
     for (const o of team) o.city = c.id;
+    S.officersMoved(state);
     if (m.troops) {
       c.train = Math.round((c.train * c.troops + m.train * m.troops) / (c.troops + m.troops));
       S.addTroops(c, m.unit || S.garrisonUnit(c), m.troops);

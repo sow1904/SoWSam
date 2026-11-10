@@ -167,10 +167,13 @@
     const out = {};
     const room = (k) => have[k] - (out[k] || 0);
     let left = Math.min(Math.floor(n), S.countsTotal(have));
+    // Each type's weight once: weighing is the costly part.
+    const wt = {};
+    for (const k of Object.keys(have)) wt[k] = Math.max(0.0001, weight ? weight(k) : 1);
+    const w = (k) => room(k) * wt[k];
     while (left > 0) {
       const open = Object.keys(have).filter((k) => room(k) > 0);
       if (!open.length) break;
-      const w = (k) => room(k) * Math.max(0.0001, weight ? weight(k) : 1);
       const sum = open.reduce((s, k) => s + w(k), 0);
       let given = 0;
       for (const k of open) {
@@ -273,8 +276,12 @@
   }
   // A side's multiplier against another: every part of one mix against every
   // part of the other, weighted by their shares. Plain ids work too.
+  // Read-only mixes of one plain id, so the matchup sums need not build
+  // a fresh object for every call.
+  const ONE = {};
+  const shares = (spec) => (typeof spec === "string" && S.UNITS[spec] ? ONE[spec] || (ONE[spec] = Object.freeze({ [spec]: 1 })) : S.mixOf(spec));
   S.unitMul = function (spec, foe, where, rough) {
-    const A = S.mixOf(spec), F = foe ? S.mixOf(foe) : null;
+    const A = shares(spec), F = foe ? shares(foe) : null;
     let m = 0;
     for (const [a, sa] of Object.entries(A)) {
       if (!F) { m += sa * typeMul(a, null, where, rough); continue; }

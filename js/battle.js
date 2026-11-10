@@ -293,11 +293,13 @@
     for (const d of defs) {
       if (escapes.length && S.chance(state, S.isRuler(state, d) ? 85 : 55)) {
         d.city = escapes[Math.floor(S.rand(state) * escapes.length)];
+        S.officersMoved(state);
         say(b, `${S.josa(d.name, "은", "는")} ${S.ro(S.placeName(state, d.city))} 달아났습니다.`);
       } else {
         d.status = "captive";
         d.captor = A.force;
         if (fort) d.city = S.place(state, A.origin) && S.place(state, A.origin).owner === A.force ? A.origin : (S.citiesOf(state, A.force)[0] || {}).id || d.city;
+        S.officersMoved(state);
         report.captured.push(d.id);
         say(b, `${S.josa(d.name, "을", "를")} 사로잡았습니다.`);
       }
@@ -321,6 +323,7 @@
     t.order = Math.max(10, t.order - 20);
     letGo(state, b, A.officers);
     for (const o of atk) o.city = b.place;
+    S.officersMoved(state);
     report.attackerWon = true;
     if (defForce && !fort && state.forces[defForce].capital === t.id && S.citiesOf(state, defForce).length) S.capitalFell(state, defForce, A.force, report);
     if (defForce) S.checkForce(state, defForce, report);
@@ -416,6 +419,7 @@
       // The siege is lifted: the relief army enters the city.
       S.addTroops(home, R.unit, R.troops);
       for (const o of crewOf(state, R.officers, R.force)) o.city = b.place;
+      S.officersMoved(state);
       return;
     }
     S.launch(state, { kind: "return", force: R.force, path: R.path.slice().reverse(), speed: S.unitSpeed(R.unit),
@@ -641,6 +645,7 @@
         const t = S.place(state, b.place);
         S.addTroops(t, A.unit, A.troops);
         for (const o of crewOf(state, A.officers, A.force)) o.city = b.place;
+        S.officersMoved(state);
         report.attackerWon = true;
       } else {
         say(b, outcome === "allied"

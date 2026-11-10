@@ -51,34 +51,60 @@
   }
 
   // ---------- map view (zoom and pan on the SVG viewBox) ----------
+  // While the wheel turns or the map is dragged, only the drawn picture moves
+  // (a CSS transform the compositor handles without redrawing). The viewBox
+  // is set, and the map redrawn sharp, once the wheel or drag rests: redrawing
+  // the big terrain picture and every icon on each wheel tick was slow.
   const view = { x: 0, y: 0, w: 1000, h: 700, zoom: 1 };
+  const shown = { x: 0, y: 0, w: 1000, h: 700 }; // the viewBox now on the SVG
+  let shownRect = null; // the SVG's box when the viewBox was set
+  let settleTimer = 0;
   const pts = (list) => list.map((p) => p.join(",")).join(" ");
+  // The SVG's box on screen, untouched by a pending transform.
+  const mapRect = () => ($("#map").style.transform && shownRect) || $("#map").getBoundingClientRect();
 
-  function applyView() {
-    const svg = $("#map");
-    const r = svg.getBoundingClientRect();
+  function fitView(r) {
     view.w = Math.max(200, r.width / view.zoom);
     view.h = Math.max(200, r.height / view.zoom);
     const W = S.MAP_SIZE.w, H = S.MAP_SIZE.h;
     view.x = Math.min(Math.max(view.x, -view.w * 0.3), W - view.w * 0.7);
     view.y = Math.min(Math.max(view.y, -view.h * 0.3), H - view.h * 0.7);
+  }
+  // Show the new view at once by moving the old picture; settle it soon.
+  function previewView() {
+    const svg = $("#map"), r = mapRect();
+    fitView(r);
+    const s = shown.w / view.w;
+    const tx = ((shown.x - view.x) / view.w) * r.width, ty = ((shown.y - view.y) / view.h) * r.height;
+    svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(applyView, 150);
+  }
+  function applyView() {
+    clearTimeout(settleTimer);
+    const svg = $("#map");
+    svg.style.transform = "";
+    const r = svg.getBoundingClientRect();
+    shownRect = r;
+    fitView(r);
+    Object.assign(shown, { x: view.x, y: view.y, w: view.w, h: view.h });
     svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
     svg.classList.toggle("far", view.zoom < 0.75);
   }
   function centerOn(c) {
-    const r = $("#map").getBoundingClientRect();
+    const r = mapRect();
     view.x = c.x - r.width / view.zoom / 2;
     view.y = c.y - r.height / view.zoom / 2;
     applyView();
   }
   function zoomAt(factor, cx, cy) {
-    const svg = $("#map"), r = svg.getBoundingClientRect();
+    const r = mapRect();
     const px = view.x + ((cx - r.left) / r.width) * view.w;
     const py = view.y + ((cy - r.top) / r.height) * view.h;
     view.zoom = Math.min(2.5, Math.max(0.35, view.zoom * factor));
     view.x = px - ((cx - r.left) / r.width) * (r.width / view.zoom);
     view.y = py - ((cy - r.top) / r.height) * (r.height / view.zoom);
-    applyView();
+    previewView();
   }
   let drag = null;
   let dragged = false;
@@ -99,9 +125,12 @@
       dragged = true;
       view.x = drag.vx - dx / view.zoom;
       view.y = drag.vy - dy / view.zoom;
-      applyView();
+      previewView();
     });
-    window.addEventListener("pointerup", () => { drag = null; });
+    window.addEventListener("pointerup", () => {
+      if (drag && dragged) applyView();
+      drag = null;
+    });
     window.addEventListener("resize", () => state && applyView());
   }
 
@@ -122,14 +151,22 @@
     const M = S.MAP;
     // The painted terrain map when the map has one, else the drawn outline.
     const T = M.terrain;
-    $("#map").classList.toggle("terrain", !!T);
-    let svg = T
+    const map = $("#map");
+    map.classList.toggle("terrain", !!T);
+    // The sea and terrain picture are drawn once; only what changes is redrawn.
+    const baseKey = T ? T.image : "outline";
+    const base = T
       ? `<rect class="sea" x="-2000" y="-2000" width="${T.w + 4000}" height="${T.h + 4000}"/>` +
         `<image class="terrain-img" href="${T.image}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>`
       : `<rect class="sea" x="-2000" y="-2000" width="${S.MAP_SIZE.w + 4000}" height="${S.MAP_SIZE.h + 4000}"/>` +
         `<polygon class="land" points="${pts(M.land)}"/>` +
         M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
         M.rivers.map((r) => `<polyline class="river" points="${pts(r)}"/>`).join("");
+    if (map.dataset.base !== baseKey || !$("#mapLayer")) {
+      map.innerHTML = base + `<g id="mapLayer"></g><g id="marchLayer"></g>`;
+      map.dataset.base = baseKey;
+    }
+    let svg = "";
     // Province names at the centre of their commanderies.
     for (const [pid, pname] of Object.entries(S.PROVINCES)) {
       const cs = S.provinceCities(state, pid);
@@ -163,8 +200,7 @@
         `<text class="name" x="${c.x}" y="${c.y + r + 13 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + r + 22 * k}">${fmt(c.troops)}</text></g>`;
     }
-    svg += `<g id="marchLayer"></g>`;
-    $("#map").innerHTML = svg;
+    $("#mapLayer").innerHTML = svg;
     renderMarches();
     applyView();
   }

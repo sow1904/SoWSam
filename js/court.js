@@ -268,6 +268,7 @@
       if (k) state.cities[o.city].posts[k] = null;
       o.force = to;
       o.city = toRuler.city;
+      S.officersMoved(state);
       o.loyalty = 75;
       o.done = true;
       gone.push(o.name);

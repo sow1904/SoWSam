@@ -9,6 +9,7 @@ for (const f of ["data/map190.js", "data/people.js", "data/abilities.js", "data/
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;
+if (process.env.CHECK) S.CHECK_INDEX = true;
 
 const games = +(process.argv[2] || 20);
 const years = +(process.argv[3] || 30);

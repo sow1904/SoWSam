@@ -336,8 +336,14 @@
   function seekAlly(state, fid) {
     if (!S.chance(state, 3) || S.allies(state, fid).length >= 2) return;
     // Only neighbours, or forces that share a neighbour with this one, are worth courting.
-    const near = (to) => S.touches(state, fid, to) || Object.keys(state.forces).some((x) =>
-      x !== fid && x !== to && state.forces[x].alive && S.touches(state, fid, x) && S.touches(state, to, x));
+    // The forces each one borders, worked out once per force.
+    const borders = new Map();
+    const nb = (f) => {
+      if (!borders.has(f)) borders.set(f, new Set(S.citiesOf(state, f).flatMap((c) => S.neighbors(c.id).map((n) => state.cities[n].owner))));
+      return borders.get(f);
+    };
+    const near = (to) => nb(fid).has(to) || [...nb(fid)].some((x) =>
+      x && x !== fid && x !== to && state.forces[x].alive && nb(to).has(x));
     const others = Object.values(state.forces).filter((f) => f.alive && f.id !== fid && f.id !== state.playerForce &&
       !S.allied(state, fid, f.id) && !S.pactCooldown(state, fid, f.id) && near(f.id));
     if (!others.length) return;

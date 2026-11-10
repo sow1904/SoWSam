@@ -210,8 +210,32 @@
   S.fullProvinces = (state, fid) =>
     Object.keys(S.PROVINCES).filter((p) => { const h = S.provinceHold(state, p, fid); return h.total && h.held === h.total; });
 
-  S.officersIn = (state, cid, filter) =>
-    Object.values(state.officers).filter((o) => o.city === cid && (!filter || filter(o)));
+  // Officers by city. Looking them up was the busiest work of a turn, so
+  // the lookup is indexed; whatever moves an officer to another city calls
+  // S.officersMoved to have the index rebuilt.
+  const byCity = new WeakMap();
+  S.officersMoved = (state) => byCity.delete(state);
+  function cityIndex(state) {
+    let ix = byCity.get(state);
+    if (!ix) {
+      ix = new Map();
+      for (const o of Object.values(state.officers)) {
+        let list = ix.get(o.city);
+        if (!list) ix.set(o.city, (list = []));
+        list.push(o);
+      }
+      byCity.set(state, ix);
+    }
+    return ix;
+  }
+  S.officersIn = function (state, cid, filter) {
+    const list = cityIndex(state).get(cid) || [];
+    if (S.CHECK_INDEX) {
+      const scan = Object.values(state.officers).filter((o) => o.city === cid);
+      if (scan.length !== list.length || scan.some((o, i) => o !== list[i])) throw new Error("officer index stale at " + cid);
+    }
+    return filter ? list.filter(filter) : list.slice();
+  };
   S.serving = (state, cid) => S.officersIn(state, cid, (o) => o.status === "serving" && !o.transit);
   S.idle = (state, cid) => S.serving(state, cid).filter((o) => !o.done && !S.postOf(state, o));
   S.visibleFree = (state, cid) => S.officersIn(state, cid, (o) => o.status === "free" && !o.hidden);
@@ -526,6 +550,7 @@
     if (home.length) {
       t.status = "serving";
       t.city = home[Math.floor(rand(state) * home.length)].id;
+      S.officersMoved(state);
     } else {
       t.status = "free";
       t.force = null;
@@ -783,7 +808,7 @@
       f.alive = false;
       for (const o of Object.values(state.officers)) {
         if (o.force !== fid) continue;
-        if (o.status === "serving") { o.status = "free"; o.force = null; o.hidden = false; o.city = S.homeCity(state, o.city); }
+        if (o.status === "serving") { o.status = "free"; o.force = null; o.hidden = false; o.city = S.homeCity(state, o.city); S.officersMoved(state); }
       }
       S.dropForts(state, fid);
       const msg = `${f.name}군이 멸망했습니다.`;
@@ -868,6 +893,7 @@
         o.force = null;
         o.hidden = false;
         o.city = S.homeCity(state, o.city);
+        S.officersMoved(state);
         S.addLog(state, `${S.josa(o.name, "이", "가")} ${S.josa(S.forceName(state, f), "을", "를")} 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
       } else if (S.chance(state, (10 + Math.max(0, state.forces[o.force].weariness - 50) / 2) * S.loyaltyDrift(o))) {
         o.loyalty = Math.max(0, o.loyalty - 1);
@@ -1022,6 +1048,7 @@
         if (!owned(o.city)) {
           const rc = state.officers[f.ruler].city;
           o.city = owned(rc) ? rc : (S.citiesOf(state, f.id)[0] || {}).id || o.city;
+          S.officersMoved(state);
         }
         o.status = "serving";
         o.force = f.id;
@@ -1108,11 +1135,11 @@
 
   S.checkOver = function (state) {
     if (state.over) return state.over;
-    const alive = Object.values(state.forces).filter((f) => S.citiesOf(state, f.id).length > 0);
-    for (const f of Object.values(state.forces)) if (!alive.includes(f)) f.alive = false;
+    const owners = new Set();
+    for (const c of Object.values(state.cities)) owners.add(c.owner);
+    for (const f of Object.values(state.forces)) if (!owners.has(f.id)) f.alive = false;
     if (state.playerForce && !state.forces[state.playerForce].alive) state.over = { result: "lose" };
     else {
-      const owners = new Set(Object.values(state.cities).map((c) => c.owner));
       if (owners.size === 1 && !owners.has(null)) state.over = { result: "win", force: [...owners][0] };
     }
     return state.over;
