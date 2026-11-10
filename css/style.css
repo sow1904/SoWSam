@@ -54,7 +54,7 @@ input, select {
 /* Brand and status share the first row; on a window too narrow for everything
    at once, the buttons move to a row of their own instead of squeezing the status. */
 #status { flex: 1 1 0; min-width: 0; color: var(--muted); display: flex; gap: 4px 14px; flex-wrap: wrap; }
-@media (max-width: 1750px) { .actions { flex-basis: 100%; } }
+@media (max-width: 1750px) { .actions { flex-basis: 100%; justify-content: flex-end; } }
 #status > span { white-space: nowrap; }
 #status b { color: var(--ink); }
 .brand { white-space: nowrap; }
@@ -167,6 +167,8 @@ h3 { margin: 16px 0 6px; font-size: 14px; color: var(--accent); }
 .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px 14px; }
 .stats div { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line); padding: 2px 0; }
 .stats span { color: var(--muted); }
+/* Filled top to bottom, three to a column. */
+.stats.cols { grid-template-rows: repeat(3, auto); grid-auto-flow: column; }
 .cmds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .cmds button { padding: 7px 4px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }

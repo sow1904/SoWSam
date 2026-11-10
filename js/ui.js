@@ -375,8 +375,10 @@
       stat("성벽", `${c.wall}/${c.wallMax}`) +
       (own ? stat("월 수지", signed(S.balance(c))) : "") +
       `</div>` +
-      `<h3>자원</h3><div class="stats">` +
+      // Resources down the left, the monthly budget down the right.
+      `<h3>자원${own ? " · 월 수지" : ""}</h3><div class="stats cols">` +
       S.RES_KEYS.map((k) => stat(S.RESOURCES[k], `${fmt(c.res[k])}/${fmt(S.resCap(c, k))}/+${S.resYield(c, k)}`)).join("") +
+      (own ? stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) + stat("관리 봉급", "-" + S.salaries(c)) : "") +
       `</div>` +
       `<h3>호족${own ? helpTip("호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. " +
         `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.`) : ""}</h3><div class="stats">` +
@@ -387,11 +389,6 @@
     const head = html;
     html = roadList(c) + battleList(c.id);
     if (own) html += delegateRow(c) + policyRow(c.id) + garrisonRow(c.id);
-    if (own) {
-      html += `<h3>월 수지 내역</h3><div class="stats">` +
-        stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) +
-        stat("관리 봉급", "-" + S.salaries(c)) + `</div>`;
-    }
     if (own) html += postsTable(c);
     if (own) {
       html += `<h3>명령${helpTip(COMMAND_HELP)}</h3><div class="cmds">` +
