@@ -297,28 +297,53 @@
   S.salaries = (c) => S.POST_KEYS.reduce((sum, k) => sum + (c.posts[k] && c.posts[k].type === "clerk" ? S.CLERKS[c.posts[k].tier].salary : 0), 0);
   S.balance = (c) => S.income(c) - S.upkeep(c) - S.salaries(c);
 
+  // A date as one number (year, month, day), to tell when a post was filled.
+  S.dayStamp = (state) => state.year * 10000 + state.month * 100 + (state.day || 1);
+  // Can an officer leave a post now, and is he then free to act this month?
+  // On the day he was appointed nothing has been done yet, so he leaves
+  // free. Later in the month he was appointed he must stay. On the 1st of a
+  // later month last month's work is finished, so he leaves free; on other
+  // days the handover takes the rest of the month.
+  S.postRelease = function (state, post) {
+    if (!post || post.type !== "officer") return { ok: true, free: true };
+    const now = S.dayStamp(state), since = post.since || 0;
+    if (since === now) return { ok: true, free: true };
+    if (Math.floor(since / 100) === Math.floor(now / 100)) {
+      const o = state.officers[post.id];
+      return { ok: false, msg: `${o ? S.josa(o.name, "은", "는") : "이 무장은"} 이번 달에 임명되어 다음 달 1일부터 담당에서 뺄 수 있습니다.` };
+    }
+    return { ok: true, free: (state.day || 1) === 1 };
+  };
+
   // spec: {type:"officer", id} | {type:"clerk", tier} | null (leave empty)
   S.assignPost = function (state, cid, kind, spec) {
     const c = state.cities[cid];
     if (!c || !S.POSTS[kind]) return fail("잘못된 담당입니다.");
     const label = S.POSTS[kind].label;
     const old = c.posts[kind];
+    const replacing = old && old.type === "officer" && !(spec && spec.type === "officer" && spec.id === old.id);
+    const out = replacing ? S.postRelease(state, old) : { ok: true, free: true };
+    if (!out.ok) return fail(out.msg);
     if (spec && spec.type === "officer") {
       const o = state.officers[spec.id];
       if (!o || o.status !== "serving" || o.city !== cid || o.force !== c.owner) return fail("이 도시의 무장이 아닙니다.");
       if (o.done) return fail(`${S.josa(o.name, "은", "는")} 이번 달 이미 행동해 임명할 수 없습니다.`);
       const prev = S.postOf(state, o);
       if (prev === kind) return fail("이미 이 담당입니다.");
-      if (prev) c.posts[prev] = null;
-      c.posts[kind] = { type: "officer", id: o.id };
+      if (prev) {
+        const move = S.postRelease(state, c.posts[prev]);
+        if (!move.ok) return fail(move.msg);
+        c.posts[prev] = null;
+      }
+      c.posts[kind] = { type: "officer", id: o.id, since: S.dayStamp(state) };
     } else if (spec && spec.type === "clerk") {
       if (!S.CLERKS[spec.tier]) return fail("잘못된 관리 등급입니다.");
       c.posts[kind] = { type: "clerk", tier: spec.tier };
     } else {
       c.posts[kind] = null;
     }
-    // An officer taken off a post spends the month handing over the work.
-    if (old && old.type === "officer" && !(spec && spec.type === "officer" && spec.id === old.id)) {
+    // An officer taken off a post mid-month spends the month handing over the work.
+    if (replacing && !out.free) {
       const o = state.officers[old.id];
       if (o) o.done = true;
     }

@@ -337,7 +337,7 @@
       (own ? `<p class="hint">호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. ` +
         `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.</p>` : "");
     html += roadList(c) + battleList(c.id);
-    if (own) html += policyRow(c.id) + garrisonRow(c.id);
+    if (own) html += delegateRow(c) + policyRow(c.id) + garrisonRow(c.id);
     if (own) {
       html += `<h3>월 수지 내역</h3><div class="stats">` +
         stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) +
@@ -382,6 +382,15 @@
 
   // What the commander does when an enemy army comes: march out to meet it on
   // the road (요격) or hold the walls (농성).
+  function delegateRow(c) {
+    const cur = S.delegateOf(state, c) || "";
+    const opts = [["", "직접 다스림"]].concat(Object.entries(S.DELEGATE).map(([k, v]) => [k, `위임: ${v}`]));
+    return `<div class="row"><label>통치</label><select id="delegate" data-place="${c.id}">` +
+      opts.map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
+      `</select></div><p class="hint">위임하면 매달 1일에 태수가 담당 배치, 관리 고용, 등용, 회유, 징병, 훈련, 포상을 알아서 합니다. ` +
+      `내정 중시는 담당에 무장을 많이 두고 병력은 지킬 만큼만, 군비 확장은 무장을 남겨 징병과 훈련에 힘씁니다. ` +
+      `출진, 수송, 이동, 계략, 연구, 포로 처리는 하지 않으며, 직접 명령도 그대로 내릴 수 있습니다.</p>`;
+  }
   function policyRow(id) {
     const cur = S.defensePolicy(state, id);
     return `<div class="row"><label>방어 방침</label><select id="defPolicy" data-place="${id}">` +
@@ -864,20 +873,26 @@
   // player appear as report cards on the map, a line at a time.
   const SPEEDS = [8000, 4000, 2000, 500]; // milliseconds per month
   const CLOCK_KEY = "sowsam.clock";
-  const CLOCK_DEFAULTS = { speed: 1, modal: true, threat: true, attacked: true, bad: true, court: true, month: false };
+  // v: settings version; v2 made pausing on the 1st the default.
+  const CLOCK_DEFAULTS = { v: 2, speed: 1, modal: true, threat: true, attacked: true, bad: true, court: true, captured: true, month: true };
   const CLOCK_LABELS = {
     modal: "명령 창이나 정보 창을 열면 멈춤",
     threat: "적 군단이 아군 도시로 진군을 시작하면 멈춤",
     attacked: "아군 도시에서 전투가 벌어지면 멈춤",
     bad: "나쁜 소식(무장 이탈, 도시 함락, 반란 등)이 오면 멈춤",
     court: "헌제의 청이나 선양 조서가 오면 멈추고 황실 창 열기",
-    month: "매달 1일마다 멈춤 (턴제처럼 플레이)",
+    captured: "아군이 성을 빼앗으면 멈추고 그 도시를 보여 주기",
+    month: "매달 1일마다 멈춤 (새 달의 명령을 내리기 좋음)",
   };
   const clock = { running: false, resumeOnClose: false, acc: 0, last: 0, seenN: 0, pending: null, settings: loadClockSettings() };
   const battles = [];
 
   function loadClockSettings() {
-    try { return Object.assign({}, CLOCK_DEFAULTS, JSON.parse(localStorage.getItem(CLOCK_KEY) || "{}")); } catch (e) { return Object.assign({}, CLOCK_DEFAULTS); }
+    try {
+      const saved = JSON.parse(localStorage.getItem(CLOCK_KEY) || "{}");
+      if (!(saved.v >= 2)) { delete saved.month; delete saved.v; }
+      return Object.assign({}, CLOCK_DEFAULTS, saved);
+    } catch (e) { return Object.assign({}, CLOCK_DEFAULTS); }
   }
   function saveClockSettings() {
     try { localStorage.setItem(CLOCK_KEY, JSON.stringify(clock.settings)); } catch (e) { /* ignore */ }
@@ -935,6 +950,7 @@
   function stepDay() {
     const me = state.playerForce;
     const reports = [];
+    const held = new Set(S.citiesOf(state, me).map((c) => c.id));
     const month = S.tickDay(state, (r) => {
       if (r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
     });
@@ -956,6 +972,14 @@
     if (month) saveGame(true);
     if (state.over) { setRunning(false); return showEnd(); }
     const s = clock.settings;
+    // A city just taken stands unstaffed: show it so posts and policy can be set.
+    const taken = S.citiesOf(state, me).filter((c) => !held.has(c.id));
+    if (s.captured && taken.length) {
+      selected = taken[0].id;
+      renderAll();
+      centerOn(taken[0]);
+      return pause(`${S.josa(taken[0].name, "을", "를")} 차지했습니다. 담당과 위임 방침을 정하세요`);
+    }
     const han = state.han;
     const courtNew = han && han.pending && han.holder === me && han.pending !== clock.pending;
     clock.pending = han && han.pending;
@@ -1330,6 +1354,7 @@
   });
   document.addEventListener("change", (ev) => {
     if (ev.target.id === "defPolicy" && state) { result(S.setDefensePolicy(state, ev.target.dataset.place, ev.target.value)); return; }
+    if (ev.target.id === "delegate" && state) { result(S.setDelegate(state, ev.target.dataset.place, ev.target.value || null)); return; }
     if (modalOnInput) modalOnInput();
   });
   $("#modal").addEventListener("click", (ev) => {

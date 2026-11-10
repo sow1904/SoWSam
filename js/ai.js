@@ -152,9 +152,10 @@
     return best && best.k;
   }
 
-  // Put spare officers and hired clerks on the four domestic posts.
-  function staffPosts(state, c, frontier) {
-    const reserve = frontier ? 3 : 1;
+  // Put spare officers and hired clerks on the four domestic posts, keeping
+  // some officers free for commands (more on the frontier unless told).
+  function staffPosts(state, c, frontier, keep) {
+    const reserve = keep != null ? keep : frontier ? 3 : 1;
     const serving = S.serving(state, c.id);
     const unposted = () => serving.filter((o) => !S.postOf(state, o));
     // Free up posted officers when the city lacks commanders.
@@ -271,6 +272,67 @@
     }
   }
 
+  // ---------- delegation (위임) ----------
+  // A player city can be left to its governor, with a policy. On the 1st of
+  // each month (and when first delegated) the governor staffs the posts,
+  // recruits, wins over the gentry, drafts and drills, and rewards wavering
+  // officers. He never attacks, moves troops or officers, schemes, researches
+  // or releases captives: those stay the player's. Direct commands still work.
+  S.DELEGATE = { domestic: "내정 중시", military: "군비 확장" };
+  S.delegateOf = (state, c) => (c.delegate && c.delegate.fid === c.owner ? c.delegate.policy : null);
+  S.setDelegate = function (state, cid, policy) {
+    const c = state.cities[cid];
+    if (!c || !c.owner || c.owner !== state.playerForce) return { ok: false, msg: "아군 도시가 아닙니다." };
+    if (policy && !S.DELEGATE[policy]) return { ok: false, msg: "알 수 없는 방침입니다." };
+    c.delegate = policy ? { fid: c.owner, policy } : null;
+    if (!policy) return { ok: true, msg: `${c.name}을 직접 다스립니다.` };
+    const did = S.govern(state, c);
+    return { ok: true, msg: `${c.name}을 태수에게 맡겼습니다(${S.DELEGATE[policy]}).` + (did ? ` 이번 달: ${did}` : "") };
+  };
+  // Returns a short account of what was done, or "".
+  S.govern = function (state, c) {
+    const policy = S.delegateOf(state, c);
+    if (!policy) return "";
+    const mil = policy === "military";
+    const frontier = enemyNeighbors(state, c).length > 0;
+    const done = {};
+    const note = (r, label) => { if (r && r.ok) done[label] = (done[label] || 0) + 1; return r; };
+    staffPosts(state, c, frontier, mil ? (frontier ? 3 : 2) : frontier ? 2 : 1);
+    let idle = S.idle(state, c.id);
+    const take = (key) => {
+      if (!idle.length) return null;
+      idle.sort(byDesc(key));
+      return idle.shift();
+    };
+    // Recruit those who would come; captives are left for the player.
+    for (const t of S.visibleFree(state, c.id)) {
+      if (!idle.length) break;
+      const o = [...idle].sort(byDesc("speech"))[0];
+      if (S.recruitChance(state, o, t) <= 0) continue;
+      idle = idle.filter((x) => x !== o);
+      note(S.recruit(state, o.id, c.id, t.id), "등용");
+    }
+    if (!mil && idle.length > 1 && S.chance(state, 40)) note(S.search(state, take("wit").id, c.id), "탐색");
+    if (idle.length && c.gentry > 40 && c.consent < (mil ? 40 : 55) && c.gold > 300) note(S.woo(state, take("speech").id, c.id), "회유");
+    const want = () => mil
+      ? (frontier ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36 : c.troops < 6000)
+      : c.troops < (frontier ? 5000 : 2500);
+    while (idle.length) {
+      const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
+      const ok = want() && c.manpower > 400 && c.gold > (mil ? 250 : 600) && c.order > (mil ? 50 : 60) && foodMonths > (mil ? 8 : 12);
+      const unit = ok ? pickDraft(state, c) : null;
+      let r = null;
+      if (unit) r = note(S.draft(state, take("cmd").id, c.id, unit), "징병");
+      else if (c.train < (mil ? 80 : 60) && c.troops > 1000) r = note(S.drill(state, take("cmd").id, c.id), "훈련");
+      else break;
+      if (!r.ok) break;
+    }
+    for (const o of S.serving(state, c.id)) {
+      if (o.loyalty < 70 && c.gold > 400) note(S.reward(state, c.id, o.id), "포상");
+    }
+    return Object.entries(done).map(([k, n]) => (n > 1 ? `${k} ${n}회` : k)).join(", ");
+  };
+
   S.runAI = function (state, fid, onEvent) {
     const log = onEvent || (() => {});
     const cities = S.citiesOf(state, fid);
@@ -381,6 +443,13 @@
     S.endMonth(state);
     state.day = 1;
     planAIDays(state);
+    // The player's delegated cities are run by their governors on the 1st.
+    if (state.playerForce && S.govern) {
+      for (const c of S.citiesOf(state, state.playerForce)) {
+        const did = S.govern(state, c);
+        if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
+      }
+    }
     return "month";
   };
   // A whole month at once (headless simulations).
