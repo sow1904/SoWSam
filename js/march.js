@@ -252,7 +252,7 @@
     for (const o of team) o.city = c.id;
     if (m.troops) {
       c.train = Math.round((c.train * c.troops + m.train * m.troops) / (c.troops + m.troops));
-      c.troops += m.troops;
+      S.addTroops(c, m.unit || S.garrisonUnit(c), m.troops);
     }
     c.gold += m.gold || 0;
     c.food += m.food || 0;

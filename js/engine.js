@@ -111,6 +111,7 @@
       };
       state.cities[id].manpower = Math.round(S.manpowerMax(state.cities[id]) * 0.6);
       S.initRes(state.cities[id]);
+      state.cities[id].unit = S.startMix(state.cities[id]);
     }
     let n = 0;
     const addOfficer = (line, force, loyalty) => {
@@ -390,23 +391,29 @@
     },
   };
 
-  S.draft = function (state, oid, cid) {
+  // Draft soldiers of one type. Each is armed from the city's stores.
+  S.draft = function (state, oid, cid, unit) {
     const [o, c, err] = act(state, oid, cid);
     if (err) return fail(err);
-    const amount = S.preview.draft(state, c, o);
+    unit = unit || S.DEFAULT_UNIT;
+    if (!S.canRaise(state, c.owner, unit)) return fail(`${S.unitName(unit)}은 아직 징병할 수 없습니다.`);
+    const men = S.preview.draft(state, c, o);
+    if (men < 100) return fail("동원할 수 있는 장정이 없습니다. 병역 인구가 회복되기를 기다려야 합니다.");
+    const amount = Math.min(men, S.armable(c, unit));
+    if (amount < 100) return fail(`${S.unitName(unit)}을 무장시킬 자원이 부족합니다. (100명에 ${S.costText(unit, 100)})`);
     const cost = Math.ceil(amount * S.COST.draftPerTroop);
-    if (amount < 100) return fail("동원할 수 있는 장정이 없습니다. 병역 인구가 회복되기를 기다려야 합니다.");
     if (c.gold < cost) return fail(`금이 부족합니다. (필요 ${cost})`);
     c.gold -= cost;
+    S.payCost(c, unit, amount);
     c.train = Math.round((c.train * c.troops + 10 * amount) / (c.troops + amount));
-    c.troops += amount;
+    S.addTroops(c, unit, amount);
     c.retainers += Math.round(amount * S.retainerShare(c));
     c.pop -= amount;
     c.manpower -= amount;
     c.order = Math.max(0, c.order - 4);
     S.addWeariness(state, c.owner, (amount / forcePop(state, c.owner)) * 400);
     o.done = true;
-    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${c.name}에서 병사 ${amount}명을 모았습니다.` };
+    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${c.name}에서 ${S.unitName(unit)} ${amount}명을 모았습니다. (${S.costText(unit, amount)})` };
   };
 
   S.drill = function (state, oid, cid) {
@@ -547,13 +554,13 @@
     food = clamp(Math.floor(food || 0), 0, c.food);
     const hasRes = res && S.RES_KEYS.some((k) => res[k] > 0);
     if (hasRes && (!c.res || !t.res)) return fail("자원은 도시에서 도시로만 옮길 수 있습니다.");
-    c.troops -= troops;
+    c.troops -= troops; // a slice of every type alike
     c.gold -= gold;
     c.food -= food;
     const goods = hasRes ? S.takeRes(c, res) : null;
     const speed = troops || gold || food || goods ? "cargo" : "officer";
     const m = S.launch(state, { kind: "move", force: c.owner, path: route.path, km: route.km, speed,
-      officers: oids, troops, train: c.train, gold, food, res: goods, origin: cid, target: targetCid });
+      officers: oids, troops, unit: troops ? S.garrisonUnit(c) : undefined, train: c.train, gold, food, res: goods, origin: cid, target: targetCid });
     const names = oids.map((id) => state.officers[id].name).join(", ");
     const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`, goods && S.resText(goods)].filter(Boolean).join(", ");
     return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${m.arrive - m.start}일 뒤 도착합니다.${cargo ? " (" + cargo + ")" : ""}` };
@@ -704,6 +711,22 @@
     return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
   };
 
+  // What marches out: whole counts by type ({id: n}), all of one type (an
+  // id), or a slice of every type alike (nothing given).
+  S.sortieCounts = function (place, troops, unit) {
+    if (unit && typeof unit === "object") {
+      const out = {};
+      for (const [k, v] of Object.entries(unit)) if (S.UNITS[k] && v >= 1) out[k] = Math.floor(v);
+      return out;
+    }
+    if (typeof unit === "string") return { [unit]: Math.floor(troops) };
+    return S.mixCounts(S.garrisonUnit(place), Math.min(Math.floor(troops), S.marchable(place)));
+  };
+  S.hasTroops = (place, counts) => {
+    const have = S.available(place);
+    return Object.entries(counts).every(([k, v]) => (have[k] || 0) >= v);
+  };
+
   S.attack = function (state, cid, targetCid, oids, troops, unit) {
     const c = S.place(state, cid);
     const t = S.place(state, targetCid);
@@ -717,17 +740,17 @@
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
     }
-    unit = unit || S.DEFAULT_UNIT;
-    if (!S.canRaise(state, c.owner, unit)) return fail("그 병종은 아직 쓸 수 없습니다.");
-    troops = Math.floor(troops);
+    const counts = S.sortieCounts(c, troops, unit);
+    troops = S.countsTotal(counts);
     if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
       return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
     }
-    const speed = S.unitSpeed(unit);
+    if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
+    const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
     const foodNeed = S.marchFood(troops, days);
     if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
-    c.troops -= troops;
+    unit = S.takeTroops(c, counts);
     c.food -= foodNeed;
     const m = S.launch(state, { kind: "army", force: c.owner, path: way.path, km: way.km, speed,
       officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
@@ -1040,6 +1063,8 @@
       }
       if (!("tuntian" in c.posts)) c.posts.tuntian = null;
       if (!c.res) S.initRes(c);
+      // Older saves kept one garrison type; give them a mixed garrison.
+      if (!c.unit || typeof c.unit === "string") c.unit = S.startMix(c);
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.pacts) state.pacts = {};

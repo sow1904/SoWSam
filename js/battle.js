@@ -203,7 +203,7 @@
     const old = (state.battles || []).find((x) => x.kind === "siege" && x.place === m.target && x.att.force === m.force);
     if (old) {
       old.att.train = Math.round((old.att.train * old.att.troops + m.train * m.troops) / Math.max(1, old.att.troops + m.troops));
-      if (m.troops > old.att.troops) old.att.unit = m.unit; // one type per army: the larger body sets it
+      old.att.unit = S.blend(old.att.unit, old.att.troops, m.unit, m.troops);
       old.att.troops += m.troops;
       old.att.troops0 += m.troops;
       old.att.rations += m.troops / 10;
@@ -309,11 +309,12 @@
     const remainingD = Math.max(0, t.troops);
     t.owner = A.force;
     t.posts = S.emptyPosts();
-    t.troops = A.troops + Math.floor(remainingD * 0.3);
+    const stay = Math.floor(remainingD * 0.3); // some defenders go over
+    t.unit = S.blend(A.unit, A.troops, S.garrisonUnit(t), stay);
+    t.troops = A.troops + stay;
     t.retainers = fort ? 0 : Math.floor(remainingD * 0.3);
     t.consent = Math.min(t.consent, 30);
     t.train = A.train;
-    t.unit = A.unit;
     t.gold = Math.floor(t.gold / 2);
     if (t.res) for (const k of S.RES_KEYS) t.res[k] = Math.floor(t.res[k] / 2);
     t.food = Math.floor(t.food / 2) + Math.floor(A.rations || 0);
@@ -347,15 +348,15 @@
       const o = state.officers[id];
       if (!o || o.status !== "serving" || o.city !== cid || o.force !== c.owner || o.done || o.transit || S.postOf(state, o)) return fail("이곳에서 쉬고 있는 무장만 보낼 수 있습니다.");
     }
-    unit = unit || S.DEFAULT_UNIT;
-    if (!S.canRaise(state, c.owner, unit)) return fail("그 병종은 아직 쓸 수 없습니다.");
-    troops = Math.floor(troops);
+    const counts = S.sortieCounts(c, troops, unit);
+    troops = S.countsTotal(counts);
     if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) return fail(`원군 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다.`);
-    const speed = S.unitSpeed(unit);
+    if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
+    const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
     const food = S.marchFood(troops, days);
     if (c.food < food) return fail(`군량이 부족합니다. (필요 ${food})`);
-    c.troops -= troops;
+    unit = S.takeTroops(c, counts);
     c.food -= food;
     const m = S.launch(state, { kind: "relief", force: c.owner, path: way.path, km: way.km, speed,
       officers: oids, troops, unit, train: c.train, origin: cid, target: targetId, battle: way.battle });
@@ -371,7 +372,7 @@
     const ids = m.officers.filter((id) => { const o = state.officers[id]; return o && o.status === "serving" && o.force === m.force; });
     S.releaseMarch(state, m);
     if (b.relief) {
-      if (m.troops > b.relief.troops) b.relief.unit = m.unit;
+      b.relief.unit = S.blend(b.relief.unit, b.relief.troops, m.unit, m.troops);
       b.relief.troops += m.troops;
       b.relief.troops0 += m.troops;
       b.relief.officers.push(...ids);
@@ -413,7 +414,7 @@
     const home = S.place(state, b.place);
     if (why === "enter" && home.owner === R.force) {
       // The siege is lifted: the relief army enters the city.
-      home.troops += R.troops;
+      S.addTroops(home, R.unit, R.troops);
       for (const o of crewOf(state, R.officers, R.force)) o.city = b.place;
       return;
     }
@@ -449,7 +450,10 @@
       const raidOdds = 1 - Math.pow(1 - daily, 15);
       const direct = best.spare + t.troops >= b.att.troops * nerve;
       const raidWorth = raidOdds >= 0.45 * nerve && best.spare >= b.att.troops * 0.3;
-      if (direct || raidWorth) S.relieve(state, best.c.id, b.place, team.map((o) => o.id), best.spare, S.bestUnitVs(state, fid, b.att.unit, "field", 1));
+      if (direct || raidWorth) {
+        const counts = S.pickTroops(best.c, best.spare, (k) => Math.pow(S.unitEdge(k, b.att.unit, "field", 1), 2));
+        S.relieve(state, best.c.id, b.place, team.map((o) => o.id), best.spare, counts);
+      }
     }
   };
 
@@ -560,9 +564,12 @@
     const water = S.waterLink(state, P, id);
     const rough = S.linkRough(state, P, id);
     const where = water ? "water" : "field";
-    const unit = S.garrisonUnit(t);
-    const troops = Math.max(0, Math.min(S.marchable(t) - Math.max(1000, Math.round(t.troops * 0.2)), t.troops));
-    if (!pool.length || troops < 1000) return null;
+    const want = Math.max(0, Math.min(S.marchable(t) - Math.max(1000, Math.round(t.troops * 0.2)), t.troops));
+    if (!pool.length || want < 1000) return null;
+    // The governor sends out the soldiers who fare best against what is coming.
+    const counts = S.pickTroops(t, want, (k) => (water ? 1 : Math.pow(S.unitEdge(k, m.unit, where, rough), 2)));
+    const unit = S.mixOf(counts);
+    const troops = S.countsTotal(counts);
     const score = (o) => o.cmd + o.war / 2 + (S.hasSkill(o, water ? "수전" : "야전") ? 20 : 0);
     const team = pool.slice().sort((a, b) => score(b) - score(a)).slice(0, S.MAX_SORTIE_OFFICERS);
     if (team.length === pool.length && pool.length > 1) team.pop(); // someone stays to hold the walls
@@ -581,28 +588,11 @@
     if (has(pool, "수성")) need += 0.2;
     const policy = S.defensePolicy(state, id);
     if (policy === "intercept") need -= 0.4;
-    return { team, troops, unit, water, ratio: ours / Math.max(1, theirs), need, policy, P, surprise: sp ? { name: sp.name, pct: surprisePct } : null };
+    return { team, troops, unit, counts, water, ratio: ours / Math.max(1, theirs), need, policy, P, surprise: sp ? { name: sp.name, pct: surprisePct } : null };
   };
-  // A governor left to it arms the garrison for what is coming: for a fight
-  // on the road if the place can march out, otherwise for the walls.
-  // Whether the governor reads the enemy in time rests on the sharpest mind there.
-  function rearm(state, t, m) {
-    const here = S.serving(state, t.id).filter((o) => o.force === t.owner);
-    if (!here.length || !S.chance(state, clamp(top(here, "wit"), 20, 90))) return;
-    const P = m.path[m.path.length - 2];
-    const where = S.waterLink(state, P, t.id) ? "water" : "field";
-    const edge = (u, a, d) => S.unitMul(u, m.unit, d, 1) / S.unitMul(m.unit, u, a, 1);
-    const unit = isPass(state, t.id) || S.besieged(state, t.id) || where === "water"
-      ? S.raisable(state, t.owner).reduce((a, u) => (edge(u, "siegeA", "siegeD") > edge(a, "siegeA", "siegeD") ? u : a))
-      : S.bestUnitVs(state, t.owner, m.unit, where, S.linkRough(state, P, t.id));
-    if (unit === S.garrisonUnit(t)) return;
-    t.unit = unit;
-    if (t.owner === state.playerForce) S.addLog(state, `${t.name}의 태수가 다가오는 ${S.unitName(m.unit)}에 맞서 수비 병종을 ${S.unitName(unit)}으로 바꿨습니다.`, "sys");
-  }
   S.planDefense = function (state, m) {
     const t = S.place(state, m.target);
     if (m.kind !== "army" || !t.owner || t.owner === m.force || m.path.length < 2) return;
-    if (S.defensePolicy(state, m.target) === "auto") rearm(state, t, m);
     if (S.defensePolicy(state, m.target) === "hold") return;
     const odds = S.interceptOdds(state, m.target, m);
     if (!odds || odds.ratio < odds.need) return;
@@ -612,7 +602,7 @@
     const meet = m.start + Math.ceil((total - L / 2 - (m.skip || 0)) / S.SPEED[m.speed || "army"]);
     const now = S.today(state);
     if (meet <= now) return;
-    t.troops -= odds.troops;
+    if (!S.takeTroops(t, odds.counts)) return;
     const s = S.launch(state, { kind: "sortie", force: t.owner, path: [m.target, odds.P], km: L / 2, days: meet - now, speed: "army",
       officers: odds.team.map((o) => o.id), troops: odds.troops, unit: odds.unit, train: t.train, origin: m.target, target: m.target, vs: m.id, water: odds.water });
     m.intercept = s.id;
@@ -649,7 +639,7 @@
         say(b, `${S.josa(S.placeName(state, b.place), "은", "는")} 이미 아군의 손에 들어왔습니다. 포위군이 성에 들어갑니다.`);
         letGo(state, b, A.officers);
         const t = S.place(state, b.place);
-        t.troops += A.troops;
+        S.addTroops(t, A.unit, A.troops);
         for (const o of crewOf(state, A.officers, A.force)) o.city = b.place;
         report.attackerWon = true;
       } else {

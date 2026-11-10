@@ -103,7 +103,7 @@
     const ids = team.map((o) => o.id);
     let best = null;
     for (const t of targets) {
-      const unit = pickUnit(state, c, t);
+      const unit = pickUnit(state, c, t, troops);
       const est = S.estimate(state, c.id, t.id, ids, troops, unit);
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull; // vacant cities are easy pickings
@@ -119,24 +119,37 @@
     S.attack(state, c.id, best.t.id, ids, troops, best.unit);
   }
 
-  // The unit type for an attack: good against the walls, and not easily
-  // beaten if the garrison marches out to meet it on the last stretch of road.
-  // Not always the single best: a better fit is only likelier to be chosen,
+  // The soldiers for an attack, by type: those good against the walls, and
+  // not easily beaten if the garrison marches out to meet them on the last
+  // stretch of road. A better fit only weighs more, with some chance in it,
   // so the enemy cannot count on one answer.
-  function pickUnit(state, c, t) {
+  function pickUnit(state, c, t, troops) {
     const way = S.attackTargets(state, c.id).find((x) => x.id === t.id);
     const P = way ? way.path[way.path.length - 2] : c.id;
     const where = S.waterLink(state, P, t.id) ? "water" : "field";
     const rough = S.linkRough(state, P, t.id);
     const gu = S.garrisonUnit(t);
-    const list = S.raisable(state, c.owner).map((u) => {
-      const walls = S.unitMul(u, gu, "siegeA", 1) / S.unitMul(gu, u, "siegeD", 1);
-      const field = where === "water" ? 1 : S.unitEdge(u, gu, where, rough); // on a river both sides fight in ships
-      return { u, w: Math.pow(walls * field, 2) };
+    const luck = {};
+    for (const k of Object.keys(S.UNITS)) luck[k] = 0.6 + S.rand(state) * 0.8;
+    return S.pickTroops(c, troops, (k) => {
+      const walls = S.unitMul(k, gu, "siegeA", 1) / S.unitMul(gu, k, "siegeD", 1);
+      const field = where === "water" ? 1 : S.unitEdge(k, gu, where, rough); // on a river both sides fight in ships
+      return Math.pow(walls * field, 2) * luck[k];
     });
-    let roll = S.rand(state) * list.reduce((s, x) => s + x.w, 0);
-    for (const x of list) if ((roll -= x.w) <= 0) return x.u;
-    return list.length ? list[list.length - 1].u : S.DEFAULT_UNIT;
+  }
+
+  // The type to draft: one the stores can arm, good against the garrisons
+  // next door, with some chance in it.
+  function pickDraft(state, c) {
+    const foes = S.links(state, c.id).map((n) => S.place(state, n)).filter((p) => p && p.owner && p.owner !== c.owner);
+    let best = null;
+    for (const k of S.raisable(state, c.owner)) {
+      if (S.armable(c, k) < 300) continue;
+      const edge = foes.length ? foes.reduce((s, p) => s + S.unitEdge(k, S.garrisonUnit(p), "field", 1), 0) / foes.length : 1;
+      const v = Math.pow(edge, 2) * (0.5 + S.rand(state)) * (1 + (S.unitOf(k).tier - 1) * 0.3);
+      if (!best || v > best.v) best = { k, v };
+    }
+    return best && best.k;
   }
 
   // Put spare officers and hired clerks on the four domestic posts.
@@ -246,7 +259,8 @@
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
       let r = null;
-      if (affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10) r = S.draft(state, take(byDesc("cmd")).id, c.id);
+      const unit = affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10 ? pickDraft(state, c) : null;
+      if (unit) r = S.draft(state, take(byDesc("cmd")).id, c.id, unit);
       else if (c.train < 75 && c.troops > 1000) r = S.drill(state, take(byDesc("cmd")).id, c.id);
       else break;
       if (r && !r.ok) break;

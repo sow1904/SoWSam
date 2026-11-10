@@ -91,11 +91,9 @@
     const open = Object.keys(S.TECH).filter((k) => S.techLevel(state, fid, k) < S.techMax(k));
     if (!open.length) return null;
     const use = {};
-    for (const p of S.citiesOf(state, fid).concat(S.fortsOf(state, fid))) {
-      const line = S.unitOf(S.garrisonUnit(p)).line;
-      use[line] = (use[line] || 0) + 1;
-    }
-    for (const m of S.marchesOf(state, fid)) if (m.unit) use[S.unitOf(m.unit).line] = (use[S.unitOf(m.unit).line] || 0) + 2;
+    const count = (spec, w) => { for (const [line, v] of Object.entries(S.lineShares(spec))) use[line] = (use[line] || 0) + v * w; };
+    for (const p of S.citiesOf(state, fid).concat(S.fortsOf(state, fid))) count(S.garrisonUnit(p), 1);
+    for (const m of S.marchesOf(state, fid)) if (m.unit) count(m.unit, 2);
     // Keep at a field once begun rather than spreading thin.
     const begun = (k) => ((state.forces[fid].tech || {})[k] || { pts: 0 }).pts / 40;
     const weight = (k) => 1 + (use[S.TECH[k].line] || 0) + begun(k) + (k === "navy" && S.citiesOf(state, fid).some((x) => S.links(state, x.id).some((n) => S.isWater(x.id, n))) ? 3 : 0);

@@ -351,10 +351,17 @@
       `</select></div><p class="hint">적 군단이 오면 태수가 요격과 농성 중 하나를 고릅니다. 태수에게 맡기면 야전에 강하고 과감한 장수는 나가 싸우고, ` +
       `신중하거나 수성에 강한 장수는 성을 지킵니다. 요격 우선이면 더 쉽게 나가고, 농성이면 나가지 않습니다.</p>`;
   }
-  // Unit types (병종): what the garrison fights with, and the picker for armies.
-  function unitOptions(fid, cur) {
-    return S.raisable(state, fid).map((u) => `<option value="${u}"${u === cur ? " selected" : ""}>${S.unitName(u)} (${S.UNIT_LINES[S.unitOf(u).line]})</option>`).join("");
+  // Unit types (병종): one number box per type a place can send out.
+  function unitRows(prefix, place, part) {
+    const have = S.available(place);
+    const ids = S.mixIds(S.garrisonUnit(place)).filter((k) => have[k] > 0);
+    return ids.map((k) => rangeRow(prefix + k, `${S.unitName(k)} <span class="hint">(${S.UNIT_LINES[S.unitOf(k).line]})</span>`, have[k], Math.floor(have[k] * part))).join("");
   }
+  const unitPick = (prefix) => {
+    const out = {};
+    for (const el of document.querySelectorAll(`input[type=range][id^="${prefix}"]`)) if (+el.value > 0) out[el.id.slice(prefix.length)] = +el.value;
+    return out;
+  };
   const UNIT_HINT = `창은 기병을, 기병은 궁병을, 검(검과 방패를 든 보병)은 창과 궁을, 궁은 창을 이기고, 궁기병은 보병을 멀리서 괴롭힙니다. ` +
     `궁은 성을 칠 때도 지킬 때도 강하고, 기병은 성에서 약합니다. 기병은 빨리 행군하지만 험한 산길에서 약해집니다. ` +
     `큰 강 위에서는 병종과 상관없이 배로 싸웁니다. 몽충이 기본이고, 수전 특기 무장이 있으면 투함입니다.`;
@@ -370,9 +377,8 @@
 
   function garrisonRow(id) {
     const p = S.place(state, id);
-    const auto = S.defensePolicy(state, id) === "auto";
-    return `<div class="row"><label>수비 병종</label><select id="garUnit" data-place="${id}">${unitOptions(p.owner, S.garrisonUnit(p))}</select></div>` +
-      `<p class="hint">성을 지키거나 요격하러 나갈 때 이 병종으로 싸웁니다.${auto ? " 태수에게 맡기면 적 군단이 다가올 때 태수가 그에 맞서 병종을 바꾸기도 합니다(지략이 높을수록 잘 읽습니다)." : ""}</p>`;
+    return `<div class="row"><label>수비 병력</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>` +
+      `<p class="hint">성은 이 병력이 모두 함께 지킵니다. 요격하러 나갈 때는 다가오는 적에게 유리한 병종을 골라 내보냅니다.</p>`;
   }
   function battleList(id) {
     const list = S.battlesAt(state, id);
@@ -493,10 +499,6 @@
 
   // ---------- commands ----------
   const SIMPLE = {
-    draft: {
-      title: "징병", stat: "cmd", run: (o, c) => S.draft(state, o, c),
-      preview: (o, c) => { const n = S.preview.draft(state, c, o); return `병사 +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`; },
-    },
     train: { title: "훈련", stat: "cmd", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
     woo: {
       title: "회유", stat: "speech", run: (o, c) => S.woo(state, o, c),
@@ -514,6 +516,27 @@
   let pending = null;
 
   const commands = {
+    draft() {
+      const c = state.cities[selected];
+      const units = S.raisable(state, c.owner);
+      const cur = pending && pending.cmd === "draft" && units.includes(pending.unit) ? pending.unit : units[0];
+      pending = { cmd: "draft", unit: cur };
+      const list = S.idle(state, c.id).sort((a, b) => b.cmd - a.cmd);
+      const rows = units.map((k) => `<tr><td>${S.unitName(k)}</td><td>${S.UNIT_LINES[S.unitOf(k).line]}</td><td>${S.costText(k, 1)}</td><td>${fmt(S.armable(c, k))}</td></tr>`).join("");
+      openModal(`<h2>징병</h2><p class="hint">병사는 한 병종으로 뽑고, 한 명마다 아래 자원이 듭니다. 뽑는 수는 무장의 용병, 병역 인구, 그리고 이 도시의 자원으로 무장시킬 수 있는 수 가운데 가장 작은 값입니다. ` +
+        `자원은 다른 도시에서 수송해 올 수 있습니다.</p>` +
+        `<table><tr><th>병종</th><th>계열</th><th>1명당</th><th>무장 가능</th></tr>${rows}</table>` +
+        `<div class="row"><label>뽑을 병종</label><select id="dfUnit">${units.map((k) => `<option value="${k}"${k === cur ? " selected" : ""}>${S.unitName(k)}</option>`).join("")}</select></div>` +
+        officerTable(list, { pick: "doDraft", extraHead: "효과", extra: (o) => {
+          const n = Math.min(S.preview.draft(state, c, o), S.armable(c, cur));
+          return `${S.unitName(cur)} +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`;
+        } }) +
+        `<div class="footer"><button data-action="close">취소</button></div>`, true);
+      modalOnInput = () => {
+        const v = $("#dfUnit") && $("#dfUnit").value;
+        if (v && v !== pending.unit) { pending.unit = v; commands.draft(); }
+      };
+    },
     simple(cmd) {
       const c = state.cities[selected];
       const def = SIMPLE[cmd];
@@ -659,9 +682,8 @@
           const b = S.battleOf(state, w.battle);
           return `<option value="${w.id}">${placeLabel(w.id)} (포위군 ${S.forceName(state, b.att.force)} ${S.unitName(b.att.unit)} ${b.att.troops}명, ${b.day}일째)</option>`;
         }).join("")}</select></div>` +
-        `<div class="row"><label>병종</label><select id="rlfUnit">${unitOptions(c.owner, S.bestUnitVs(state, c.owner, S.battleOf(state, ways[0].battle).att.unit, "field", 1))}</select></div>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
-        rangeRow("rlfTroops", "병사", S.marchable(c), Math.round(S.marchable(c) * 0.7)) +
+        unitRows("rlfU_", c, 0.7) +
         `<div class="row"><label>전망</label><span id="rlfEst"></span></div>` +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doRelieve">원군 출발</button></div>`);
       modalOnInput = updateRelief;
@@ -681,10 +703,9 @@
           const t = S.place(state, d);
           return `<option value="${d}">${placeLabel(d)} (${t.owner || t.troops > 0 ? S.forceName(state, t.owner) : "비어 있음"}, ${S.unitName(S.garrisonUnit(t))} ${t.troops})</option>`;
         }).join("")}</select></div>` +
-        `<div class="row"><label>병종</label><select id="atUnit">${unitOptions(c.owner, S.DEFAULT_UNIT)}</select></div>` +
         `<p class="hint">${UNIT_HINT}</p>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
-        rangeRow("atTroops", "병사", S.marchable(c), Math.round(S.marchable(c) * 0.7)) +
+        unitRows("atU_", c, 0.7) +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 출진하지 않고 성에 남습니다.</p>` : "") +
         `<div class="row"><label>전력</label><span id="atEst"></span></div>` +
         `<div class="footer"><button data-action="close">취소</button><button class="primary" data-action="doAttack">출진</button></div>`);
@@ -719,14 +740,16 @@
     const team = ids.map((id) => state.officers[id]);
     const besiegers = b.att.officers.map((id) => state.officers[id]).filter((o) => o && o.status === "serving");
     const pc = S.raidChance(team, besiegers, true);
-    const ours = num("rlfTroops") + t.troops;
-    const unit = $("#rlfUnit").value;
+    const unit = unitPick("rlfU_");
+    const sent = S.countsTotal(unit);
+    if (!sent) { el.textContent = "보낼 병사를 정해 주세요."; return; }
+    const ours = sent + t.troops;
     const days = S.travelDays(way.km, S.unitSpeed(unit));
     const edge = S.unitMul(unit, b.att.unit, "field", 1) / S.unitMul(b.att.unit, unit, "field", 1);
-    el.innerHTML = `원군 ${fmt(num("rlfTroops"))} + 성안 ${fmt(t.troops)} : 포위군 ${fmt(b.att.troops)} — ` +
+    el.innerHTML = `원군 ${fmt(sent)} + 성안 ${fmt(t.troops)} : 포위군 ${fmt(b.att.troops)} — ` +
       (ours >= b.att.troops ? `<span class="good">수가 많음</span>` : `<span class="bad">수가 적음</span>`) +
       `<br>병종 상성: ${S.unitName(unit)} 대 ${S.unitName(b.att.unit)} ${edgeLabel(edge)}` +
-      `<br><span class="hint">하루에 보급로 절단 ${pc.cut}% · 군량고 소각 ${pc.burn}% · ${days}일 뒤 도착 · 군량 ${S.marchFood(num("rlfTroops"), days)}</span>`;
+      `<br><span class="hint">하루에 보급로 절단 ${pc.cut}% · 군량고 소각 ${pc.burn}% · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days)}</span>`;
   }
   const edgeLabel = (e) => (e >= 1.15 ? `<span class="good">유리 ×${e.toFixed(2)}</span>` : e <= 0.87 ? `<span class="bad">불리 ×${e.toFixed(2)}</span>` : `비슷함 ×${e.toFixed(2)}`);
 
@@ -735,8 +758,10 @@
     const el = $("#atEst");
     if (!ids.length) { el.textContent = "무장을 골라 주세요."; return; }
     if (ids.length > S.MAX_SORTIE_OFFICERS) { el.innerHTML = `<span class="bad">무장은 ${S.MAX_SORTIE_OFFICERS}명까지입니다.</span>`; return; }
-    const unit = $("#atUnit").value;
-    const e = S.estimate(state, selected, $("#atTarget").value, ids, num("atTroops"), unit);
+    const unit = unitPick("atU_");
+    const sent = S.countsTotal(unit);
+    if (!sent) { el.textContent = "보낼 병사를 정해 주세요."; return; }
+    const e = S.estimate(state, selected, $("#atTarget").value, ids, sent, unit);
     const label = e.ratio >= 1.6 ? `<span class="good">압도적 우세</span>` : e.ratio >= 1.2 ? `<span class="good">우세</span>`
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
     const way = S.attackTargets(state, selected).find((x) => x.id === $("#atTarget").value);
@@ -754,7 +779,7 @@
     const ground = water ? "강 위" : rough > 1 ? "험한 산길" : "길";
     el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label} <span class="hint">(공성, 병종 반영)</span><br>` +
       `요격당하면(${ground}): ${S.unitName(ours)} 대 ${S.unitName(theirs)} ${edgeLabel(field)}<br>` +
-      `<span class="hint">${days}일 뒤 도착 · 군량 ${S.marchFood(num("atTroops"), days)} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
+      `<span class="hint">병사 ${fmt(sent)}명 · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days)} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 
   function updateScheme() {
@@ -1177,6 +1202,12 @@
       closeModal();
       result(r);
     },
+    doDraft: (d) => {
+      const r = S.draft(state, d.oid, selected, pending.unit);
+      if (!r.ok) { toast(r.msg); return; }
+      closeModal();
+      result(r);
+    },
     doSimple: (d) => {
       const r = SIMPLE[pending.cmd].run(d.oid, selected);
       closeModal();
@@ -1223,13 +1254,15 @@
       result(r);
     },
     doRelieve: () => {
-      const r = S.relieve(state, selected, $("#rlfTarget").value, checked(), num("rlfTroops"), $("#rlfUnit").value);
+      const pick = unitPick("rlfU_");
+      const r = S.relieve(state, selected, $("#rlfTarget").value, checked(), S.countsTotal(pick), pick);
       if (!r.ok) { toast(r.msg); return; }
       closeModal();
       result(r);
     },
     doAttack: () => {
-      const r = S.attack(state, selected, $("#atTarget").value, checked(), num("atTroops"), $("#atUnit").value);
+      const pick = unitPick("atU_");
+      const r = S.attack(state, selected, $("#atTarget").value, checked(), S.countsTotal(pick), pick);
       if (!r.ok) { toast(r.msg); return; }
       closeModal();
       result(r);
@@ -1258,7 +1291,6 @@
   });
   document.addEventListener("change", (ev) => {
     if (ev.target.id === "defPolicy" && state) { result(S.setDefensePolicy(state, ev.target.dataset.place, ev.target.value)); return; }
-    if (ev.target.id === "garUnit" && state) { result(S.setGarrisonUnit(state, ev.target.dataset.place, ev.target.value)); return; }
     if (modalOnInput) modalOnInput();
   });
   $("#modal").addEventListener("click", (ev) => {

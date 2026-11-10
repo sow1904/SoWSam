@@ -1,6 +1,8 @@
-// Unit types (병종). An army takes the field as one unit type, chosen when it
-// marches out; a place's garrison has its own type, which it fights with when
-// it holds the walls or marches out to meet an army on the road.
+// Unit types (병종). Soldiers are drafted as one type and stay that type.
+// A place's garrison and an army are a mix of types (비율 혼성), kept as
+// shares that add up to 1 (place.unit, march.unit, side.unit): losses fall
+// evenly, so the shares hold until two bodies merge or a type is taken out.
+// A plain type id is a mix of one.
 //
 // Types come in lines (계열). Matchups are between lines; a later type in a
 // line is the same kind of soldier, only better armed. Han foot soldiers
@@ -12,29 +14,29 @@
 // or with 조선 technology; 누선 for a force holding part of 형주 or 양주.
 //
 // Later types in a line wait for technology (js/tech.js); special ones will
-// wait for holding certain lands, and all will need weapons made from wood
-// and iron.
-// TODO: ratio-mixed armies (비율 혼성) instead of one type per army.
+// wait for holding certain lands. Drafting spends wood, iron and horses
+// (js/resources.js), one per soldier for each item in a type's cost.
 (function (S) {
   S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", navy: "수군" };
 
   // atk/def scale what a side deals and how much it shrugs off; tier and
-  // special decide when it can be raised.
+  // special decide when it can be raised; cost is what each soldier is
+  // drafted with (spears and swords are iron, bows wood, horses horses).
   S.UNITS = {
-    jibing: { name: "극병", line: "spear", tier: 1, atk: 1, def: 1 },
-    spearman: { name: "창병", line: "spear", tier: 2, atk: 1.1, def: 1.1 },
-    lightfoot: { name: "경보병", line: "sword", tier: 1, atk: 1, def: 1 },
-    heavyfoot: { name: "중보병", line: "sword", tier: 2, atk: 1.1, def: 1.15 },
-    mountain: { name: "산악병", line: "sword", tier: 2, special: true, atk: 1.05, def: 1, rough: 1.35 },
-    rattan: { name: "등갑병", line: "sword", tier: 2, special: true, atk: 1, def: 1.3, fireWeak: true },
-    archer: { name: "궁병", line: "bow", tier: 1, atk: 1, def: 0.9 },
-    crossbow: { name: "노병", line: "bow", tier: 2, atk: 1.15, def: 0.9 },
-    repeater: { name: "연노병", line: "bow", tier: 3, special: true, atk: 1.3, def: 0.9 },
-    lighthorse: { name: "경기병", line: "horse", tier: 1, atk: 1.05, def: 0.95, fast: true },
-    heavyhorse: { name: "중기병", line: "horse", tier: 2, atk: 1.15, def: 1.1, fast: true },
-    elephant: { name: "상병", line: "horse", tier: 3, special: true, atk: 1.3, def: 1.2 },
-    horsearcher: { name: "궁기병", line: "horsebow", tier: 1, atk: 1, def: 0.9, fast: true },
-    raider: { name: "돌기병", line: "horsebow", tier: 2, special: true, atk: 1.15, def: 0.95, fast: true },
+    jibing: { name: "극병", line: "spear", tier: 1, atk: 1, def: 1, cost: { iron: 1 } },
+    spearman: { name: "창병", line: "spear", tier: 2, atk: 1.1, def: 1.1, cost: { iron: 1, wood: 1 } },
+    lightfoot: { name: "경보병", line: "sword", tier: 1, atk: 1, def: 1, cost: { iron: 1 } },
+    heavyfoot: { name: "중보병", line: "sword", tier: 2, atk: 1.1, def: 1.15, cost: { iron: 2 } },
+    mountain: { name: "산악병", line: "sword", tier: 2, special: true, atk: 1.05, def: 1, rough: 1.35, cost: { iron: 1 } },
+    rattan: { name: "등갑병", line: "sword", tier: 2, special: true, atk: 1, def: 1.3, fireWeak: true, cost: { wood: 2 } },
+    archer: { name: "궁병", line: "bow", tier: 1, atk: 1, def: 0.9, cost: { wood: 1 } },
+    crossbow: { name: "노병", line: "bow", tier: 2, atk: 1.15, def: 0.9, cost: { wood: 1, iron: 1 } },
+    repeater: { name: "연노병", line: "bow", tier: 3, special: true, atk: 1.3, def: 0.9, cost: { wood: 1, iron: 1 } },
+    lighthorse: { name: "경기병", line: "horse", tier: 1, atk: 1.05, def: 0.95, fast: true, cost: { horse: 1, iron: 1 } },
+    heavyhorse: { name: "중기병", line: "horse", tier: 2, atk: 1.15, def: 1.1, fast: true, cost: { horse: 1, iron: 2 } },
+    elephant: { name: "상병", line: "horse", tier: 3, special: true, atk: 1.3, def: 1.2, cost: { iron: 1 } },
+    horsearcher: { name: "궁기병", line: "horsebow", tier: 1, atk: 1, def: 0.9, fast: true, cost: { horse: 1, wood: 1 } },
+    raider: { name: "돌기병", line: "horsebow", tier: 2, special: true, atk: 1.15, def: 0.95, fast: true, cost: { horse: 1, wood: 1 } },
     // ships
     mengchong: { name: "몽충", line: "navy", tier: 1, atk: 1, def: 1 },
     douhan: { name: "투함", line: "navy", tier: 2, atk: 1.15, def: 1.15 },
@@ -70,16 +72,137 @@
   };
 
   S.unitOf = (id) => S.UNITS[id] || S.UNITS[S.DEFAULT_UNIT];
-  S.unitName = (id) => S.unitOf(id).name;
-  S.garrisonUnit = (place) => (place && S.UNITS[place.unit] && S.UNITS[place.unit].line !== "navy" ? place.unit : S.DEFAULT_UNIT);
-  // Which land types a force can raise: up to its technology in the line
+
+  // ---------- mixes ----------
+  // A mix as shares: {id: share}, shares adding up to 1. Accepts a plain id.
+  S.mixOf = function (spec) {
+    if (typeof spec === "string") return { [S.UNITS[spec] ? spec : S.DEFAULT_UNIT]: 1 };
+    const out = {};
+    let sum = 0;
+    for (const [k, v] of Object.entries(spec || {})) if (S.UNITS[k] && v > 0) { out[k] = v; sum += v; }
+    if (!sum) return { [S.DEFAULT_UNIT]: 1 };
+    for (const k in out) out[k] /= sum;
+    return out;
+  };
+  // Shares of n soldiers of a and m of b put together.
+  S.blend = function (a, n, b, m) {
+    const A = S.mixOf(a), B = S.mixOf(b), out = {};
+    n = Math.max(0, n || 0);
+    m = Math.max(0, m || 0);
+    if (n + m <= 0) return A;
+    for (const [k, v] of Object.entries(A)) out[k] = (out[k] || 0) + v * n;
+    for (const [k, v] of Object.entries(B)) out[k] = (out[k] || 0) + v * m;
+    return S.mixOf(out);
+  };
+  // Whole soldiers of each type in n soldiers of a mix (largest remainder).
+  S.mixCounts = function (spec, n) {
+    const mix = S.mixOf(spec);
+    n = Math.max(0, Math.floor(n || 0));
+    const rows = Object.entries(mix).map(([k, v]) => ({ k, x: v * n, c: Math.floor(v * n) }));
+    let left = n - rows.reduce((s, r) => s + r.c, 0);
+    rows.sort((a, b) => (b.x - b.c) - (a.x - a.c));
+    for (const r of rows) if (left > 0) { r.c++; left--; }
+    const out = {};
+    for (const r of rows) if (r.c > 0) out[r.k] = r.c;
+    return out;
+  };
+  S.countsTotal = (counts) => Object.values(counts || {}).reduce((s, v) => s + v, 0);
+  // Ids of a mix, largest share first.
+  S.mixIds = (spec) => Object.entries(S.mixOf(spec)).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  S.mainUnit = (spec) => S.mixIds(spec)[0];
+  // A short name: the type itself, or the two largest parts of a mix.
+  S.unitName = function (spec) {
+    const mix = S.mixOf(spec);
+    const ids = S.mixIds(mix).filter((k) => mix[k] >= 0.05);
+    if (ids.length <= 1) return S.unitOf(ids[0] || S.mainUnit(mix)).name;
+    return ids.slice(0, 2).map((k) => S.unitOf(k).name).join("·") + (ids.length > 2 ? " 등" : "") + " 혼성";
+  };
+  // The full make-up of n soldiers: "극병 3000, 궁병 2000".
+  S.mixText = (spec, n) => Object.entries(S.mixCounts(spec, n)).sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${S.unitOf(k).name} ${v}`).join(", ") || "없음";
+  // Shares by line, for the research AI and the like.
+  S.lineShares = function (spec) {
+    const out = {};
+    for (const [k, v] of Object.entries(S.mixOf(spec))) out[S.unitOf(k).line] = (out[S.unitOf(k).line] || 0) + v;
+    return out;
+  };
+
+  // What a place's garrison fights as: its mix of land types.
+  S.garrisonUnit = function (place) {
+    const mix = S.mixOf(place && place.unit);
+    for (const k of Object.keys(mix)) if (S.unitOf(k).line === "navy") delete mix[k];
+    return S.mixOf(mix);
+  };
+  // Soldiers of each type a place can send out (gentry retainers stay).
+  S.available = (place) => S.mixCounts(S.garrisonUnit(place), Math.max(0, place.troops - (place.retainers || 0)));
+  // Take whole soldiers of given types out of a place. Returns the shares of
+  // what left, or null if the place lacks them.
+  S.takeTroops = function (place, counts) {
+    const have = S.available(place);
+    const n = S.countsTotal(counts);
+    if (n <= 0) return null;
+    for (const [k, v] of Object.entries(counts)) if (v > 0 && (have[k] || 0) < v) return null;
+    const all = S.mixCounts(S.garrisonUnit(place), place.troops);
+    for (const [k, v] of Object.entries(counts)) all[k] = (all[k] || 0) - v;
+    place.troops -= n;
+    if (place.troops > 0) place.unit = S.mixOf(all);
+    return S.mixOf(counts);
+  };
+  // Soldiers of a mix join a place.
+  S.addTroops = function (place, spec, n) {
+    if (!(n > 0)) return;
+    place.unit = S.blend(S.garrisonUnit(place), Math.max(0, place.troops), spec, n);
+    place.troops += n;
+  };
+  // Choose n soldiers from what a place has, leaning toward types weighted
+  // higher (weight(id) > 0). Returns whole counts.
+  S.pickTroops = function (place, n, weight) {
+    const have = S.available(place);
+    const out = {};
+    const room = (k) => have[k] - (out[k] || 0);
+    let left = Math.min(Math.floor(n), S.countsTotal(have));
+    while (left > 0) {
+      const open = Object.keys(have).filter((k) => room(k) > 0);
+      if (!open.length) break;
+      const w = (k) => room(k) * Math.max(0.0001, weight ? weight(k) : 1);
+      const sum = open.reduce((s, k) => s + w(k), 0);
+      let given = 0;
+      for (const k of open) {
+        const v = Math.min(room(k), Math.floor((left * w(k)) / sum));
+        out[k] = (out[k] || 0) + v;
+        given += v;
+      }
+      if (!given) {
+        const k = open.reduce((a, b) => (w(b) > w(a) ? b : a));
+        const v = Math.min(left, room(k));
+        out[k] = (out[k] || 0) + v;
+        given = v;
+      }
+      left -= given;
+    }
+    for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+    return out;
+  };
+
+  // Which land types a force can draft: up to its technology in the line
   // (js/tech.js). Special types will need certain lands.
   S.canRaise = (state, fid, id) => {
     const u = S.UNITS[id];
     return !!u && u.line !== "navy" && !u.special && u.tier <= (S.lineLevel ? S.lineLevel(state, fid, u.line) : 1);
   };
   S.raisable = (state, fid) => Object.keys(S.UNITS).filter((id) => S.canRaise(state, fid, id));
-  S.unitSpeed = (id) => (S.unitOf(id).fast ? "cavalry" : "army");
+  // An army marches at the pace of its slowest part.
+  S.unitSpeed = (spec) => (Object.keys(S.mixOf(spec)).every((k) => S.unitOf(k).fast) ? "cavalry" : "army");
+  // How many soldiers of a type a city's stores can arm.
+  S.armable = function (c, id) {
+    let n = Infinity;
+    for (const [k, v] of Object.entries(S.unitOf(id).cost || {})) n = Math.min(n, Math.floor(((c.res && c.res[k]) || 0) / v));
+    return n === Infinity ? 1e9 : n;
+  };
+  S.costText = (id, n) => Object.entries(S.unitOf(id).cost || {}).map(([k, v]) => `${S.RESOURCES[k]} ${v * n}`).join(", ");
+  S.payCost = function (c, id, n) {
+    for (const [k, v] of Object.entries(S.unitOf(id).cost || {})) c.res[k] -= v * n;
+  };
 
   // The ships a side fights in on a great river: 투함 under a naval
   // specialist or with 조선 technology, else 몽충.
@@ -87,10 +210,9 @@
   S.fleet = (state, fid, officers) =>
     officers.some((o) => S.hasSkill(o, "수전")) || (S.lineLevel && S.lineLevel(state, fid, "navy") >= 2) ? "douhan" : "mengchong";
 
-  // A side's multiplier on what it deals, against a foe of type `foe`.
+  // One type's multiplier on what it deals, against a foe type.
   //   where: "water" | "field" | "siegeA" | "siegeD"; rough: the road's roughness (1 = easy)
-  // On the water both sides are ships, so only their tiers count.
-  S.unitMul = function (id, foe, where, rough) {
+  function typeMul(id, foe, where, rough) {
     const u = S.unitOf(id), f = foe ? S.unitOf(foe) : null;
     const set = SETTING[where] || SETTING.field;
     let m = u.atk * (set[u.line] || set.other);
@@ -102,11 +224,22 @@
       if (u.rough) m *= u.rough;
     }
     return m;
+  }
+  // A side's multiplier against another: every part of one mix against every
+  // part of the other, weighted by their shares. Plain ids work too.
+  S.unitMul = function (spec, foe, where, rough) {
+    const A = S.mixOf(spec), F = foe ? S.mixOf(foe) : null;
+    let m = 0;
+    for (const [a, sa] of Object.entries(A)) {
+      if (!F) { m += sa * typeMul(a, null, where, rough); continue; }
+      for (const [f, sf] of Object.entries(F)) m += sa * sf * typeMul(a, f, where, rough);
+    }
+    return m;
   };
   // How one side fares against the other: the ratio of what each deals.
-  S.unitEdge = (id, foe, where, rough) => S.unitMul(id, foe, where, rough) / S.unitMul(foe, id, where, rough);
+  S.unitEdge = (spec, foe, where, rough) => S.unitMul(spec, foe, where, rough) / S.unitMul(foe, spec, where, rough);
 
-  // Pick the type that fares best against `foe` in a setting, from those a force can raise.
+  // The type a force would most like to draft against a foe.
   S.bestUnitVs = function (state, fid, foe, where, rough) {
     let best = null;
     for (const id of S.raisable(state, fid)) {
@@ -116,11 +249,9 @@
     return best ? best.id : S.DEFAULT_UNIT;
   };
 
-  // Change the type a place's garrison fights with.
-  S.setGarrisonUnit = function (state, id, unit) {
-    const p = S.place(state, id);
-    if (!p || !S.canRaise(state, p.owner, unit)) return { ok: false, msg: "그 병종은 아직 쓸 수 없습니다." };
-    p.unit = unit;
-    return { ok: true, msg: `${p.name}의 수비 병종을 ${S.unitName(unit)}으로 정했습니다.` };
-  };
+  // The garrison a city starts a game with: mostly foot, archers on the
+  // walls, and more horsemen in the horse country.
+  S.startMix = (c) => (S.regionMul && S.regionMul(c, "horse") > 0
+    ? { jibing: 0.25, lightfoot: 0.2, archer: 0.2, lighthorse: 0.2, horsearcher: 0.15 }
+    : { jibing: 0.35, lightfoot: 0.3, archer: 0.25, lighthorse: 0.1 });
 })(globalThis.SAM = globalThis.SAM || {});
