@@ -30,10 +30,13 @@
   }
 
   // ---------- rendering ----------
+  let panelOf = null; // the place the panel showed last, to keep its scroll
   function renderAll() {
     renderStatus();
     renderMap();
-    renderPanel();
+    if (panelOf === selected) keepScroll(renderPanel);
+    else renderPanel();
+    panelOf = selected;
     renderLog();
   }
 
@@ -298,6 +301,7 @@
 
   function renderPanel() {
     const p = $("#panel");
+    p.classList.remove("split");
     if (!selected) {
       p.innerHTML = `<h2>도시를 선택하세요</h2><p class="hint">지도에서 도시를 누르면 정보와 명령이 나옵니다. ` +
         `무장마다 한 달에 한 번 명령할 수 있습니다. 시간은 「▶ 진행」이나 스페이스 바로 흐르게 합니다.</p>` +
@@ -336,7 +340,9 @@
       `</div>` +
       (own ? `<p class="hint">호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. ` +
         `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.</p>` : "");
-    html += roadList(c) + battleList(c.id);
+    // Everything above stays in view; from here on the panel scrolls.
+    const head = html;
+    html = roadList(c) + battleList(c.id);
     if (own) html += delegateRow(c) + policyRow(c.id) + garrisonRow(c.id);
     if (own) {
       html += `<h3>월 수지 내역</h3><div class="stats">` +
@@ -377,7 +383,8 @@
     }).join("")}</div>`;
     const sites = S.buildSites(state, c.id);
     if (sites.length) html += `<p class="hint">축성할 수 있는 터: ${sites.map((f) => f.name).join(", ")}. 축성 특기가 있는 무장이 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓습니다.</p>`;
-    p.innerHTML = html;
+    p.classList.add("split");
+    p.innerHTML = `<div class="pfix">${head}</div><div class="pscroll">${html}</div>`;
   }
 
   // What the commander does when an enemy army comes: march out to meet it on
@@ -994,9 +1001,10 @@
 
   function keepScroll(fn) {
     const p = $("#panel");
-    const top = p.scrollTop;
+    const box = () => [p, p.querySelector(".pfix"), p.querySelector(".pscroll")];
+    const tops = box().map((el) => el && el.scrollTop);
     fn();
-    p.scrollTop = top;
+    box().forEach((el, i) => { if (el && tops[i] != null) el.scrollTop = tops[i]; });
   }
 
   // Finished battles stay on the map as cards until dismissed.
