@@ -93,13 +93,15 @@
   S.finishBuild = function (state, m) {
     const f = state.forts[m.fort];
     const c = state.cities[m.origin];
-    S.releaseMarch(state, m);
     f.building = null;
     const mine = m.force === state.playerForce;
     if (!state.forces[m.force].alive || c.owner !== m.force) {
       if (mine) S.addLog(state, `${c.name}을 잃어 ${f.name} 공사가 중단되었습니다.`, "warn");
+      // The builders cannot go back to a lost city: they head for the nearest own one.
+      S.reroute(state, m, m.origin);
       return;
     }
+    S.releaseMarch(state, m);
     f.built = true;
     f.owner = m.force;
     f.wall = Math.round(f.wallMax * 0.6);

@@ -9,11 +9,11 @@
 //
 // Ships are not chosen: a battle on a great river is fought in whatever
 // ships a side has. 몽충 by default; 투함 when a naval specialist (수전) leads
-// (later also by technology); 누선 for a force holding part of 형주 or 양주.
+// or with 조선 technology; 누선 for a force holding part of 형주 or 양주.
 //
-// For now only the first type of each line can be raised. Later types wait
-// for technology (기술), special ones for holding certain lands; both will
-// need weapons made from wood and iron.
+// Later types in a line wait for technology (js/tech.js); special ones will
+// wait for holding certain lands, and all will need weapons made from wood
+// and iron.
 // TODO: ratio-mixed armies (비율 혼성) instead of one type per army.
 (function (S) {
   S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", navy: "수군" };
@@ -71,18 +71,21 @@
 
   S.unitOf = (id) => S.UNITS[id] || S.UNITS[S.DEFAULT_UNIT];
   S.unitName = (id) => S.unitOf(id).name;
-  S.garrisonUnit = (place) => (place && S.canRaise(null, null, place.unit) ? place.unit : S.DEFAULT_UNIT);
-  // Which land types a force can raise. Later types wait for technology and land.
+  S.garrisonUnit = (place) => (place && S.UNITS[place.unit] && S.UNITS[place.unit].line !== "navy" ? place.unit : S.DEFAULT_UNIT);
+  // Which land types a force can raise: up to its technology in the line
+  // (js/tech.js). Special types will need certain lands.
   S.canRaise = (state, fid, id) => {
     const u = S.UNITS[id];
-    return !!u && u.line !== "navy" && u.tier === 1 && !u.special;
+    return !!u && u.line !== "navy" && !u.special && u.tier <= (S.lineLevel ? S.lineLevel(state, fid, u.line) : 1);
   };
   S.raisable = (state, fid) => Object.keys(S.UNITS).filter((id) => S.canRaise(state, fid, id));
   S.unitSpeed = (id) => (S.unitOf(id).fast ? "cavalry" : "army");
 
-  // The ships a side fights in on a great river.
-  // TODO: 투함 by technology; 누선 for a force holding part of 형주 or 양주.
-  S.fleet = (state, fid, officers) => (officers.some((o) => S.hasSkill(o, "수전")) ? "douhan" : "mengchong");
+  // The ships a side fights in on a great river: 투함 under a naval
+  // specialist or with 조선 technology, else 몽충.
+  // TODO: 누선 for a force holding part of 형주 or 양주.
+  S.fleet = (state, fid, officers) =>
+    officers.some((o) => S.hasSkill(o, "수전")) || (S.lineLevel && S.lineLevel(state, fid, "navy") >= 2) ? "douhan" : "mengchong";
 
   // A side's multiplier on what it deals, against a foe of type `foe`.
   //   where: "water" | "field" | "siegeA" | "siegeD"; rough: the road's roughness (1 = easy)

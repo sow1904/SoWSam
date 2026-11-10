@@ -274,6 +274,7 @@
       officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, origin: from, target: to.id });
     if (m.force === state.playerForce) S.addLog(state, `${here.name}에 갈 수 없게 되어 ${S.ro(to.name)} 방향을 돌립니다.`, "warn");
   }
+  S.reroute = reroute;
   // A beaten army falls back the way it came.
   S.sendHome = function (state, m, survivors) {
     const team = crew(state, m);

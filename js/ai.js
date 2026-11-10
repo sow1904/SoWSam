@@ -201,6 +201,9 @@
       const o = take(byDesc("wit"));
       S.search(state, o.id, c.id);
     }
+    // Research the arms the force fights with.
+    const studied = S.researchAI(state, c, idle);
+    if (studied) idle = idle.filter((x) => x !== studied);
     // A cunning officer on the frontier spreads rumours or sows discord next door.
     if (frontier && idle.length > 1 && c.gold > 600 && S.chance(state, 30)) {
       const o = [...idle].sort(byDesc("plot"))[0];

@@ -301,7 +301,7 @@
     if (own) html += postsTable(c);
     if (own) {
       html += `<h3>명령</h3><div class="cmds">` +
-        cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("recruit", "등용") +
+        cmdButton("draft", "징병") + cmdButton("train", "훈련") + cmdButton("search", "탐색") + cmdButton("research", "연구") + cmdButton("recruit", "등용") +
         cmdButton("relocate", "이동") + cmdButton("move", "수송") + cmdButton("attack", "출진") + cmdButton("scheme", "계략") +
         cmdButton("woo", "회유") + cmdButton("reward", "포상", true) +
         (S.buildSites(state, c.id).length ? cmdButton("build", "축성") : "") +
@@ -504,6 +504,26 @@
       pending = { cmd };
       officerPicker(def.title, `실행할 무장을 고르세요. ${S.STAT_NAMES[def.stat]} 능력이 높을수록 효과가 큽니다.`, list, "doSimple",
         (o) => def.preview(o, c));
+    },
+    research() {
+      const c = state.cities[selected];
+      const fid = c.owner;
+      const fields = Object.keys(S.TECH);
+      const open = fields.filter((k) => S.techLevel(state, fid, k) < S.techMax(k));
+      const rows = fields.map((k) => {
+        const lv = S.techLevel(state, fid, k), max = S.techMax(k);
+        const t = (state.forces[fid].tech || {})[k];
+        const next = lv < max ? `${t ? t.pts : 0}/${S.techNeed(lv)} → ${S.techUnlocks(k, lv + 1).join(", ") || "-"}` : "완료";
+        return `<tr><td>${S.TECH[k].name}</td><td>${lv}/${max}</td><td>${next}</td></tr>`;
+      }).join("");
+      if (!open.length) { toast("연구할 수 있는 기술을 모두 올렸습니다."); return; }
+      const list = S.idle(state, c.id).sort((a, b) => b.wit - a.wit);
+      openModal(`<h2>연구</h2><p class="hint">무장 한 명이 한 달 동안 금 ${S.TECH_COST}을 들여 기술을 연구합니다. 지략이 높을수록 많이 나아갑니다. ` +
+        `기술은 세력 전체의 것이고, 단계가 오르면 그 계열의 상위 병종을 쓸 수 있습니다. 조선 기술이 2단계면 강 위에서 투함으로 싸웁니다.</p>` +
+        `<table><tr><th>기술</th><th>단계</th><th>다음 단계</th></tr>${rows}</table>` +
+        `<div class="row"><label>연구할 기술</label><select id="rsField">${open.map((k) => `<option value="${k}">${S.TECH[k].name}</option>`).join("")}</select></div>` +
+        officerTable(list, { pick: "doResearch", extraHead: "진척", extra: (o) => `+${S.researchPoints(o)}` }) +
+        `<div class="footer"><button data-action="close">취소</button></div>`, true);
     },
     recruit() {
       const c = state.cities[selected];
@@ -952,8 +972,9 @@
       .map(({ f, t }) => `<tr><td><span style="color:${f.color}">■</span> ${f.name}군${f.emperor ? " (황제)" : ""}${f.id === state.playerForce ? " (나)" : ""}</td>` +
         `<td>${S.regime(state, f.id).label}</td><td>${t.cities}</td><td>${t.officers}</td><td>${fmt(t.troops)}</td><td>${fmt(t.manpower)}</td>` +
         `<td>${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</td><td>${fmt(t.gold)}</td><td>${fmt(t.food)}</td>` +
+        `<td>${Object.keys(S.TECH).filter((k) => S.techLevel(state, f.id, k) > 1).map((k) => S.TECH[k].name + S.techLevel(state, f.id, k)).join(" ") || "-"}</td>` +
         `<td>${S.allies(state, f.id).map((a) => state.forces[a].name).join(", ") || "-"}</td><td>${diplomacyCell(f.id)}</td></tr>`).join("");
-    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th><th>동맹</th><th>외교</th></tr>${rows}</table>` +
+    openModal(`<h2>세력 정보</h2><table><tr><th>세력</th><th>체제</th><th>도시</th><th>무장</th><th>병력</th><th>병역 인구</th><th>전쟁 피로</th><th>금</th><th>군량</th><th>기술</th><th>동맹</th><th>외교</th></tr>${rows}</table>` +
       `<p class="hint">동맹을 맺은 세력끼리는 서로 공격하지 않습니다. 동맹 제의에는 예물로 금 ${S.PACT_COST}이 들고, 같은 세력에는 한 달에 한 번만 제의할 수 있습니다. ` +
       `동맹을 파기하면 내 모든 도시의 치안이 5 떨어지고, ${S.PACT_COOLDOWN}개월 동안 다시 동맹을 맺을 수 없습니다. 컴퓨터 세력도 더 싸울 상대가 없거나 동맹이 훨씬 약해지면 동맹을 깰 수 있습니다.</p>` +
       `<p class="hint">병역 인구는 징병할 수 있는 장정 수입니다. 전사자는 돌아오지 않고, 인구에서 조금씩 회복됩니다. ` +
@@ -1125,6 +1146,12 @@
       const spec = d.empty ? null : d.oid ? { type: "officer", id: d.oid } : { type: "clerk", tier: +d.tier };
       const r = S.assignPost(state, selected, d.kind, spec);
       if (r.ok) closeModal();
+      result(r);
+    },
+    doResearch: (d) => {
+      const r = S.research(state, d.oid, selected, $("#rsField").value);
+      if (!r.ok) { toast(r.msg); return; }
+      closeModal();
       result(r);
     },
     doSimple: (d) => {
