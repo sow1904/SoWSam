@@ -204,10 +204,10 @@
   // served 유주; the Yangzi fleets were built from 남양 down to 오.
   S.SPECIAL = {
     mountain: { cities: ["wuling", "lingling", "guiyang", "yuzhang", "kuaiji"], label: "무릉, 영릉, 계양, 예장, 회계" },
-    rattan: { cities: ["zangke", "yuexi", "yizhoujun", "yongchang"], label: "남중(장가, 월수, 익주군, 영창)" },
+    rattan: { prov: "nanzhong", label: "남중" },
     elephant: { prov: "jiao", label: "교주" },
     raider: { prov: "you", label: "유주" },
-    louchuan: { cities: ["nanyang", "nanjun", "jiangxia", "changsha", "lujiang", "jiujiang", "danyang", "wujun"], label: "장강(남양, 남군, 강하, 장사, 여강, 구강, 단양, 오군)" },
+    louchuan: { cities: ["nanyang", "xiangyang", "nanjun", "jiangxia", "wuchang", "changsha", "lujiang", "jiujiang", "danyang", "wujun"], label: "장강과 한수(남양, 양양, 강릉, 강하, 무창, 장사, 여강, 구강, 건업, 오군)" },
     repeater: { prov: "yi", research: "repeater", label: "익주" },
     bodao: { prov: "yi", research: "bodao", label: "익주" },
   };

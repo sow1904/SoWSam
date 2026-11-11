@@ -72,7 +72,7 @@
   </main>
   <div id="toast"></div>
 
-  <script src="../js/data/map190.js"></script>
+  <script src="../js/data/map.js"></script>
   <script src="../js/forts.js"></script>
   <script src="../js/march.js"></script>
   <script src="../js/battle.js"></script>
@@ -80,7 +80,7 @@
   (function (S) {
     const KEY = "sowsam.editor.pos.190.v2"; // v2: fitted to the redrawn map (one Yellow River)
     const $ = (s) => document.querySelector(s);
-    S.MAP = S.MAPS["190"];
+    S.MAP = S.MAPS["main"];
     const T = S.MAP.terrain;
     const svg = $("#map");
 
@@ -90,7 +90,7 @@
       const [x, y] = S.placeXY(id, c[3], c[4]);
       nodes[id] = { id, name: c[0], kind: "city", x, y, x0: x, y0: y };
     }
-    for (const [id, f] of Object.entries(S.FORT_SITES["190"])) {
+    for (const [id, f] of Object.entries(S.FORT_SITES["main"])) {
       const [x, y] = S.placeXY(id, f[5], f[6]);
       nodes[id] = { id, name: f[0], kind: f[7] ? "fort" : "site", fortKind: f[1], x, y, x0: x, y0: y };
     }
@@ -139,13 +139,13 @@
       g.setAttribute("class", `node ${n.kind}${moved(n) ? " moved" : ""}${selected === n.id ? " sel" : ""}`);
     }
     // Enough of a game state for S.waterLink to tell passes from forts.
-    const fortState = { forts: Object.fromEntries(Object.entries(S.FORT_SITES["190"]).map(([id, f]) => [id, { kind: f[1] }])) };
+    const fortState = { forts: Object.fromEntries(Object.entries(S.FORT_SITES["main"]).map(([id, f]) => [id, { kind: f[1] }])) };
     function drawRoads() {
       const g = $("#roads");
       g.innerHTML = S.MAP.roads.map(([a, b]) => {
         const A = nodes[a], B = nodes[b];
         // Roads bend through built strongholds that sit on them.
-        const via = Object.values(nodes).filter((n) => n.kind === "fort" && S.siteRoad(S.FORT_SITES["190"][n.id]).slice(1).some((e) => [S.FORT_SITES["190"][n.id][2], e].sort().join() === [a, b].sort().join()))
+        const via = Object.values(nodes).filter((n) => n.kind === "fort" && S.siteRoad(S.FORT_SITES["main"][n.id]).slice(1).some((e) => [S.FORT_SITES["main"][n.id][2], e].sort().join() === [a, b].sort().join()))
           .sort((p, q) => Math.hypot(p.x - A.x, p.y - A.y) - Math.hypot(q.x - A.x, q.y - A.y));
         // Each piece of the road on its own: pieces that cross a great river are blue.
         const chain = [A, ...via, B];
@@ -286,7 +286,7 @@
       }
     });
     function exportJSON() {
-      const out = { map: "190", note: "SoWSam map editor", cities: {}, forts: {}, moved: [] };
+      const out = { map: "main", note: "SoWSam map editor", cities: {}, forts: {}, moved: [] };
       for (const n of Object.values(nodes)) {
         (n.kind === "city" ? out.cities : out.forts)[n.id] = [n.x, n.y];
         if (moved(n)) out.moved.push(n.id);

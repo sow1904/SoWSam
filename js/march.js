@@ -12,18 +12,23 @@
   // Mountain roads and gorges, by how much longer they take.
   const ROUGH = {
     "youfufeng|hanzhong": 1.6, // 포사도
-    "wudu|hanzhong": 1.4,
-    "hanzhong|guanghan": 1.5, // 금우도
+    "hanyang|hanzhong": 1.4, // 기산도
+    "hanzhong|zitong": 1.5, // 금우도
     "bajun|jiameng": 1.2, // 가릉강 골짜기를 거슬러
-    "wudu|guanghan": 1.8, // 음평도
-    "bajun|nanjun": 1.4, // 장강 삼협
+    "longxi|guanghan": 1.8, // 음평도
+    "nanjun|badong": 1.4, // 장강 삼협
+    "bajun|badong": 1.2,
+    "xincheng|hanzhong": 1.5, "xiangyang|xincheng": 1.3, // 한수 상류의 산길
     "bajun|zangke": 1.5, // 야랑도
-    "qianwei|yuexi": 1.4, "yuexi|yizhoujun": 1.4, "yuexi|zangke": 1.2,
+    "shujun|yuexi": 1.4, "yuexi|yizhoujun": 1.4, "yuexi|zangke": 1.2,
+    "zangke|cangwu": 1.5, "yizhoujun|jiaozhi": 1.4,
     "hongnong|jingzhao": 1.2, // 동관
     "henan|hongnong": 1.2, // 함곡관
-    "daijun|shanggu": 1.3, "daijun|yanmen": 1.3, // 연산과 항산 사이 골짜기
-    "youbeiping|liaoxi": 1.5, // 노룡새, 조조의 오환 정벌길
+    "zhuo|daijun": 1.3, "guangyang|daijun": 1.3, "daijun|yanmen": 1.3, // 연산과 항산 사이 골짜기
+    "guangyang|liaoxi": 1.5, // 노룡새, 조조의 오환 정벌길
+    "liaoxi|liaodong": 1.4, "liaoxi|xuantu": 1.5, // 요택
     "hedong|shangdang": 1.3, "shangdang|taiyuan": 1.3, // 태항산
+    "changshan|taiyuan": 1.3, // 정형
   };
   const key = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
   S.roadKey = key;

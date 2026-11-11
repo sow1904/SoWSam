@@ -27,14 +27,15 @@
   for (const [a, b] of [
     // 장강
     ["jiujiang", "danyang"], ["lujiang", "danyang"], ["guangling", "danyang"], ["guangling", "wujun"], ["wujun", "kuaiji"],
-    ["nanjun", "jiangxia"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["jiangxia", "changsha"], ["jiangxia", "yuzhang"],
-    ["jiangxia", "lujiang"], ["lujiang", "yuzhang"], ["danyang", "hefei"], // 유수구
+    ["nanjun", "wuchang"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["wuchang", "changsha"], ["wuchang", "yuzhang"],
+    ["wuchang", "lujiang"], ["lujiang", "yuzhang"], ["jiangxia", "wuchang"], ["danyang", "hefei"], // 유수구
     // 황하
-    ["henan", "henei"], ["henan", "hedong"], ["henei", "dongjun"], ["dongjun", "qinghe"], ["dongjun", "weijun"],
-    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["qinghe", "dongping"], ["qinghe", "jibei"],
-    ["jibei", "pingyuan"], ["pingyuan", "jinan"], ["jinan", "lean"], ["lean", "qiguo"],
+    ["henan", "henei"], ["henan", "hedong"], ["henei", "dongjun"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
+    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["pingyuan", "jinan"],
     // 한수: 번성에서 양양으로 건넌다
     ["nanyang", "xiangyang"],
+    // 바닷길
+    ["donglai", "liaodong"], ["donglai", "wujun"],
   ]) WATER[S.roadKey(a, b)] = true;
   const isPass = (state, id) => S.isFort(state, id) && state.forts[id].kind === "pass";
   S.isWater = (a, b) => !!WATER[S.roadKey(a, b)];

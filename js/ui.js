@@ -24,7 +24,9 @@
   function loadSaved() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      const saved = raw ? JSON.parse(raw) : null;
+      // A save from a map that is gone (the 99-commandery map) cannot be played on.
+      return saved && S.MAPS[saved.map] ? saved : null;
     } catch (e) {
       return null;
     }

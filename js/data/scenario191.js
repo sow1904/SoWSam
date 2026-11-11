@@ -2,8 +2,10 @@
 // Summer 191. 동탁 has burned 낙양 and withdrawn to 장안, and the coalition
 // against him has broken up. 원소 has just taken 기주 from 한복, and 조조 is
 // about to become 동군태수. Who held which commandery follows the histories,
-// with some simplification. Commanderies not listed under any force are held
-// by local administrators and start neutral.
+// with some simplification: the map keeps about four cities to a province, so
+// a lord whose commandery is not on it starts in the nearest city that is
+// (포신 of 제북 in 태산, 유총 of 진국 in 초군, 공손찬 in 탁군). Cities not listed
+// under any force are held by local administrators and start neutral.
 (function (S) {
   // Officer line: "name @city"; abilities are in data/abilities.js and birth
   // and death years in data/people.js. The first officer of a force is its
@@ -11,7 +13,7 @@
   // joining the force they are listed under if it still exists.
   S.SCENARIO_191 = {
     id: "191",
-    map: "190",
+    map: "main",
     title: "191년 군웅할거",
     desc: "동탁이 낙양을 불태우고 장안으로 물러났다. 반동탁 연합은 흩어지고, 관동의 군웅은 서로의 땅을 노린다.",
     year: 191,
@@ -44,10 +46,7 @@
       },
       {
         id: "yuanshao", name: "원소", color: "#c9a227",
-        cities: {
-          weijun: 16000, bohai: 12000, julu: 6000, changshan: 5000, zhongshan: 6000,
-          anping: 5000, hejian: 5000, qinghe: 6000, zhaoguo: 4000,
-        },
+        cities: { weijun: 20000, bohai: 12000, julu: 9000, changshan: 8000, hejian: 6000 },
         officers: [
           "원소 @weijun", "안량 @weijun", "문추 @weijun",
           "전풍 @weijun", "저수 @weijun", "심배 @weijun",
@@ -56,7 +55,7 @@
           "진림 @weijun",
           "원담 @bohai", "고간 @bohai", "원희 @bohai",
           "원상 @weijun",
-          "장합 @hejian", "국의 @julu", "고람 @zhongshan",
+          "장합 @hejian", "국의 @julu", "고람 @changshan",
         ],
       },
       {
@@ -78,13 +77,13 @@
       },
       {
         id: "liudai", name: "유대", color: "#b0a4d8",
-        cities: { shanyang: 8000, jiyin: 5000, dongping: 5000 },
+        cities: { shanyang: 13000 },
         officers: ["유대 @shanyang"],
       },
       {
         id: "baoxin", name: "포신", color: "#7b9e89",
-        cities: { jibei: 7000 },
-        officers: ["포신 @jibei", "우금 @jibei"],
+        cities: { taishan: 7000 },
+        officers: ["포신 @taishan", "우금 @taishan"],
       },
       {
         id: "zhangchao", name: "장초", color: "#a3785f",
@@ -93,8 +92,8 @@
       },
       {
         id: "liuchong", name: "유총", color: "#e07b39",
-        cities: { chenguo: 10000 },
-        officers: ["유총 @chenguo", "낙준 @chenguo"],
+        cities: { qiao: 10000 },
+        officers: ["유총 @qiao", "낙준 @qiao"],
       },
       {
         id: "yuanshu", name: "원술", color: "#d2691e",
@@ -119,38 +118,39 @@
       },
       {
         id: "liubiao", name: "유표", color: "#2e8b57",
-        cities: { nanjun: 14000, jiangxia: 6000, wuling: 3000, lingling: 4000, guiyang: 3000 },
+        // 유표 governed from 양양; 황조 held 강하 from 하구.
+        cities: { xiangyang: 12000, nanjun: 8000, wuchang: 6000, jiangxia: 3000, wuling: 3000, lingling: 4000, guiyang: 3000 },
         officers: [
-          "유표 @nanjun", "괴량 @nanjun", "괴월 @nanjun",
-          "채모 @nanjun", "장윤 @nanjun", "문빙 @nanjun",
-          "한숭 @nanjun", "유선 @nanjun", "부손 @nanjun",
-          "유기 @nanjun", "유종 @nanjun",
-          "황조 @jiangxia",
+          "유표 @xiangyang", "괴량 @xiangyang", "괴월 @xiangyang",
+          "채모 @xiangyang", "장윤 @xiangyang", "문빙 @nanjun",
+          "한숭 @xiangyang", "유선 @xiangyang", "부손 @nanjun",
+          "유기 @xiangyang", "유종 @xiangyang",
+          "황조 @wuchang",
           "왕위 @wuling",
           "황충 @lingling", "유반 @guiyang",
         ],
       },
       {
         id: "gongsunzan", name: "공손찬", color: "#e8e8e8",
-        cities: { youbeiping: 13000, liaoxi: 5000 },
+        cities: { zhuo: 13000, liaoxi: 6000 },
         officers: [
-          "공손찬 @youbeiping", "조운 @youbeiping", "엄강 @youbeiping",
-          "전해 @youbeiping", "공손범 @youbeiping", "관정 @youbeiping",
-          "단경 @youbeiping", "추단 @liaoxi", "공손속 @liaoxi",
+          "공손찬 @zhuo", "조운 @zhuo", "엄강 @zhuo",
+          "전해 @zhuo", "공손범 @zhuo", "관정 @zhuo",
+          "단경 @zhuo", "추단 @liaoxi", "공손속 @liaoxi",
         ],
       },
       {
         id: "liuyu", name: "유우", color: "#7fb3d5",
-        cities: { guangyang: 10000, zhuo: 6000, yuyang: 6000, shanggu: 3000, daijun: 3000 },
+        cities: { guangyang: 16000, daijun: 6000 },
         officers: [
           "유우 @guangyang", "선우보 @guangyang", "전주 @guangyang",
           "위유 @guangyang", "제주 @guangyang",
-          "염유 @yuyang", "선우은 @zhuo",
+          "염유 @guangyang", "선우은 @daijun",
         ],
       },
       {
         id: "gongsundu", name: "공손도", color: "#5f9ea0",
-        cities: { liaodong: 9000, xuantu: 4000 },
+        cities: { liaodong: 12000, xuantu: 4000, lelang: 4000, daifang: 2000 },
         officers: [
           "공손도 @liaodong", "공손강 @liaodong", "공손공 @liaodong",
           "유의 @liaodong", "양의 @xuantu",
@@ -172,24 +172,24 @@
       },
       {
         id: "taoqian", name: "도겸", color: "#9370db",
-        cities: { donghai: 10000, langya: 6000, pengcheng: 6000, xiapi: 8000 },
+        cities: { donghai: 14000, pengcheng: 6000, xiapi: 8000 },
         officers: [
           "도겸 @donghai", "미축 @donghai", "미방 @donghai",
           "조굉 @donghai", "왕랑 @donghai", "조욱 @donghai",
           "진규 @xiapi", "진등 @xiapi",
-          "장패 @langya", "손관 @langya",
+          "장패 @donghai", "손관 @donghai",
           "조표 @pengcheng", "착융 @pengcheng", "설례 @pengcheng",
         ],
       },
       {
         id: "liuyan", name: "유언", color: "#b8860b",
-        cities: { guanghan: 10000, shujun: 12000, qianwei: 5000, bajun: 8000 },
+        cities: { guanghan: 10000, shujun: 14000, bajun: 8000, zitong: 4000, badong: 3000 },
         officers: [
           "유언 @guanghan", "유장 @guanghan", "오의 @guanghan",
           "방희 @guanghan",
           "장임 @shujun", "장송 @shujun", "조위 @shujun",
           "장숙 @shujun",
-          "가룡 @qianwei", "임기 @qianwei",
+          "가룡 @shujun", "임기 @shujun",
           "황권 @bajun", "엄안 @bajun",
         ],
       },
@@ -225,10 +225,10 @@
       },
       {
         id: "shixie", name: "사섭", color: "#20b2aa",
-        cities: { jiaozhi: 7000, hepu: 3000, jiuzhen: 3000, nanhai: 5000 },
+        cities: { jiaozhi: 10000, rinan: 3000, nanhai: 5000 },
         officers: [
-          "사섭 @jiaozhi", "사휘 @jiaozhi", "사일 @hepu",
-          "사유 @jiuzhen", "사무 @nanhai",
+          "사섭 @jiaozhi", "사휘 @jiaozhi", "사일 @jiaozhi",
+          "사유 @rinan", "사무 @nanhai",
         ],
       },
     ],
@@ -243,13 +243,13 @@
       "곽가 @yingchuan", "희지재 @yingchuan", "서서 @yingchuan",
       "진군 @yingchuan", "종회 @yingchuan",
       "한복 @chenliu", "전위 @chenliu",
-      "허저 @peiguo", "하후패 @peiguo",
+      "허저 @qiao", "하후패 @qiao",
       "정욱 @dongjun", "진궁 @dongjun", "반장 @dongjun",
       "만총 @shanyang",
-      "장연 @changshan", "전예 @yuyang",
+      "장연 @changshan", "전예 @guangyang",
       "곽회 @taiyuan", "왕기 @taiyuan", "학소 @taiyuan",
       "태사자 @donglai", "유요 @donglai",
-      "제갈근 @langya", "서성 @langya",
+      "제갈근 @donghai", "서성 @donghai",
       "노숙 @xiapi", "보즐 @xiapi",
       "장소 @pengcheng", "장굉 @guangling",
       "여몽 @runan",
@@ -261,13 +261,13 @@
       "하제 @kuaiji", "우번 @kuaiji", "감택 @kuaiji",
       "위연 @nanyang", "화흠 @nanyang", "등애 @nanyang",
       "등지 @nanyang",
-      "제갈량 @nanjun", "방통 @nanjun", "마량 @nanjun",
-      "마속 @nanjun", "동윤 @nanjun",
+      "제갈량 @xiangyang", "방통 @xiangyang", "마량 @xiangyang",
+      "마속 @xiangyang", "동윤 @nanjun",
       "비의 @jiangxia", "장완 @lingling", "유파 @lingling",
-      "감녕 @bajun", "왕평 @bajun", "장억 @qianwei",
+      "감녕 @bajun", "왕평 @bajun", "장억 @bajun",
       "강유 @hanyang",
-      "정은 @anding", "이감 @anding", "마완 @anding",
-      "장횡 @beidi", "양흥 @beidi",
+      "정은 @youfufeng", "이감 @youfufeng", "마완 @youfufeng",
+      "장횡 @zuopingyi", "양흥 @zuopingyi",
     ],
   };
 })(globalThis.SAM = globalThis.SAM || {});

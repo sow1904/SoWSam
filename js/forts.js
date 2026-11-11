@@ -21,18 +21,17 @@
   // them meet, and guards all of them.
   // built = already standing in the map's year; otherwise a site to build on.
   S.FORT_SITES = {
-    190: {
+    main: {
       hulao: ["호로관", "pass", "henan", "chenliu", "henan", 34.83, 113.25, true], // 성고, 낙양 동쪽 관문
       hangu: ["함곡관", "pass", "henan", "hongnong", "henan", 34.73, 112.12, true], // 후한의 함곡관은 신안
       tongguan: ["동관", "pass", "hongnong", "jingzhao", "hongnong", 34.6, 110.3, true],
       chencang: ["진창", "fort", "youfufeng", "hanzhong", "youfufeng", 34.35, 107.37, true], // 산관을 함께 지킴
-      yangping: ["양평관", "pass", "wudu", "hanzhong", "hanzhong", 33.15, 106.1, true],
-      jiameng: ["가맹관", "pass", "hanzhong", "guanghan", "guanghan", 32.3, 105.8, true],
-      jiange: ["검각", "pass", "hanzhong", "guanghan", "guanghan", 32.0, 105.5, false],
-      baidi: ["백제성", "fort", "bajun", "nanjun", "bajun", 31.05, 109.55, true],
-      yijing: ["역경", "fort", "zhuo", ["hejian", "zhongshan"], "hejian", 38.95, 116.05, false], // 탁군에서 하간·중산으로 가는 길을 함께 막음
+      yangping: ["양평관", "pass", "hanyang", "hanzhong", "hanzhong", 33.15, 106.1, true], // 기산도가 한중으로 드는 곳
+      jiameng: ["가맹관", "pass", "hanzhong", "zitong", "zitong", 32.3, 105.8, true],
+      jiange: ["검각", "pass", "hanzhong", "zitong", "zitong", 32.0, 105.5, false],
+      yiling: ["이릉", "fort", "badong", "nanjun", "nanjun", 30.7, 111.3, true], // 삼협이 끝나는 곳
+      yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
-      xiangyang: ["양양", "fort", "nanyang", "nanjun", "nanjun", 32.01, 112.14, true], // 유표가 190년부터 형주를 다스린 곳
     },
   };
 

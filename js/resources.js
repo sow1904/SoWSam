@@ -13,7 +13,8 @@
   // cavalry, the Xiongnu border) and 유주 (Gongsun Zan's white horses, the
   // Wuhuan). 기주 and 익주 are granaries, 사례 and 교주 trade hubs, 청주 and 서주
   // home to many Han iron offices, 형주 and 양주 the Yangzi forests (남양 완현
-  // was also a famed ironworks).
+  // was also a famed ironworks). 옹주 (관중 and 롱우) and 요동 raise horses
+  // too, and 남중 is forest.
   S.REGION = {
     liang: { horse: 2, label: "말(많음)" },
     bing: { horse: 1, label: "말" },
@@ -26,7 +27,11 @@
     xu: { iron: 1.5, label: "철" },
     yan: { pop: 1.5, label: "인구" },
     yu: { pop: 1.5, label: "인구" },
-    jing: { wood: 1.5, iron: 1.25, label: "목재, 철" },
+    jingbei: { wood: 1.5, iron: 1.25, label: "목재, 철" },
+    jingnan: { wood: 1.5, iron: 1.25, label: "목재, 철" },
+    yong: { horse: 1, label: "말" },
+    liaodong: { horse: 1, label: "말" },
+    nanzhong: { wood: 1.5, label: "목재" },
     yang: { wood: 1.5, label: "목재" },
   };
   S.regionMul = (c, key) => {

@@ -93,7 +93,7 @@
     for (const [id, [name, prov, seat, lat, lon, size, gentry]] of Object.entries(S.MAP.cities)) {
       const [x, y] = S.placeXY(id, lat, lon);
       state.cities[id] = {
-        id, name, prov, seat, x, y, size,
+        id, name: S.cityName(id, scenario.year), prov: S.cityProv(id, scenario.year), seat, x, y, size,
         owner: null,
         gold: 200 + size * 100,
         food: 4000 + size * 2000,
@@ -1127,7 +1127,10 @@
     for (const c of Object.values(state.cities)) {
       const m = S.MAP.cities[c.id];
       [c.x, c.y] = S.placeXY(c.id, m[3], m[4]);
-      c.name = m[0]; // names may be revised (하남 -> 낙양)
+      // Names and provinces follow the map and the year the game began in.
+      const y0 = (state.start && state.start.year) || state.year;
+      c.name = S.cityName(c.id, y0);
+      c.prov = S.cityProv(c.id, y0);
     }
     for (const f of Object.values(state.forts)) [f.x, f.y] = S.placeXY(f.id, f.lat, f.lon);
     // Older saves used 통솔/무력/지력/정치.
