@@ -39,6 +39,9 @@
   ]) WATER[S.roadKey(a, b)] = true;
   const isPass = (state, id) => S.isFort(state, id) && state.forts[id].kind === "pass";
   S.isWater = (a, b) => !!WATER[S.roadKey(a, b)];
+  // Sea routes, drawn differently on the map.
+  const SEA = { [S.roadKey("donglai", "liaodong")]: true, [S.roadKey("donglai", "wujun")]: true };
+  S.isSea = (a, b) => !!SEA[S.roadKey(a, b)];
   S.waterLink = (state, a, b) => S.isWater(a, b);
 
   const crewOf = (state, ids, force) => ids.map((id) => state.officers[id]).filter((o) => o && o.status === "serving" && o.force === force);
