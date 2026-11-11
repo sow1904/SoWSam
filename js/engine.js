@@ -201,7 +201,7 @@
   S.neighbors = (cid) => ADJ[cid] || [];
 
   // Provinces: which commanderies make up each, and who holds how many.
-  S.provinceCities = (state, prov) => Object.values(state.cities).filter((c) => c.prov === prov);
+  S.provinceCities = (state, prov) => S.cityList(state).filter((c) => c.prov === prov);
   S.provinceHold = function (state, prov, fid) {
     const cs = S.provinceCities(state, prov);
     return { held: cs.filter((c) => c.owner === fid).length, total: cs.length };
@@ -241,7 +241,19 @@
   S.visibleFree = (state, cid) => S.officersIn(state, cid, (o) => o.status === "free" && !o.hidden);
   S.captivesIn = (state, cid, force) =>
     S.officersIn(state, cid, (o) => o.status === "captive" && o.captor === force);
-  S.citiesOf = (state, fid) => Object.values(state.cities).filter((c) => c.owner === fid);
+  // The cities as a list. A game's set of cities never changes, so the list
+  // is made once (this lookup runs many thousands of times a month).
+  const cityLists = new WeakMap();
+  S.cityList = function (state) {
+    let list = cityLists.get(state.cities);
+    if (!list) cityLists.set(state.cities, (list = Object.values(state.cities)));
+    return list;
+  };
+  S.citiesOf = function (state, fid) {
+    const out = [];
+    for (const c of S.cityList(state)) if (c.owner === fid) out.push(c);
+    return out;
+  };
   S.officersOf = (state, fid) => Object.values(state.officers).filter((o) => o.force === fid && o.status === "serving");
   S.isRuler = (state, o) => o.force && state.forces[o.force] && state.forces[o.force].ruler === o.id;
   S.forceName = (state, fid) => (fid && state.forces[fid] ? state.forces[fid].name + "군" : "공백지");
@@ -1164,7 +1176,7 @@
   S.checkOver = function (state) {
     if (state.over) return state.over;
     const owners = new Set();
-    for (const c of Object.values(state.cities)) owners.add(c.owner);
+    for (const c of S.cityList(state)) owners.add(c.owner);
     for (const f of Object.values(state.forces)) if (!owners.has(f.id)) f.alive = false;
     if (state.playerForce && !state.forces[state.playerForce].alive) state.over = { result: "lose" };
     else {

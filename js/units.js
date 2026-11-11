@@ -64,7 +64,8 @@
     horse: [0.75, 1.1, 1.2, 1, 1.15],
     horsebow: [1.15, 1.15, 1.05, 0.9, 1],
   };
-  S.lineMatch = (a, b) => (MATCH[a] && LINE_ORDER.includes(b) ? MATCH[a][LINE_ORDER.indexOf(b)] : 1);
+  const LINE_AT = Object.fromEntries(LINE_ORDER.map((k, i) => [k, i]));
+  S.lineMatch = (a, b) => (MATCH[a] && b in LINE_AT ? MATCH[a][LINE_AT[b]] : 1);
 
   const MOUNTED = { horse: true, horsebow: true };
   // How well a line fights in a setting:
@@ -81,14 +82,22 @@
 
   // ---------- mixes ----------
   // A mix as shares: {id: share}, shares adding up to 1. Accepts a plain id.
+  // Mixes made here are frozen and remembered, so reading one again (the
+  // matchup sums do it constantly) costs nothing. Never change a mix in
+  // place: make a new one.
+  const MIXES = new WeakSet();
+  const ONE = {};
+  const keep = (mix) => { MIXES.add(Object.freeze(mix)); return mix; };
+  const one = (id) => ONE[id] || (ONE[id] = keep({ [id]: 1 }));
   S.mixOf = function (spec) {
-    if (typeof spec === "string") return { [S.UNITS[spec] ? spec : S.DEFAULT_UNIT]: 1 };
+    if (typeof spec === "string") return one(S.UNITS[spec] ? spec : S.DEFAULT_UNIT);
+    if (spec && MIXES.has(spec)) return spec;
     const out = {};
     let sum = 0;
-    for (const [k, v] of Object.entries(spec || {})) if (S.UNITS[k] && v > 0) { out[k] = v; sum += v; }
-    if (!sum) return { [S.DEFAULT_UNIT]: 1 };
+    for (const k in spec) { const v = spec[k]; if (S.UNITS[k] && v > 0) { out[k] = v; sum += v; } }
+    if (!sum) return one(S.DEFAULT_UNIT);
     for (const k in out) out[k] /= sum;
-    return out;
+    return keep(out);
   };
   // Shares of n soldiers of a and m of b put together.
   S.blend = function (a, n, b, m) {
@@ -96,8 +105,8 @@
     n = Math.max(0, n || 0);
     m = Math.max(0, m || 0);
     if (n + m <= 0) return A;
-    for (const [k, v] of Object.entries(A)) out[k] = (out[k] || 0) + v * n;
-    for (const [k, v] of Object.entries(B)) out[k] = (out[k] || 0) + v * m;
+    for (const k in A) out[k] = (out[k] || 0) + A[k] * n;
+    for (const k in B) out[k] = (out[k] || 0) + B[k] * m;
     return S.mixOf(out);
   };
   // Whole soldiers of each type in n soldiers of a mix (largest remainder).
@@ -136,8 +145,12 @@
   // What a place's garrison fights as: its mix of land types.
   S.garrisonUnit = function (place) {
     const mix = S.mixOf(place && place.unit);
-    for (const k of Object.keys(mix)) if (S.unitOf(k).line === "navy") delete mix[k];
-    return S.mixOf(mix);
+    let ships = false;
+    for (const k in mix) if (S.UNITS[k].line === "navy") ships = true;
+    if (!ships) return mix;
+    const land = {};
+    for (const k in mix) if (S.UNITS[k].line !== "navy") land[k] = mix[k];
+    return S.mixOf(land);
   };
   // Soldiers of each type a place can send out (gentry retainers stay).
   S.available = (place) => S.mixCounts(S.garrisonUnit(place), Math.max(0, place.troops - (place.retainers || 0)));
@@ -276,16 +289,12 @@
   }
   // A side's multiplier against another: every part of one mix against every
   // part of the other, weighted by their shares. Plain ids work too.
-  // Read-only mixes of one plain id, so the matchup sums need not build
-  // a fresh object for every call.
-  const ONE = {};
-  const shares = (spec) => (typeof spec === "string" && S.UNITS[spec] ? ONE[spec] || (ONE[spec] = Object.freeze({ [spec]: 1 })) : S.mixOf(spec));
   S.unitMul = function (spec, foe, where, rough) {
-    const A = shares(spec), F = foe ? shares(foe) : null;
+    const A = S.mixOf(spec), F = foe ? S.mixOf(foe) : null;
     let m = 0;
-    for (const [a, sa] of Object.entries(A)) {
-      if (!F) { m += sa * typeMul(a, null, where, rough); continue; }
-      for (const [f, sf] of Object.entries(F)) m += sa * sf * typeMul(a, f, where, rough);
+    for (const a in A) {
+      if (!F) { m += A[a] * typeMul(a, null, where, rough); continue; }
+      for (const f in F) m += A[a] * F[f] * typeMul(a, f, where, rough);
     }
     return m;
   };
