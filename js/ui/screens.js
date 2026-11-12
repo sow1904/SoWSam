@@ -115,7 +115,7 @@
   UI.showOfficers = lists.officers = function () {
     const me = state.playerForce;
     const cols = [
-      ["이름", (o) => o.name, (o) => `${S.isRuler(state, o) ? `<span class="crown" title="군주">主</span>` : ""}<b>${o.name}</b>`],
+      ["이름", (o) => o.name, (o) => `${S.isRuler(state, o) ? `<span class="crown" title="군주">主</span>` : ""}<b>${o.name}</b>${UI.personMarks(o)}`],
       ["소재", whereOf], ["나이", (o) => S.age(state, o)],
       ...S.ABILITY_KEYS.map((k) => [S.ABILITY_NAMES[k], (o) => o[k]]),
       ["충성", (o) => (S.isRuler(state, o) ? 101 : o.loyalty), (o) => (S.isRuler(state, o) ? "-" : o.loyalty)],
@@ -255,6 +255,11 @@
       `</div><p class="hint">무장은 16세가 되면 등장합니다. 사실 수명에서는 병으로 죽은 인물은 정사의 사망 연도 2년 전부터 매년 72면체 주사위를, ` +
       `전사·처형 등으로 죽은 인물은 48세부터 매년 144면체 주사위를 굴립니다. 1~12가 나오면 그 달에 세상을 떠납니다. ` +
       `가상 수명에서는 모두 99세까지 살고, 그 뒤 12면체 주사위로 세상을 떠나는 달을 정합니다.</p>` +
+      `<h3>등장 인물</h3><div class="links">` +
+      `<label><input type="checkbox" id="optFiction" checked> 연의의 인물 <span class="mark">演</span></label>` +
+      `<label><input type="checkbox" id="optWomen" checked> 여성 <span class="mark f">女</span></label></div>` +
+      `<p class="hint">정사에 기록된 인물은 늘 나옵니다. 삼국지연의에만 나오는 인물(주창, 초선, 형도영 등)과 여성(채염, 손상향, 왕이 등)은 뺄 수 있습니다. ` +
+      `세력에 속하지 않은 인물은 고향 도시의 재야 인재로 나오고, 아직 어린 인물은 16세가 되는 해에 등장합니다.</p>` +
       `<h3>세력을 고르세요</h3><div class="forcegrid">${cards}</div>`, true);
     $("#modal .box").classList.add("titlebox");
   };
@@ -298,7 +303,9 @@
     },
     start: (d) => {
       const pick = document.querySelector('input[name="lifespan"]:checked');
-      UI.setState(S.newGame(S.SCENARIO_191, d.force, null, { lifespan: pick ? pick.value : "real" }));
+      UI.setState(S.newGame(S.SCENARIO_191, d.force, null, {
+        lifespan: pick ? pick.value : "real", fiction: $("#optFiction").checked, women: $("#optWomen").checked,
+      }));
       begin(S.citiesOf(state, d.force)[0], `${state.forces[d.force].name}군으로 천하통일을 시작합니다! 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`);
     },
     continue: () => {

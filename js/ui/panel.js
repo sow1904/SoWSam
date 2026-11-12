@@ -52,6 +52,11 @@
   const abilityCells = (o) => S.ABILITY_KEYS.map((k) => `<td class="${grade(o[k])}">${o[k]}</td>`).join("");
   const traitTags = (o) => S.traitsOf(o).map((t) => `<span class="trait" title="${S.TRAIT_HELP[t]}">${t}</span>`).join(" ");
   const skillTags = (o) => S.skillsOf(o).map((t) => `<span class="trait skill" title="${S.SKILL_HELP[t]}">${t}</span>`).join(" ");
+  // Small marks after a name: a figure of the novel, a woman.
+  UI.personMarks = function (o) {
+    const p = S.PEOPLE[o.name] || {};
+    return (p.fiction ? `<sup class="mark" title="연의의 인물">演</sup>` : "") + (p.female ? `<sup class="mark f" title="여성">女</sup>` : "");
+  };
   UI.abilityHead = () => S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("");
   Object.assign(UI, { abilityCells, traitTags, skillTags });
 
@@ -64,7 +69,7 @@
       const cls = [o.done && opts.showDone ? "done" : "", opts.pick ? "pick" : ""].join(" ");
       const attrs = opts.pick ? ` data-action="${opts.pick}" data-oid="${o.id}"` : "";
       const crown = S.isRuler(state, o) && o.status === "serving" ? `<span class="crown" title="군주">主</span>` : "";
-      return `<tr class="${cls}"${attrs}><td class="oname">${crown}${o.name}</td><td>${S.age(state, o)}</td>${abilityCells(o)}` +
+      return `<tr class="${cls}"${attrs}><td class="oname">${crown}${o.name}${UI.personMarks(o)}</td><td>${S.age(state, o)}</td>${abilityCells(o)}` +
         `<td class="han-${o.han}">${S.HAN_NAMES[o.han].slice(2)}</td>` +
         `<td class="traits">${traitTags(o)}</td><td class="traits">${skillTags(o)}</td>` +
         (opts.loyalty ? `<td>${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +

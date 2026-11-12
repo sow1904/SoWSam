@@ -73,6 +73,8 @@
     const state = {
       version: 1,
       lifespan: opts.lifespan || "real",
+      fiction: opts.fiction !== false, // figures of the novel take part
+      women: opts.women !== false, // women take part
       scenario: scenario.id,
       year: scenario.year,
       month: scenario.month,
@@ -154,6 +156,28 @@
       }
     }
     for (const line of scenario.free) addOfficer(line, null, 0);
+    // The roster (data/roster.js): those the scenario gives to a force, then
+    // the rest as free talent at home. Figures of the novel and women can be
+    // left out; those dead before the scenario starts are.
+    const placed = new Set(Object.values(state.officers).map((o) => o.name));
+    const wanted = (name) => {
+      const p = S.PEOPLE[name];
+      if (!p) throw new Error("unknown person " + name);
+      if (placed.has(name) || p.died < state.year) return false;
+      return !(p.fiction && opts.fiction === false) && !(p.female && opts.women === false);
+    };
+    for (const [fid, names] of Object.entries(scenario.join || {})) {
+      const f = state.forces[fid];
+      for (const name of names.split(/\s+/).filter(wanted)) {
+        const home = S.PEOPLE[name].home;
+        const city = state.cities[home] && state.cities[home].owner === fid ? home : state.officers[f.ruler].city;
+        addOfficer(`${name} @${city}`, fid, 80 + Math.floor(n % 5) * 4);
+        placed.add(name);
+      }
+    }
+    if (scenario.freeRest) {
+      for (const [name, p] of Object.entries(S.PEOPLE)) if (p.home && wanted(name)) addOfficer(`${name} @${p.home}`, null, 0);
+    }
     for (const [a, b] of scenario.alliances || []) S.makePact(state, a, b);
     for (const [cid, over] of Object.entries(scenario.cityState || {})) {
       const c = state.cities[cid];

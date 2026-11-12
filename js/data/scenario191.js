@@ -123,7 +123,7 @@
         officers: [
           "유표 @xiangyang", "괴량 @xiangyang", "괴월 @xiangyang",
           "채모 @xiangyang", "장윤 @xiangyang", "문빙 @nanjun",
-          "한숭 @xiangyang", "유선 @xiangyang", "부손 @nanjun",
+          "한숭 @xiangyang", "유선(劉先) @xiangyang", "부손 @nanjun",
           "유기 @xiangyang", "유종 @xiangyang",
           "황조 @wuchang",
           "왕위 @wuling",
@@ -153,7 +153,7 @@
         cities: { liaodong: 12000, xuantu: 4000, lelang: 4000, daifang: 2000 },
         officers: [
           "공손도 @liaodong", "공손강 @liaodong", "공손공 @liaodong",
-          "유의 @liaodong", "양의 @xuantu",
+          "유의 @liaodong", "양의(陽儀) @xuantu",
         ],
       },
       {
@@ -232,6 +232,29 @@
         ],
       },
     ],
+    // People of data/roster.js who serve a force in 191, by force. Each starts
+    // in their home city if the force holds it, else beside the ruler; those
+    // not yet of age join the force when they turn 16.
+    join: {
+      dongzhuo: "성렴 위속 송헌 후성 조성 학맹 이몽 왕방 양정 호차아 동승 사손서 황완 양표 마일제 정태",
+      yuanshao: "순우경 초촉 마연 장의 한맹 여광 여상 주령 견초 최염 이부 관통 곽원 저곡 유부인",
+      caocao: "왕필 조안민 변씨 하후은 하후걸 하후덕 조앙 조충 조예 조우 조상 조희 하후상 하후무 하후위 하후혜 하후화 하후현 조절",
+      zhangmiao: "허사 왕해",
+      yuanshu: "악취 양강 한윤 장형 이업 원요",
+      sunjian: "손보 송겸 오부인 손유 손교 손광 손소(孫韶) 손랑 손환 손등 손려 손화 손패 손휴 손준 손침 손상향 손노반 손노육",
+      liubiao: "이적 방계 소비 진취 등룡 채부인 채화 채중",
+      gongsunzan: "왕문 공손월",
+      gongsundu: "한충 공손황 공손연",
+      liubei: "유선 관색",
+      kongrong: "시의 무안국 종보",
+      taoqian: "허탐 장개",
+      liuyan: "유모 동부 유괴 영포 등현 양회 고패 이이 유순",
+      zhanglu: "양임 두호",
+      hansui: "성공영",
+      shixie: "사광",
+    },
+    // Everyone else in the roster starts out of office in their home city.
+    freeRest: true,
     // Unaffiliated talent, hidden until found with 탐색. Those not yet of age
     // appear in their home commandery when they turn 16.
     free: [
