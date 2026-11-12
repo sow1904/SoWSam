@@ -192,6 +192,21 @@
     }
   }
 
+  // Sell grain beyond three years' need; with gold to spare, a frontier city
+  // away from the herds buys horses, and any city short of iron buys some.
+  function marketAI(state, c, frontier) {
+    if (S.besieged(state, c.id)) return;
+    const keep = S.foodUse(c.troops) * 36 + 8000;
+    if (c.food > keep) S.trade(state, c.id, "food", Math.min(c.food - keep, S.tradeMax(state, c, "food", true)), true);
+    const buy = (k, upTo, spare) => {
+      const price = S.tradePrice(state, c, k);
+      const n = Math.min(upTo - c.res[k], Math.floor((c.gold - spare) / price), S.tradeMax(state, c, k, false));
+      if (n >= 100) S.trade(state, c.id, k, n, false);
+    };
+    if (c.res.iron < 400) buy("iron", 1200, 800);
+    if (frontier && S.regionMul(c, "horse") === 0 && S.canRaise(state, c.owner, "lighthorse")) buy("horse", 1500, 1500);
+  }
+
   function domestic(state, c, fid) {
     staffPosts(state, c, enemyNeighbors(state, c).length > 0);
     let idle = S.idle(state, c.id);
@@ -253,6 +268,7 @@
         if (S.relocate(state, c.id, to, go.map((o) => o.id)).ok) idle = idle.filter((o) => !go.includes(o));
       }
     }
+    marketAI(state, c, frontier);
     // Frontier cities keep drafting while the treasury can pay the upkeep.
     const affordable = () => frontier
       ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36

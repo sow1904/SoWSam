@@ -165,7 +165,7 @@
   const CMD = {
     draft: ["徵", "징병"], train: ["鍊", "훈련"], attack: ["征", "출진"], relieve: ["援", "원군"], move: ["輸", "수송"], build: ["築", "축성"],
     search: ["探", "탐색"], recruit: ["登", "등용"], reward: ["賞", "포상"], relocate: ["移", "이동"],
-    scheme: ["計", "계략"], woo: ["懷", "회유"], research: ["硏", "연구"],
+    scheme: ["計", "계략"], woo: ["懷", "회유"], research: ["硏", "연구"], trade: ["商", "교역"],
   };
   function cmdButton(place, cmd, free) {
     const disabled = !free && !S.idle(state, place.id).length;
@@ -207,7 +207,7 @@
           S.buildSites(state, c.id).length ? cmdButton(c, "build") : ""]) +
         cmdGroup("인사", [cmdButton(c, "search"), cmdButton(c, "recruit"), cmdButton(c, "reward", true), cmdButton(c, "relocate")]) +
         cmdGroup("계략", [cmdButton(c, "scheme"), cmdButton(c, "woo")]) +
-        cmdGroup("군주", [S.isCapital(state, c.id) ? cmdButton(c, "research") : ""]) +
+        cmdGroup("경제", [cmdButton(c, "trade", true), S.isCapital(state, c.id) ? cmdButton(c, "research") : ""]) +
         capitalRow(c) +
         `<h3>방비</h3>` + policyRow(c.id) + garrisonRow(c.id)]);
       tabs.push(["post", "내정", () => delegateRow(c) + postsTable(c)]);

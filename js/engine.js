@@ -649,11 +649,21 @@
     c.food -= food;
     const goods = hasRes ? S.takeRes(c, res) : null;
     const speed = troops || gold || food || goods ? "cargo" : "officer";
+    // The escort eats on the way (from the city's stores, else from the load),
+    // and the carriers eat part of the food they carry.
+    const days = S.travelDays(route.km, speed);
+    const cost = S.convoyFood(troops, food, days, S.pathRough(state, route.path));
+    const fromCity = Math.min(c.food, cost.eaten);
+    c.food -= fromCity;
+    const sent = food;
+    food = Math.max(0, food - cost.lost - (cost.eaten - fromCity));
     const m = S.launch(state, { kind: "move", force: c.owner, path: route.path, km: route.km, speed,
       officers: oids, troops, unit: troops ? S.garrisonUnit(c) : undefined, train: c.train, gold, food, res: goods, origin: cid, target: targetCid });
     const names = oids.map((id) => state.officers[id].name).join(", ");
-    const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, food && `군량 ${food}`, goods && S.resText(goods)].filter(Boolean).join(", ");
-    return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${m.arrive - m.start}일 뒤 도착합니다.${cargo ? " (" + cargo + ")" : ""}` };
+    const cargo = [troops && `병사 ${troops}`, gold && `금 ${gold}`, sent && `군량 ${sent}`, goods && S.resText(goods)].filter(Boolean).join(", ");
+    const used = cost.eaten + (sent - food) - (cost.eaten - fromCity);
+    return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${m.arrive - m.start}일 뒤 도착합니다.${cargo ? " (" + cargo + ")" : ""}` +
+      (used > 0 ? ` 가는 길에 군량 ${used}을 먹습니다.` : "") };
   };
 
   // Officers alone travel faster, to any own city reachable through own territory.
@@ -838,7 +848,7 @@
     if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
     const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
-    const foodNeed = S.marchFood(troops, days);
+    const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path));
     if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
     unit = S.takeTroops(c, counts);
     c.food -= foodNeed;
@@ -852,8 +862,20 @@
     return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };
 
-  // Rations for the march: a tenth of the men up front, plus the days on the road.
-  S.marchFood = (troops, days) => Math.ceil(troops / 10 + (troops * days) / 1000);
+  // An army in the field eats twice what a garrison does: one food a day for
+  // every 400 men. Over mountain roads carts give way to porters, and it
+  // costs more again by the road's roughness.
+  S.FIELD_FOOD = 400;
+  S.fieldFood = (troops, days, rough) => (troops * days * (rough || 1)) / S.FIELD_FOOD;
+  // Rations for the march: a tenth of the men up front (the siege depot),
+  // plus the days on the road.
+  S.marchFood = (troops, days, rough) => Math.ceil(troops / 10 + S.fieldFood(troops, days, rough));
+  // What a convoy costs in food: its escort eats on the way, and of the food
+  // it carries one part in a hundred is eaten by its carriers each day (more
+  // on rough roads, and never more than six parts in ten).
+  S.convoyFood = function (troops, food, days, rough) {
+    return { eaten: Math.ceil(S.fieldFood(troops, days, rough)), lost: Math.round(food * Math.min(0.6, 0.01 * days * (rough || 1))) };
+  };
 
 
   // Family first, in order of succession; otherwise the most capable officer.
@@ -989,6 +1011,68 @@
     S.runCourt(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
     S.checkOver(state);
+  };
+
+  // ---------- merchants (상인) ----------
+  // Merchants buy and sell food, wood, iron and horses for gold in any city
+  // that is not under siege. It takes no officer. A city's commerce sets how
+  // much they deal in a month. They pay half of what they charge.
+  // why: horses come from the northern and western herds, so their price
+  // climbs with the distance from the nearest horse country. That lets the
+  // south field some cavalry, at a price.
+  S.TRADE = { food: 0.04, wood: 0.2, iron: 0.3, horse: 0.8, horseKm: 350, sell: 0.5, volume: 2 };
+  S.TRADE_GOODS = ["food", "wood", "iron", "horse"];
+  S.goodName = (k) => (k === "food" ? "군량" : S.RESOURCES[k]);
+  const herdKm = new WeakMap();
+  // Straight-line distance from a city to the nearest horse country.
+  function horseDistance(state, c) {
+    let map = herdKm.get(state.cities);
+    if (!map) herdKm.set(state.cities, (map = {}));
+    if (!(c.id in map)) {
+      let best = Infinity;
+      for (const h of S.cityList(state)) if (S.regionMul(h, "horse") > 0) best = Math.min(best, S.nodeKm(state, c.id, h.id) / S.ROAD_FACTOR);
+      map[c.id] = best === Infinity ? 2000 : Math.round(best);
+    }
+    return map[c.id];
+  }
+  // Gold for one unit, buying.
+  S.tradePrice = function (state, c, k) {
+    if (k === "food") return S.TRADE.food;
+    if (k === "horse") return S.TRADE.horse * (1 + horseDistance(state, c) / S.TRADE.horseKm);
+    return S.TRADE[k] / Math.max(1, S.regionMul(c, k));
+  };
+  S.goodStock = (c, k) => (k === "food" ? c.food : c.res[k]);
+  // Gold's worth of goods the merchants will still deal in this month.
+  S.tradeRoom = function (state, c) {
+    const stamp = state.year * 100 + state.month;
+    const used = c.traded && c.traded.stamp === stamp ? c.traded.gold : 0;
+    return Math.max(0, Math.round(c.trade * S.TRADE.volume - used));
+  };
+  // The most that can be bought or sold now.
+  S.tradeMax = function (state, c, k, sell) {
+    const price = S.tradePrice(state, c, k) * (sell ? S.TRADE.sell : 1);
+    const room = Math.floor(S.tradeRoom(state, c) / price);
+    if (sell) return Math.max(0, Math.min(room, S.goodStock(c, k)));
+    const space = k === "food" ? Infinity : S.resCap(c, k) - c.res[k];
+    return Math.max(0, Math.min(room, Math.floor(c.gold / price), space));
+  };
+  S.trade = function (state, cid, k, amount, sell) {
+    const c = state.cities[cid];
+    if (!c || !c.owner) return fail("교역할 수 있는 도시가 아닙니다.");
+    if (!S.TRADE_GOODS.includes(k)) return fail("상인이 다루지 않는 물건입니다.");
+    if (S.besieged(state, cid)) return fail("포위당한 도시에는 상인이 들어오지 못합니다.");
+    amount = Math.floor(amount || 0);
+    if (amount < 1) return fail("수량을 정해 주세요.");
+    if (amount > S.tradeMax(state, c, k, sell)) return fail(sell ? "그만큼은 팔 수 없습니다." : "그만큼은 살 수 없습니다.");
+    const price = S.tradePrice(state, c, k) * (sell ? S.TRADE.sell : 1);
+    const gold = sell ? Math.floor(amount * price) : Math.ceil(amount * price);
+    c.gold += sell ? gold : -gold;
+    if (k === "food") c.food += sell ? -amount : amount;
+    else c.res[k] += sell ? -amount : amount;
+    const stamp = state.year * 100 + state.month;
+    if (!c.traded || c.traded.stamp !== stamp) c.traded = { stamp, gold: 0 };
+    c.traded.gold += amount * price;
+    return { ok: true, gold, msg: `${c.name}에서 상인에게 ${S.goodName(k)} ${amount}${k === "horse" ? "필" : ""}을 금 ${gold}에 ${sell ? "팔았습니다" : "샀습니다"}.` };
   };
 
   // ---------- diplomacy ----------

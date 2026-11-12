@@ -178,7 +178,8 @@
   // Besiegers eat from the depot, which is refilled from home while the line holds.
   function feedBesiegers(state, b) {
     const A = b.att;
-    const need = A.troops / 1000;
+    // A day's food, dearer the rougher the road it comes by.
+    const need = S.fieldFood(A.troops, 1, A.path ? S.pathRough(state, A.path) : 1);
     const home = S.place(state, A.origin);
     if (A.supply.line && home && home.owner === A.force) {
       const want = Math.min(Math.max(0, A.troops / 10 - A.rations), need * 2, home.food);
@@ -361,7 +362,7 @@
     if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
     const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
-    const food = S.marchFood(troops, days);
+    const food = S.marchFood(troops, days, S.pathRough(state, way.path));
     if (c.food < food) return fail(`군량이 부족합니다. (필요 ${food})`);
     unit = S.takeTroops(c, counts);
     c.food -= food;

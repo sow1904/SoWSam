@@ -22,6 +22,8 @@
     "bajun|zangke": 1.5, // 야랑도
     "shujun|yuexi": 1.4, "yuexi|yizhoujun": 1.4, "yuexi|zangke": 1.2,
     "zangke|cangwu": 1.5, "yizhoujun|jiaozhi": 1.4,
+    "lingling|cangwu": 1.4, "guiyang|cangwu": 1.4, "guiyang|nanhai": 1.4, // 오령
+    "cangwu|jiaozhi": 1.3,
     "hongnong|jingzhao": 1.2, // 동관
     "henan|hongnong": 1.2, // 함곡관
     "zhuo|daijun": 1.3, "guangyang|daijun": 1.3, "daijun|yanmen": 1.3, // 연산과 항산 사이 골짜기
@@ -42,6 +44,17 @@
     const city = f.id === a ? b : a;
     if (!S.MAP.cities[city]) return 1;
     return Math.max(1, ...f.road.filter((x) => x !== city).map((x) => ROUGH_KEYED[key(city, x)] || 1));
+  };
+
+  // How rough a whole road is: the roughness of its links, weighted by length.
+  S.pathRough = function (state, path) {
+    let km = 0, sum = 0;
+    for (let i = 1; i < path.length; i++) {
+      const d = S.legKm(state, path[i - 1], path[i]);
+      km += d;
+      sum += d * S.linkRough(state, path[i - 1], path[i]);
+    }
+    return km ? sum / km : 1;
   };
 
   function greatCircle(la1, lo1, la2, lo2) {

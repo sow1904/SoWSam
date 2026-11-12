@@ -142,13 +142,46 @@
       const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
       if (!dests.length) { UI.toast("아군 영토로 이어진 다른 도시가 없습니다."); return; }
       UI.openModal(title("수송") + `<p class="hint">무장이 병사·금·군량·자원을 이끌고 아군 영토를 지나 다른 아군 도시로 갑니다. ` +
-        `수송대는 하루 ${S.SPEED.cargo}km를 가고, 짐 없이 무장만 보내면 하루 ${S.SPEED.officer}km를 갑니다. 보낸 병사와 물자는 도착할 때까지 어느 도시에도 없습니다.</p>` +
+        `수송대는 하루 ${S.SPEED.cargo}km를 가고, 짐 없이 무장만 보내면 하루 ${S.SPEED.officer}km를 갑니다. 보낸 병사와 물자는 도착할 때까지 어느 도시에도 없습니다. ` +
+        `호위 병사는 가는 동안 하루 ${S.FIELD_FOOD}명당 군량 1을 먹고, 실어 가는 군량은 하루에 100분의 1씩 줄어듭니다(험한 길에서는 더).</p>` +
         `<div class="row"><label>목적지</label><select id="mvDest">${dests.map((d) => `<option value="${d}">${UI.placeLabel(d)} (${dist[d]}일)</option>`).join("")}</select></div>` +
         checkList(S.idle(state, c.id)) +
         rangeRow("mvTroops", "병사", S.marchable(c)) + rangeRow("mvGold", "금", c.gold) + rangeRow("mvFood", "군량", c.food) +
         (c.res ? S.RES_KEYS.map((k) => rangeRow("mv_" + k, S.RESOURCES[k], c.res[k])).join("") : "") +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 이동하지 않습니다.</p>` : "") +
+        `<div class="row"><label>가는 길</label><span id="mvEst" class="est"></span></div>` +
         footer(`<button class="primary" data-action="doMove">수송</button>`));
+      UI.modalOnInput = updateMove;
+      updateMove();
+    },
+    trade() {
+      const c = state.cities[UI.selected];
+      if (S.besieged(state, c.id)) { UI.toast("포위당한 도시에는 상인이 들어오지 못합니다."); return; }
+      const p = UI.pending && UI.pending.cmd === "trade" ? UI.pending : { cmd: "trade", good: "horse", sell: false };
+      UI.pending = p;
+      const price = (k, sell) => S.tradePrice(state, c, k) * (sell ? S.TRADE.sell : 1);
+      const per = (v) => (v >= 1 ? `1개에 금 ${v.toFixed(2)}` : `금 1에 ${(1 / v).toFixed(1)}개`);
+      const rows = S.TRADE_GOODS.map((k) => `<tr><td>${S.goodName(k)}</td><td>${fmt(S.goodStock(c, k))}</td>` +
+        `<td>${per(price(k, false))}</td><td>${per(price(k, true))}</td></tr>`).join("");
+      const max = S.tradeMax(state, c, p.good, p.sell);
+      UI.openModal(title("교역") + `<p class="hint">상인에게서 군량, 목재, 철, 말을 사거나 팝니다. 무장의 명령을 쓰지 않습니다. ` +
+        `한 달에 거래할 수 있는 양은 이 도시의 상업에 비례합니다(금으로 쳐서 상업 × ${S.TRADE.volume}). 팔 때는 살 때 값의 절반을 받습니다. ` +
+        `말은 말이 나는 고장(유주, 병주, 량주 등)에서 멀수록 비싸고, 목재와 철은 그것이 특산인 주에서 쌉니다.</p>` +
+        `<table><tr><th>물건</th><th>보유</th><th>살 때</th><th>팔 때</th></tr>${rows}</table>` +
+        `<div class="stats" style="margin-top:8px">${UI.stat("보유 금", c.gold.toLocaleString())}${UI.stat("이달 남은 거래", `금 ${S.tradeRoom(state, c).toLocaleString()}어치`)}</div>` +
+        `<div class="row"><label>물건</label><select id="trGood">${S.TRADE_GOODS.map((k) => `<option value="${k}"${k === p.good ? " selected" : ""}>${S.goodName(k)}</option>`).join("")}</select>` +
+        `<select id="trDir"><option value="buy"${p.sell ? "" : " selected"}>산다</option><option value="sell"${p.sell ? " selected" : ""}>판다</option></select></div>` +
+        rangeRow("trAmount", "수량", max, 0) +
+        `<div class="row"><label>값</label><span id="trEst" class="est"></span></div>` +
+        `<div class="footer"><button data-action="close">닫기</button><button class="primary" data-action="doTrade">${p.sell ? "판다" : "산다"}</button></div>`);
+      UI.modalOnInput = () => {
+        const good = $("#trGood").value, sell = $("#trDir").value === "sell";
+        if (good !== p.good || sell !== p.sell) { p.good = good; p.sell = sell; commands.trade(); return; }
+        const n = num("trAmount");
+        const gold = n * price(p.good, p.sell);
+        $("#trEst").innerHTML = n ? `${S.goodName(p.good)} ${fmt(n)} → 금 ${p.sell ? "+" + Math.floor(gold) : "-" + Math.ceil(gold)}` : `최대 ${fmt(max)}`;
+      };
+      UI.modalOnInput();
     },
     relocate() {
       const c = S.place(state, UI.selected);
@@ -237,6 +270,20 @@
 
   const edgeLabel = (e) => (e >= 1.15 ? `<span class="good">유리 ×${e.toFixed(2)}</span>` : e <= 0.87 ? `<span class="bad">불리 ×${e.toFixed(2)}</span>` : `비슷함 ×${e.toFixed(2)}`);
 
+  function updateMove() {
+    const c = S.place(state, UI.selected);
+    const route = S.route(state, c.id, $("#mvDest").value, "cargo");
+    if (!route) { $("#mvEst").textContent = "길이 끊겼습니다."; return; }
+    const troops = num("mvTroops"), food = num("mvFood");
+    const loaded = troops || food || num("mvGold") || ($("#mv_wood") && S.RES_KEYS.some((k) => num("mv_" + k)));
+    const days = S.travelDays(route.km, loaded ? "cargo" : "officer");
+    const rough = S.pathRough(state, route.path);
+    const cost = S.convoyFood(troops, food, days, rough);
+    $("#mvEst").innerHTML = `${days}일${rough > 1.05 ? ` · <span class="bad">험로 ×${rough.toFixed(2)}</span>` : ""}` +
+      (cost.eaten ? ` · 호위 병사가 군량 ${fmt(cost.eaten)}을 먹음` : "") +
+      (cost.lost ? ` · 실은 군량 ${fmt(food)} 가운데 ${fmt(cost.lost)}이 줄어 <b>${fmt(Math.max(0, food - cost.lost))}</b> 도착` : "");
+  }
+
   function updateRelief() {
     const el = $("#rlfEst");
     const ids = checked();
@@ -257,7 +304,7 @@
     el.innerHTML = `원군 ${fmt(sent)} + 성안 ${fmt(t.troops)} : 포위군 ${fmt(b.att.troops)} — ` +
       (ours >= b.att.troops ? `<span class="good">수가 많음</span>` : `<span class="bad">수가 적음</span>`) +
       `<br>병종 상성: ${S.unitName(unit)} 대 ${S.unitName(b.att.unit)} ${edgeLabel(edge)}` +
-      `<br><span class="hint">하루에 보급로 절단 ${pc.cut}% · 군량고 소각 ${pc.burn}% · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days)}</span>`;
+      `<br><span class="hint">하루에 보급로 절단 ${pc.cut}% · 군량고 소각 ${pc.burn}% · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days, S.pathRough(state, way.path))}</span>`;
   }
 
   function updateEstimate() {
@@ -286,7 +333,7 @@
     const ground = water ? "물 위" : rough > 1 ? "험한 산길" : "길";
     el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label} <span class="hint">(공성, 병종 반영)</span><br>` +
       `요격당하면(${ground}): ${S.unitName(ours)} 대 ${S.unitName(theirs)} ${edgeLabel(field)}<br>` +
-      `<span class="hint">병사 ${fmt(sent)}명 · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days)} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
+      `<span class="hint">병사 ${fmt(sent)}명 · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days, way ? S.pathRough(state, way.path) : 1)}${way && S.pathRough(state, way.path) > 1.05 ? " (험로)" : ""} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 
   function updateScheme() {
@@ -367,6 +414,11 @@
     doAttack: () => {
       const pick = unitPick("atU_");
       tryRun(S.attack(state, UI.selected, $("#atTarget").value, checked(), S.countsTotal(pick), pick));
+    },
+    doTrade: () => {
+      const p = UI.pending;
+      const r = S.trade(state, UI.selected, p.good, num("trAmount"), p.sell);
+      if (UI.result(r)) commands.trade();
     },
     moveCapital: () => {
       const c = state.cities[UI.selected];
