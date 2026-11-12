@@ -23,11 +23,19 @@
     // 헌제 was held at 장안 by 동탁.
     emperor: "jingzhao",
     hanFavor: 15, // 동탁 burned 낙양 and dragged the court west
-    alliances: [["sunjian", "yuanshu"], ["liubei", "gongsunzan"]],
+    // The two leagues of 191: 원소 with 조조 and 유표, against 원술 with 공손찬 and
+    // 도겸. 장막 and 포신 were 조조's friends in 연주.
+    alliances: [
+      ["sunjian", "yuanshu"], ["liubei", "gongsunzan"],
+      ["caocao", "yuanshao"], ["liubiao", "yuanshao"], ["yuanshu", "gongsunzan"], ["taoqian", "gongsunzan"],
+      ["caocao", "zhangmiao"], ["caocao", "baoxin"],
+    ],
     // Cities whose starting state differs from the defaults.
     cityState: {
       // 낙양 was burned and its people driven west to 장안 in 190.
       henan: { pop: 30000, troops: 600, order: 5, consent: 5, farm: 40, trade: 20, wall: 120, gold: 50, food: 1500 },
+      // The peoples of 남중 answered to no one, and were many.
+      zangke: { troops: 6000 }, yuexi: { troops: 6000 }, yizhoujun: { troops: 7000 }, yongchang: { troops: 6000 },
     },
     forces: [
       {
@@ -183,7 +191,7 @@
       },
       {
         id: "liuyan", name: "유언", color: "#b8860b",
-        cities: { guanghan: 10000, shujun: 14000, bajun: 8000, zitong: 4000, badong: 3000 },
+        cities: { guanghan: 10000, shujun: 12000, bajun: 8000, badong: 3000 },
         officers: [
           "유언 @guanghan", "유장 @guanghan", "오의 @guanghan",
           "방희 @guanghan",
@@ -195,7 +203,7 @@
       },
       {
         id: "zhanglu", name: "장로", color: "#708090",
-        cities: { hanzhong: 9000 },
+        cities: { hanzhong: 15000 },
         officers: [
           "장로 @hanzhong", "장위 @hanzhong", "염포 @hanzhong",
           "양송 @hanzhong", "양앙 @hanzhong", "양백 @hanzhong",
@@ -225,7 +233,7 @@
       },
       {
         id: "shixie", name: "사섭", color: "#20b2aa",
-        cities: { jiaozhi: 10000, rinan: 3000, nanhai: 5000 },
+        cities: { jiaozhi: 13000, rinan: 3000, nanhai: 6000 },
         officers: [
           "사섭 @jiaozhi", "사휘 @jiaozhi", "사일 @jiaozhi",
           "사유 @rinan", "사무 @nanhai",

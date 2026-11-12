@@ -3,6 +3,10 @@
   S.STAT_NAMES = S.ABILITY_NAMES;
 
   S.COST = { reward: 100, woo: 100, draftPerTroop: 0.1 };
+  // Food a garrison eats in a month: one for every 25 soldiers. A middling
+  // city's harvest then feeds about ten thousand men, so a great army has to
+  // be fed from several cities.
+  S.foodUse = (troops) => Math.ceil(troops / 25);
   S.MAX_SORTIE_OFFICERS = 3;
   S.MIN_SORTIE_TROOPS = 500;
 
@@ -100,7 +104,7 @@
         gold: 200 + size * 100,
         food: 4000 + size * 2000,
         pop: 40000 + size * 40000,
-        troops: 800 + size * 400,
+        troops: 1200 + size * 700,
         train: 30,
         farm: 80 + size * 60, farmMax: 200 + size * 160,
         trade: 80 + size * 60, tradeMax: 200 + size * 160,
@@ -309,7 +313,7 @@
   const postMax = (c, kind) => (kind === "order" ? 100 : c[kind + "Max"]);
 
   // Monthly change a holder with the given ability would bring.
-  S.postGain = (kind, ability) => (kind === "order" ? 1 + Math.round(ability / 25) : 2 + Math.round(ability / 8));
+  S.postGain = (kind, ability) => (kind === "order" ? 1 + Math.round(ability / 25) : 1 + Math.round(ability / 16));
   S.postPenalty = (c, kind) => {
     if (kind === "tuntian") return 0;
     if (kind === "order") return -3;
@@ -921,20 +925,20 @@
           const lost = loseTroops(c, Math.ceil(c.troops * 0.05));
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (harvest) c.food += Math.round((c.farm * 10 + c.pop / 50) * eff * S.regionMul(c, "food"));
-        c.food -= Math.ceil(c.troops / 50);
+        if (harvest) c.food += Math.round((c.farm * 7 + c.pop / 50) * eff * S.regionMul(c, "food"));
+        c.food -= S.foodUse(c.troops);
         if (c.food < 0) {
           c.food = 0;
           const lost = loseTroops(c, Math.ceil(c.troops * 0.1));
           c.order = Math.max(0, c.order - 10);
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 4000) * S.regionMul(c, "pop")));
+        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 8000) * S.regionMul(c, "pop")));
         wearinessEffects(state, c);
         runGentry(state, c);
       } else {
         // Vacant cities slowly rebuild local militia.
-        const cap = 1000 + c.size * 600;
+        const cap = 1200 + c.size * 700;
         if (c.troops < cap) c.troops = Math.min(cap, c.troops + 60);
       }
     }

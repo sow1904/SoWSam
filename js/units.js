@@ -34,10 +34,10 @@
     rattan: { name: "등갑병", line: "sword", tier: 2, special: true, atk: 1, def: 1.3, fireWeak: true, cost: { wood: 2 } },
     // 보도병: heavy armour and a two-handed blade, no shield; made to cut
     // down horsemen, but open to arrows.
-    bodao: { name: "보도병", line: "sword", tier: 3, special: true, atk: 1.15, def: 1.2, antiHorse: 1.4, noShield: true, cost: { iron: 3 } },
+    bodao: { name: "보도병", line: "sword", tier: 3, special: true, atk: 1.15, def: 1.2, antiHorse: 1.4, noShield: true, cost: { iron: 5 } },
     archer: { name: "궁병", line: "bow", tier: 1, atk: 1, def: 0.9, cost: { wood: 1 } },
     crossbow: { name: "노병", line: "bow", tier: 2, atk: 1.15, def: 0.9, cost: { wood: 1, iron: 1 } },
-    repeater: { name: "연노병", line: "bow", tier: 3, special: true, atk: 1.3, def: 0.9, cost: { wood: 1, iron: 1 } },
+    repeater: { name: "연노병", line: "bow", tier: 3, special: true, atk: 1.22, def: 0.9, cost: { wood: 2, iron: 2 } },
     lighthorse: { name: "경기병", line: "horse", tier: 1, atk: 1.05, def: 0.95, fast: true, cost: { horse: 1 } },
     heavyhorse: { name: "중기병", line: "horse", tier: 2, atk: 1.15, def: 1.1, fast: true, cost: { horse: 1, iron: 1 } },
     elephant: { name: "상병", line: "horse", tier: 3, special: true, atk: 1.3, def: 1.2, cost: { iron: 1 } },
@@ -74,7 +74,7 @@
   const SETTING = {
     field: { other: 1 },
     water: { other: 1 },
-    siegeA: { bow: 1.1, horse: 0.6, horsebow: 0.65, other: 1 },
+    siegeA: { horse: 0.6, horsebow: 0.65, other: 1 },
     siegeD: { bow: 1.2, horse: 0.8, horsebow: 0.85, other: 1 },
   };
 

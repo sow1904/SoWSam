@@ -27,8 +27,8 @@
       tongguan: ["동관", "pass", "hongnong", "jingzhao", "hongnong", 34.6, 110.3, true],
       chencang: ["진창", "fort", "youfufeng", "hanzhong", "youfufeng", 34.35, 107.37, true], // 산관을 함께 지킴
       yangping: ["양평관", "pass", "hanyang", "hanzhong", "hanzhong", 33.15, 106.1, true], // 기산도가 한중으로 드는 곳
-      jiameng: ["가맹관", "pass", "hanzhong", "zitong", "zitong", 32.3, 105.8, true],
-      jiange: ["검각", "pass", "hanzhong", "zitong", "zitong", 32.0, 105.5, false],
+      jiameng: ["가맹관", "pass", "hanzhong", "guanghan", "guanghan", 32.3, 105.8, true],
+      jiange: ["검각", "pass", "hanzhong", "guanghan", "guanghan", 32.0, 105.5, false],
       yiling: ["이릉", "fort", "badong", "nanjun", "nanjun", 30.7, 111.3, true], // 삼협이 끝나는 곳
       yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
@@ -117,7 +117,7 @@
       if (!f.built) continue;
       if (f.wall < f.wallMax) f.wall = Math.min(f.wallMax, f.wall + 20);
       if (!f.owner || f.troops <= 0) continue;
-      const need = Math.ceil(f.troops / 50);
+      const need = S.foodUse(f.troops);
       const src = S.links(state, f.id).map((id) => state.cities[id]).filter((c) => c && c.owner === f.owner).sort((a, b) => b.food - a.food)[0];
       if (src && f.food < need * 3) {
         const amt = Math.min(src.food, need * 3 - f.food);

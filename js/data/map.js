@@ -1,4 +1,4 @@
-// The map: seventeen provinces and seventy-seven cities. Not every
+// The map: seventeen provinces and seventy-six cities. Not every
 // commandery of the Later Han is here: the list keeps the ones that mattered
 // in the Three Kingdoms, about four to a province, so that no province is
 // won with two cities (docs/city-plan.md). 요동, 남중, 형북 and 형남 are this
@@ -84,7 +84,6 @@
     // 익주
     shujun:     ["성도", "yi", "성도", 30.66, 104.06, 5, 70],
     hanzhong:   ["한중", "yi", "남정", 33.10, 107.00, 3, 40],
-    zitong:     ["자동", "yi", "자동", 31.63, 105.17, 2, 50],
     bajun:      ["파군", "yi", "강주", 29.56, 106.55, 4, 55],
     guanghan:   ["광한", "yi", "낙", 31.25, 104.50, 3, 60],
     badong:     ["파동", "yi", "어복", 31.05, 109.55, 2, 40],
@@ -307,8 +306,8 @@
     ["jiujiang", "danyang"], ["jiujiang", "lujiang"], ["danyang", "lujiang"], ["danyang", "wujun"], ["danyang", "guangling"],
     ["lujiang", "yuzhang"], ["kuaiji", "wujun"], ["wujun", "guangling"],
     // 익주, 남중
-    ["hanzhong", "zitong"], // 금우도: 가맹관, 검각
-    ["zitong", "guanghan"], ["guanghan", "shujun"], ["bajun", "guanghan"], ["bajun", "shujun"], ["bajun", "badong"],
+    ["hanzhong", "guanghan"], // 금우도: 가맹관, 검각
+    ["guanghan", "shujun"], ["bajun", "guanghan"], ["bajun", "shujun"], ["bajun", "badong"],
     ["bajun", "zangke"], ["shujun", "yuexi"], ["yuexi", "yizhoujun"], ["yuexi", "zangke"], ["zangke", "yizhoujun"],
     ["yizhoujun", "yongchang"], ["yizhoujun", "jiaozhi"], ["zangke", "cangwu"],
     // 교주
@@ -367,7 +366,7 @@
       jinan: [1446, 480], donglai: [1712, 406], jingzhao: [914, 676], zuopingyi: [978, 611],
       youfufeng: [853, 647], hanyang: [734, 582], longxi: [643, 572], wuwei: [596, 354],
       jincheng: [588, 476], jiuquan: [230, 172], zhangye: [366, 243], shujun: [546, 999],
-      hanzhong: [792, 776], zitong: [652, 905], bajun: [740, 1090], guanghan: [618, 932],
+      hanzhong: [792, 776], bajun: [740, 1090], guanghan: [618, 932],
       badong: [948, 968], zangke: [742, 1343], yuexi: [425, 1224], yizhoujun: [423, 1489],
       yongchang: [177, 1471], nanyang: [1130, 789], xiangyang: [1154, 911], xincheng: [989, 874],
       jiangxia: [1289, 919], nanjun: [1196, 1050], wuling: [1128, 1160], lingling: [1145, 1342],

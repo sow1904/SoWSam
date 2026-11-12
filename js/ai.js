@@ -258,7 +258,7 @@
       ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36
       : c.troops < 2500;
     while (idle.length) {
-      const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
+      const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       let r = null;
       const unit = affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10 ? pickDraft(state, c) : null;
       if (unit) r = S.draft(state, take(byDesc("cmd")).id, c.id, unit);
@@ -318,7 +318,7 @@
       ? (frontier ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36 : c.troops < 6000)
       : c.troops < (frontier ? 5000 : 2500);
     while (idle.length) {
-      const foodMonths = c.troops > 0 ? c.food / (c.troops / 50) : 99;
+      const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       const ok = want() && c.manpower > 400 && c.gold > (mil ? 250 : 600) && c.order > (mil ? 50 : 60) && foodMonths > (mil ? 8 : 12);
       const unit = ok ? pickDraft(state, c) : null;
       let r = null;

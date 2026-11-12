@@ -42,7 +42,7 @@
 
   // Monthly yield before order: by city size, scaled by the province.
   // One unit equips one soldier (a spear, a bow, a horse).
-  const BASE = { wood: (c) => 200 + c.size * 100, iron: (c) => 120 + c.size * 60, horse: (c) => 100 + c.size * 50 };
+  const BASE = { wood: (c) => 200 + c.size * 100, iron: (c) => 160 + c.size * 80, horse: (c) => 150 + c.size * 75 };
   S.resYield = (c, k) => Math.round(BASE[k](c) * S.regionMul(c, k) * (0.5 + c.order / 200));
   // Storehouses hold about two years of output, at least a modest stock.
   S.resCap = (c, k) => Math.max(10000, Math.round(BASE[k](c) * Math.max(1, S.regionMul(c, k)) * 24));

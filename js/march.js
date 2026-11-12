@@ -13,7 +13,7 @@
   const ROUGH = {
     "youfufeng|hanzhong": 1.6, // 포사도
     "hanyang|hanzhong": 1.4, // 기산도
-    "hanzhong|zitong": 1.5, // 금우도
+    "hanzhong|guanghan": 1.5, // 금우도
     "bajun|jiameng": 1.2, // 가릉강 골짜기를 거슬러
     "longxi|guanghan": 1.8, // 음평도
     "nanjun|badong": 1.4, // 장강 삼협
