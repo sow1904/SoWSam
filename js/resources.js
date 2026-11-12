@@ -1,20 +1,23 @@
 // Resources (자원) and regional traits (지역 특성).
 // Every city stores wood (목재), iron (철) and horses (말) in c.res. Wood and
 // iron come from every city, more where the province is known for them;
-// horses only come from the northern and western horse country. Provinces
+// horses come mostly from the northern and western horse country. Provinces
 // also lean the gold, food and population economy their way.
 // Drafting troops will spend these by unit type.
 (function (S) {
   S.RESOURCES = { wood: "목재", iron: "철", horse: "말" };
   S.RES_KEYS = Object.keys(S.RESOURCES);
 
-  // Multipliers by province. Missing keys are 1; horse is 0 unless listed.
+  // Multipliers by province. Missing keys are 1, except horses: see HORSES.
   // why: horse country is 량주 (서량 기병, Qiang and Di herds), 병주 (Lü Bu's
   // cavalry, the Xiongnu border) and 유주 (Gongsun Zan's white horses, the
   // Wuhuan). 기주 and 익주 are granaries, 사례 and 교주 trade hubs, 청주 and 서주
   // home to many Han iron offices, 형주 and 양주 the Yangzi forests (남양 완현
   // was also a famed ironworks). 옹주 (관중 and 롱우) and 요동 raise horses
   // too, and 남중 is forest.
+  // Horses are bred everywhere, but few away from the herds: the north China
+  // plain raises a third of what 유주 does, the west (관중, 롱우) and 요동
+  // somewhat more, and 촉 and 오 (the rest) half as many again as that.
   S.REGION = {
     liang: { horse: 2, label: "말(많음)" },
     bing: { horse: 1, label: "말" },
@@ -29,15 +32,19 @@
     yu: { pop: 1.5, label: "인구" },
     jingbei: { wood: 1.5, iron: 1.25, label: "목재, 철" },
     jingnan: { wood: 1.5, iron: 1.25, label: "목재, 철" },
-    yong: { horse: 1, label: "말" },
-    liaodong: { horse: 1, label: "말" },
+    yong: { horse: 0.6, label: "말(조금)" },
+    liaodong: { horse: 0.6, label: "말(조금)" },
     nanzhong: { wood: 1.5, label: "목재" },
     yang: { wood: 1.5, label: "목재" },
   };
   S.regionMul = (c, key) => {
     const r = S.REGION[c.prov] || {};
-    return r[key] != null ? r[key] : key === "horse" ? 0 : 1;
+    if (r[key] != null) return r[key];
+    return key === "horse" ? (PLAIN.includes(c.prov) ? 0.3 : 0.15) : 1;
   };
+  const PLAIN = ["sili", "ji", "yan", "yu", "qing", "xu", "jingbei"]; // 하북과 중원
+  // Horse country proper: where cavalry is the custom and horses are cheap.
+  S.horseCountry = (c) => S.regionMul(c, "horse") >= 1;
   S.regionLabel = (prov) => (S.REGION[prov] || {}).label || "";
 
   // Monthly yield before order: by city size, scaled by the province.

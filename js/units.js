@@ -220,7 +220,7 @@
     rattan: { prov: "nanzhong", label: "남중" },
     elephant: { prov: "jiao", label: "교주" },
     raider: { prov: "you", label: "유주" },
-    louchuan: { cities: ["nanyang", "xiangyang", "nanjun", "jiangxia", "wuchang", "changsha", "lujiang", "jiujiang", "danyang", "wujun"], label: "장강과 한수(남양, 양양, 강릉, 강하, 무창, 장사, 여강, 구강, 건업, 오군)" },
+    louchuan: { cities: ["nanjun", "wuchang", "changsha", "lujiang", "danyang", "wujun"], label: "장강 남쪽(강릉, 무창, 장사, 여강, 건업, 오군)" },
     repeater: { prov: "yi", research: "repeater", label: "익주" },
     bodao: { prov: "yi", research: "bodao", label: "익주" },
   };
@@ -313,7 +313,7 @@
 
   // The garrison a city starts a game with: mostly foot, archers on the
   // walls, and more horsemen in the horse country.
-  S.startMix = (c) => (S.regionMul && S.regionMul(c, "horse") > 0
+  S.startMix = (c) => (S.horseCountry && S.horseCountry(c)
     ? { jibing: 0.25, lightfoot: 0.2, archer: 0.2, lighthorse: 0.2, horsearcher: 0.15 }
     : { jibing: 0.35, lightfoot: 0.3, archer: 0.25, lighthorse: 0.1 });
 })(globalThis.SAM = globalThis.SAM || {});

@@ -204,7 +204,7 @@
       if (n >= 100) S.trade(state, c.id, k, n, false);
     };
     if (c.res.iron < 400) buy("iron", 1200, 800);
-    if (frontier && S.regionMul(c, "horse") === 0 && S.canRaise(state, c.owner, "lighthorse")) buy("horse", 1500, 1500);
+    if (frontier && !S.horseCountry(c) && S.canRaise(state, c.owner, "lighthorse")) buy("horse", 1500, 1500);
   }
 
   function domestic(state, c, fid) {
