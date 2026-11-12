@@ -30,17 +30,17 @@
     ["nanjun", "wuchang"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["wuchang", "changsha"], ["wuchang", "yuzhang"],
     ["wuchang", "lujiang"], ["lujiang", "yuzhang"], ["jiangxia", "wuchang"], ["danyang", "hefei"], // 유수구
     // 황하
-    ["henan", "henei"], ["henan", "hedong"], ["henei", "dongjun"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
+    ["henan", "henei"], ["henan", "hedong"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
     ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["pingyuan", "jinan"],
     // 한수: 번성에서 양양으로 건넌다
     ["nanyang", "xiangyang"],
     // 바닷길
-    ["donglai", "liaodong"], ["donglai", "wujun"],
+    ["donglai", "liaodong"], ["donglai", "daifang"], ["donglai", "wujun"],
   ]) WATER[S.roadKey(a, b)] = true;
   const isPass = (state, id) => S.isFort(state, id) && state.forts[id].kind === "pass";
   S.isWater = (a, b) => !!WATER[S.roadKey(a, b)];
   // Sea routes, drawn differently on the map.
-  const SEA = { [S.roadKey("donglai", "liaodong")]: true, [S.roadKey("donglai", "wujun")]: true };
+  const SEA = { [S.roadKey("donglai", "liaodong")]: true, [S.roadKey("donglai", "daifang")]: true, [S.roadKey("donglai", "wujun")]: true };
   S.isSea = (a, b) => !!SEA[S.roadKey(a, b)];
   S.waterLink = (state, a, b) => S.isWater(a, b);
 
