@@ -221,7 +221,7 @@
     const defs = S.serving(state, m.target).filter((o) => o.force === t.owner);
     const b = newBattle(state, {
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
-      att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk),
+      att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target),
         rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
@@ -255,7 +255,7 @@
     const split = b.relief ? 0.7 : 1;
     const gu = S.garrisonUnit(t);
     const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split;
-    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale);
+    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state);
     let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd());
     let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd());
     lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습", "땅굴"]);
@@ -480,7 +480,7 @@
     const b = newBattle(state, {
       kind: water ? "water" : "field", place: m.target, x: pos.x, y: pos.y, from: S.placeName(state, m.origin), water, rough,
       march: m, sortie,
-      att: { force: m.force, officers: atkIds, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk), supply: newSupply() },
+      att: { force: m.force, officers: atkIds, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target), supply: newSupply() },
       def: { force: sortie.force, officers: defIds, troops: sortie.troops, troops0: sortie.troops, unit: sortie.unit, train: sortie.train, morale: startMorale(dfs), supply: newSupply() },
     });
     hold(state, b, atkIds.concat(defIds));

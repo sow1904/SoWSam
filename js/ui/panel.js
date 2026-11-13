@@ -39,6 +39,7 @@
       `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>` +
       `<span class="banner" style="--force:${f.color}"><b>${f.name}군</b><i>군주 ${ruler.name}</i></span>` +
       (cap ? chip(S.capitalLabel(state, state.playerForce), cap.name, helpTip(CAPITAL_HELP)) : "") +
+      (S.houseOf(state, state.playerForce) ? chip("가문", S.HOUSES[S.houseOf(state, state.playerForce)].name, helpTip(S.HOUSES[S.houseOf(state, state.playerForce)].help)) : "") +
       chip("체제", S.regime(state, state.playerForce).label) +
       chip("도시", t.cities) + chip("무장", t.officers) +
       chip("병력", fmt(t.troops)) + chip("병역 인구", fmt(t.manpower)) +
@@ -259,6 +260,7 @@
       S.regionLabel(c.prov) && `특산: ${S.regionLabel(c.prov)}`,
       S.specialsHere(c).length && `특수 병종: ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}`,
       S.specialLand("louchuan", c) && "장강 수군(누선)",
+      S.houseLabel(c, state) && `가문: ${S.houseLabel(c, state)}${helpTip(S.HOUSES[S.houseAt(c, state).key].help)}`,
     ].filter(Boolean);
     return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>` +
       `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +

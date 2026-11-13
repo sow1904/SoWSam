@@ -48,7 +48,8 @@
   UI.showForces = lists.forces = function () {
     if (!sorts.forces) sorts.forces = { col: 3, desc: true };
     const cols = [
-      ["세력", (r) => r.f.name, (r) => `${swatch(r.f)}${r.f.name}군${r.f.emperor ? " (황제)" : ""}${r.f.id === state.playerForce ? " <em>나</em>" : ""}`],
+      ["세력", (r) => r.f.name, (r) => `${swatch(r.f)}${r.f.name}군${r.f.emperor ? " (황제)" : ""}${r.f.id === state.playerForce ? " <em>나</em>" : ""}` +
+        (S.houseOf(state, r.f.id) ? ` <em title="${S.HOUSES[S.houseOf(state, r.f.id)].help}">${S.HOUSES[S.houseOf(state, r.f.id)].name}</em>` : "")],
       ["체제", (r) => S.regime(state, r.f.id).label],
       ["수도", (r) => (state.cities[S.capitalOf(state, r.f.id)] || {}).name || "-"],
       ["도시", (r) => r.t.cities], ["무장", (r) => r.t.officers],

@@ -16,8 +16,7 @@
   // was also a famed ironworks). 옹주 (관중 and 롱우) and 요동 raise horses
   // too, and 남중 is forest.
   // Horses are bred everywhere, but few away from the herds: the north China
-  // plain raises a third of what 유주 does, the west (관중, 롱우) and 요동
-  // somewhat more, and 촉 and 오 (the rest) half as many again as that.
+  // plain raises a third of what 유주 does, and 촉 and 오 (the rest) half of that.
   S.REGION = {
     liang: { horse: 2, label: "말(많음)" },
     bing: { horse: 1, label: "말" },
@@ -32,8 +31,8 @@
     yu: { pop: 1.5, label: "인구" },
     jingbei: { wood: 1.5, iron: 1.25, label: "목재, 철" },
     jingnan: { wood: 1.5, iron: 1.25, label: "목재, 철" },
-    yong: { horse: 0.6, label: "말(조금)" },
-    liaodong: { horse: 0.6, label: "말(조금)" },
+    yong: { horse: 1, label: "말" },
+    liaodong: { horse: 1, label: "말" },
     nanzhong: { wood: 1.5, label: "목재" },
     yang: { wood: 1.5, label: "목재" },
   };

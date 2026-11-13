@@ -96,6 +96,7 @@
       marches: [],
     };
     S.useMap(scenario.map);
+    S.GAME = state; // the game in play, for rules that only know a city
     for (const [id, [name, prov, seat, lat, lon, size, gentry]] of Object.entries(S.MAP.cities)) {
       const [x, y] = S.placeXY(id, lat, lon);
       state.cities[id] = {
@@ -428,7 +429,7 @@
   S.consentTarget = function (state, c) {
     const w = c.owner ? state.forces[c.owner].weariness : 0;
     const tuntian = c.posts.tuntian ? 15 : 0;
-    return clamp(25 + c.order * 0.45 - w * 0.4 - tuntian, 0, 100);
+    return clamp(25 + c.order * 0.45 - w * 0.4 - tuntian + S.houseConsent(c), 0, 100);
   };
   // Remove soldiers from a city, retainers in proportion.
   function loseTroops(c, n) {
@@ -807,7 +808,7 @@
     const def = sideStats(S.serving(state, targetCid).filter((o) => o.force === t.owner), t.owner ? 40 : 35);
     const gu = S.garrisonUnit(t);
     const a = power(troops, att, from.train, 1) * S.unitMul(unit, gu, "siegeA", 1);
-    const d = power(t.troops, def, t.train, wallBonus(t) * gentryDefense(t)) * S.unitMul(gu, unit, "siegeD", 1);
+    const d = power(t.troops, def, t.train, wallBonus(t) * gentryDefense(t)) * S.unitMul(gu, unit, "siegeD", 1) * S.houseDefense(t, state);
     return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
   };
 
@@ -924,7 +925,7 @@
 
   // ---------- turn ----------
   // Monthly gold income and troop upkeep (1 gold per 100 soldiers).
-  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold"));
+  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold") * S.houseGold(c));
   S.upkeep = (c) => Math.ceil(c.troops / 100);
 
   // Traits: who walks away, and how fast loyalty wears down.
@@ -957,6 +958,7 @@
         }
         if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 8000) * S.regionMul(c, "pop")));
         wearinessEffects(state, c);
+        S.houseMonth(state, c);
         runGentry(state, c);
       } else {
         // Vacant cities slowly rebuild local militia.
@@ -1046,7 +1048,7 @@
   S.tradeRoom = function (state, c) {
     const stamp = state.year * 100 + state.month;
     const used = c.traded && c.traded.stamp === stamp ? c.traded.gold : 0;
-    return Math.max(0, Math.round(c.trade * S.TRADE.volume - used));
+    return Math.max(0, Math.round(c.trade * S.TRADE.volume * S.houseTrade(c) - used));
   };
   // The most that can be bought or sold now.
   S.tradeMax = function (state, c, k, sell) {
@@ -1216,7 +1218,7 @@
   // A weary realm loses public order, and unrest can break out.
   function wearinessEffects(state, c) {
     const w = state.forces[c.owner].weariness;
-    if (w <= 30) return;
+    if (w <= 30 || S.houseCalm(c)) return;
     c.order = Math.max(0, c.order - Math.round((w - 30) / 25));
     if (w > 60 && c.order < 25 && S.chance(state, w / 10)) {
       const lost = loseTroops(c, Math.ceil(c.troops * 0.15));
@@ -1229,6 +1231,7 @@
   // Bring saves from older versions up to date.
   S.migrate = function (state) {
     S.useMap(state.map);
+    S.GAME = state;
     for (const c of Object.values(state.cities)) {
       if (!c.posts) c.posts = S.emptyPosts();
       if (c.manpower == null) c.manpower = Math.round(S.manpowerMax(c) * 0.6);
