@@ -217,13 +217,12 @@
     };
     const frontier = enemyNeighbors(state, c).length > 0;
 
-    // Recruit visible free officers and captives first.
-    const targets = S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, fid));
-    for (const t of targets) {
+    // Recruit visible free officers first. (Captives are dealt with when taken.)
+    for (const t of S.visibleFree(state, c.id)) {
       const o = take(byDesc("speech"));
       if (!o) return;
       if (S.recruitChance(state, o, t) > 0) S.recruit(state, o.id, c.id, t.id);
-      else { idle.unshift(o); if (t.status === "captive") S.release(state, c.id, t.id); }
+      else idle.unshift(o);
     }
     // Look for hidden talent now and then.
     if (idle.length > 1 && S.chance(state, 25)) {

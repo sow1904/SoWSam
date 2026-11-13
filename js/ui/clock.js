@@ -102,6 +102,9 @@
       if (r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
     });
     for (const r of reports) addBattle(r);
+    // Those we have just taken alive: their fate is asked at once.
+    const caught = reports.filter((r) => r.attacker === me).flatMap((r) => r.captured)
+      .filter((id) => state.officers[id].status === "captive" && state.officers[id].captor === me);
     const fighting = (state.battles || []).some((b) => involves(b, me));
     if (fighting || reports.length || clock.wasFighting) UI.renderBattles();
     clock.wasFighting = fighting;
@@ -129,8 +132,11 @@
       UI.tab = "post";
       UI.renderAll();
       UI.centerOn(taken[0]);
-      return pause(`${S.josa(taken[0].name, "을", "를")} 차지했습니다. 담당과 위임 방침을 정하세요`);
+      pause(`${S.josa(taken[0].name, "을", "를")} 차지했습니다. 담당과 위임 방침을 정하세요`);
+      if (caught.length) UI.showCaptives(caught);
+      return;
     }
+    if (caught.length) { pause("무장을 사로잡았습니다"); UI.showCaptives(caught); return; }
     const han = state.han;
     const courtNew = han && han.pending && han.holder === me && han.pending !== clock.pending;
     clock.pending = han && han.pending;

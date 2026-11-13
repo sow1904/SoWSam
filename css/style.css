@@ -297,6 +297,8 @@ th.desc::after { content: " ▼"; font-size: 9px; color: var(--gold2); }
 }
 .mark { margin-left: 3px; font-family: var(--serif); font-size: 10px; color: #c9b27a; border: 1px solid #6a5433; border-radius: 2px; padding: 0 2px; }
 .mark.f { color: #e8a6a0; border-color: #8a4a45; }
+.capt { display: inline-flex; gap: 4px; align-items: center; }
+.capt button { padding: 2px 8px; }
 /* Abilities by how good they are. */
 .ab-s { color: #ffd76a; font-weight: 800; text-shadow: 0 0 6px rgba(255, 190, 60, 0.45); }
 .ab-a { color: #f0c98a; font-weight: 700; }

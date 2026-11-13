@@ -568,8 +568,8 @@
     if (err) return fail(err);
     const t = state.officers[targetId];
     if (!t || t.city !== cid) return fail("대상이 이 도시에 없습니다.");
-    const valid = (t.status === "free" && !t.hidden) || (t.status === "captive" && t.captor === c.owner);
-    if (!valid) return fail("등용할 수 없는 대상입니다.");
+    if (t.status === "captive") return fail("포로는 포로 메뉴에서 설득합니다.");
+    if (t.status !== "free" || t.hidden) return fail("등용할 수 없는 대상입니다.");
     const pct = S.recruitChance(state, o, t);
     if (pct <= 0) return fail(`${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
     o.done = true;
@@ -602,26 +602,87 @@
     return { ok: true, msg: `${t.name}에게 금 ${S.josa(S.COST.reward, "을", "를")} 하사해 충성이 ${gain} 올랐습니다.` };
   };
 
+  // ---------- captives (포로) ----------
+  // A captive's fate is settled by whoever holds him: persuade him to serve
+  // (등용, three tries in all, each a fresh throw), keep him (포로), let him
+  // go (해방) or put him to death (참수). The player is asked the moment a
+  // captive is taken, and can come back to it from the city's 포로 menu.
+  S.CAPTIVE_TRIES = 3;
+  S.captiveTries = (t) => Math.max(0, S.CAPTIVE_TRIES - (t.tries || 0));
+  const heldBy = (state, t, fid) => !!t && t.status === "captive" && (!fid || t.captor === fid);
+  // Who speaks to the captive: the captor's best talker in that place.
+  S.persuader = function (state, t) {
+    const there = S.serving(state, t.city).filter((o) => o.force === t.captor);
+    return there.length ? S.best(there, "speech") : null;
+  };
+  // The same odds as any recruiting of a captive, by the persuader's speech.
+  S.persuadeChance = function (state, t) {
+    const who = S.persuader(state, t);
+    return who ? S.recruitChance(state, who, t) : 0;
+  };
+  S.persuade = function (state, targetId) {
+    const t = state.officers[targetId];
+    if (!heldBy(state, t)) return fail("포로가 아닙니다.");
+    if (S.captiveTries(t) <= 0) return fail(`${S.josa(t.name, "은", "는")} 더 설득할 수 없습니다. (${S.CAPTIVE_TRIES}번까지)`);
+    const who = S.persuader(state, t);
+    if (!who) return fail("그곳에 설득할 무장이 없습니다.");
+    const pct = S.recruitChance(state, who, t);
+    if (pct <= 0) return fail(`${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
+    t.tries = (t.tries || 0) + 1;
+    if (S.chance(state, pct)) {
+      const old = t.force;
+      t.loyalty = 65;
+      t.force = t.captor;
+      t.status = "serving";
+      t.hidden = false;
+      t.captor = null;
+      t.tries = 0;
+      t.done = true;
+      const from = old && old !== t.force ? ` (${S.forceName(state, old)} 출신)` : "";
+      return { ok: true, joined: true, msg: `${who.name}의 설득으로 포로 ${S.josa(t.name, "이", "가")} ${S.forceName(state, t.force)}에 합류했습니다!${from}` };
+    }
+    const left = S.captiveTries(t);
+    return { ok: true, joined: false, msg: `${S.josa(who.name, "이", "가")} 포로 ${S.josa(t.name, "을", "를")} 설득했지만 거절당했습니다. (${left ? `${left}번 남음` : "더 설득할 수 없음"})` };
+  };
+  // Let a captive go: to his own force's nearest city, or out of office if
+  // that force is no more.
   S.release = function (state, cid, targetId) {
     const t = state.officers[targetId];
-    const c = state.cities[cid];
-    if (!t || t.status !== "captive" || t.city !== cid || t.captor !== c.owner) return fail("석방할 수 없는 대상입니다.");
+    const c = S.place(state, cid);
+    if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("해방할 수 없는 대상입니다.");
     freeCaptive(state, t);
-    return { ok: true, msg: `${S.josa(t.name, "을", "를")} 석방했습니다.` };
+    const where = t.status === "serving" ? `${S.forceName(state, t.force)}의 ${S.ro(S.placeName(state, t.city))} 돌아갔습니다` : "재야로 돌아갔습니다";
+    return { ok: true, msg: `포로 ${S.josa(t.name, "을", "를")} 해방했습니다. ${S.josa(t.name, "은", "는")} ${where}.` };
+  };
+  S.behead = function (state, cid, targetId) {
+    const t = state.officers[targetId];
+    const c = S.place(state, cid);
+    if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("참수할 수 없는 대상입니다.");
+    const from = t.force && state.forces[t.force] ? `${S.forceName(state, t.force)}의 ` : "";
+    t.status = "dead";
+    t.hidden = true;
+    t.captor = null;
+    const msg = `${S.forceName(state, c.owner)}이 포로 ${from}${S.josa(t.name, "을", "를")} 참수했습니다.`;
+    if (c.owner !== state.playerForce) S.addLog(state, msg, "info");
+    return { ok: true, msg };
   };
 
-  // Send a released/escaped captive back to their own force if it still exists.
+  // Send a released or escaped captive back to the nearest city of his own
+  // force, if it still stands.
   function freeCaptive(state, t) {
     t.captor = null;
+    t.tries = 0;
     const home = t.force && state.forces[t.force] && state.forces[t.force].alive ? S.citiesOf(state, t.force) : [];
     if (home.length) {
       t.status = "serving";
-      t.city = home[Math.floor(rand(state) * home.length)].id;
+      t.city = home.reduce((a, b) => (S.nodeKm(state, t.city, b.id) < S.nodeKm(state, t.city, a.id) ? b : a)).id;
       S.officersMoved(state);
     } else {
       t.status = "free";
       t.force = null;
       t.hidden = false;
+      t.city = S.homeCity(state, t.city);
+      S.officersMoved(state);
     }
   }
 

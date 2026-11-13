@@ -303,6 +303,7 @@
       } else {
         d.status = "captive";
         d.captor = A.force;
+        d.tries = 0;
         if (fort) d.city = S.place(state, A.origin) && S.place(state, A.origin).owner === A.force ? A.origin : (S.citiesOf(state, A.force)[0] || {}).id || d.city;
         S.officersMoved(state);
         report.captured.push(d.id);
@@ -680,12 +681,13 @@
       : (report.attackerWon ? `${S.forceName(state, A.force)}이 ${where} 앞에서 ${S.forceName(state, D.force)}의 요격을 물리쳤습니다.`
         : `${S.forceName(state, D.force)}이 ${where} 앞에서 ${S.forceName(state, A.force)}을 요격해 물리쳤습니다.`);
     S.addLog(state, text, report.attackerWon ? "war" : "warfail");
-    // Computer forces let go of captives who will never serve them.
-    if (A.force !== state.playerForce && report.captured.length) {
-      const lead = crewOf(state, A.officers, A.force)[0];
+    // A computer force tries three times to win a captive over, then keeps
+    // him. (When it frees or kills one is yet to be decided.)
+    if (A.force !== state.playerForce) {
       for (const pid of report.captured) {
-        const p = state.officers[pid];
-        if (lead && p.status === "captive" && S.recruitChance(state, lead, p) === 0) S.release(state, p.city, pid);
+        for (let i = 0; i < S.CAPTIVE_TRIES && state.officers[pid].status === "captive"; i++) {
+          if (!S.persuade(state, pid).ok) break;
+        }
       }
     }
     if (onEvent) onEvent({ ok: true, report, msg: b.last });

@@ -141,7 +141,7 @@
   const CMD = {
     draft: ["徵", "징병"], train: ["鍊", "훈련"], attack: ["征", "출진"], relieve: ["援", "원군"], move: ["輸", "수송"], build: ["築", "축성"],
     search: ["探", "탐색"], recruit: ["登", "등용"], reward: ["賞", "포상"], relocate: ["移", "이동"],
-    scheme: ["計", "계략"], woo: ["懷", "회유"], research: ["硏", "연구"], trade: ["商", "교역"],
+    scheme: ["計", "계략"], woo: ["懷", "회유"], research: ["硏", "연구"], trade: ["商", "교역"], captives: ["虜", "포로"],
   };
   function cmdButton(place, cmd, free) {
     const disabled = !free && !S.idle(state, place.id).length;
@@ -181,7 +181,8 @@
         cmdGroup("군사", [cmdButton(c, "draft"), cmdButton(c, "train"), cmdButton(c, "attack"),
           S.reliefTargets(state, c.id).length ? cmdButton(c, "relieve") : "", cmdButton(c, "move"),
           S.buildSites(state, c.id).length ? cmdButton(c, "build") : ""]) +
-        cmdGroup("인사", [cmdButton(c, "search"), cmdButton(c, "recruit"), cmdButton(c, "reward", true), cmdButton(c, "relocate")]) +
+        cmdGroup("인사", [cmdButton(c, "search"), cmdButton(c, "recruit"), cmdButton(c, "reward", true), cmdButton(c, "relocate"),
+          S.captivesIn(state, c.id, c.owner).length ? cmdButton(c, "captives", true) : ""]) +
         cmdGroup("계략", [cmdButton(c, "scheme"), cmdButton(c, "woo")]) +
         cmdGroup("경제", [cmdButton(c, "trade", true), S.isCapital(state, c.id) ? cmdButton(c, "research") : ""]) +
         capitalRow(c) +
@@ -194,7 +195,7 @@
       if (free.length) html += `<h3>재야 인재</h3>` + UI.officerTable(free, {});
       const caps = own ? S.captivesIn(state, c.id, c.owner) : [];
       if (caps.length) {
-        html += `<h3>포로</h3>` + UI.officerTable(caps, { extraHead: "", extra: (o) => `<button data-action="release" data-oid="${o.id}">석방</button>` });
+        html += `<h3>포로</h3>` + UI.officerTable(caps, { extraHead: "", extra: () => `<button data-action="cmd" data-cmd="captives">처우</button>` });
       }
       return html;
     }]);
