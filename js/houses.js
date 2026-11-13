@@ -14,7 +14,7 @@
       name: "오두미도", rulers: ["장로", "장위"], land: "한중",
       home: (p) => p.id === "hanzhong" || p.home === "hanzhong",
       help: "장로 가문이 다스리는 동안의 힘입니다.\n" +
-        "한중에서: 치안이 매달 1 오르고 전쟁 피로로 떨어지지 않으며, 유민이 들어와 인구가 매달 0.3% 늘고, 호족 협력 목표가 15 높습니다.\n" +
+        "한중에서: 치안이 매달 1 오르고 전쟁 피로로 떨어지지 않으며, 유민이 들어와 인구가 매달 0.3% 늘고, 호족 협력 목표가 15 높습니다. 성과 관문(양평관)을 지킬 때 전력이 15% 높습니다.\n" +
         "한중 밖에서: 교단이 낯선 땅이라 치안이 매달 1 떨어지고(40까지), 호족 협력 목표가 10 낮습니다.",
     },
     nanhai: {
@@ -58,7 +58,7 @@
   S.houseTrade = (c) => (at(c, "nanhai", true) ? 2 : 1);
   S.houseConsent = (c) => (at(c, "wudou", true) ? 15 : at(c, "wudou", false) ? -10 : 0);
   S.houseCalm = (c) => at(c, "wudou", true); // weariness does not shake order
-  S.houseDefense = (place, state) => (at(place, "haidong", true, state) ? 1.15 : 1);
+  S.houseDefense = (place, state) => (at(place, "haidong", true, state) || at(place, "wudou", true, state) ? 1.15 : 1);
   // Morale an attacker starts with, marching on a place.
   S.houseMorale = function (state, fid, targetId) {
     const t = S.place(state, targetId);

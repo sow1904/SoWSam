@@ -33,9 +33,7 @@
     for (const el of document.querySelectorAll(`input[type=range][id^="${prefix}"]`)) if (+el.value > 0) out[el.id.slice(prefix.length)] = +el.value;
     return out;
   };
-  const UNIT_HINT = `창은 기병을, 기병은 궁병을, 검(검과 방패를 든 보병)은 창과 궁을, 궁은 창을 이기고, 궁기병은 보병을 멀리서 괴롭힙니다. ` +
-    `궁은 성을 칠 때도 지킬 때도 강하고, 기병은 성에서 약합니다. 기병은 빨리 행군하지만 험한 산길에서 약해집니다. ` +
-    `큰 강 위에서는 병종과 상관없이 배로 싸웁니다. 몽충이 기본이고, 수전 특기 무장이 있으면 투함입니다.`;
+  const UNIT_HINT = UI.HELP.units;
 
   const SIMPLE = {
     train: { title: "훈련", stat: "cmd", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },

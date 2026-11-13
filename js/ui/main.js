@@ -50,6 +50,11 @@
       else if (UI.cityWinOpen()) UI.closeCity();
       return;
     }
+    if (ev.code === "F1") {
+      ev.preventDefault();
+      if (UI.modalOpen()) UI.closeModal(); else UI.showHelp();
+      return;
+    }
     if (ev.code === "Space") {
       ev.preventDefault();
       if (!UI.modalOpen()) UI.actions.togglePause();

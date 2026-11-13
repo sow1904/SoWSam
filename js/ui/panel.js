@@ -6,27 +6,7 @@
   let state = null;
   UI.bind((s) => { state = s; });
 
-  const WEARINESS_HELP = [
-    "전쟁 피로(0~100): 세력 전체 백성이 전쟁에 지친 정도입니다.",
-    "단계: 20 미만 안정, 40 미만 피로, 60 미만 염전, 그 이상 한계",
-    "",
-    "오르는 경우: 전사자(세력 인구에 비해 많을수록), 공격 실패 +3, 도시를 빼앗김 +5, 많은 징병",
-    "내리는 경우: 매달 저절로(피로가 높을수록 빨리), 공격 성공 -2, 방어 성공 -1",
-    "",
-    "효과:",
-    "· 징병으로 모이는 병사가 줄고, 호족 협력이 떨어짐",
-    "· 30 초과: 매달 모든 도시의 치안이 떨어짐",
-    "· 50 초과: 무장 충성이 더 빨리 떨어짐",
-    "· 60 초과: 치안 25 미만 도시에서 민란(병사와 인구 감소)",
-  ].join("\n");
-  const CAPITAL_HELP = [
-    "세력 수도(칭제하면 황궁): 연구는 수도에서만 할 수 있습니다.",
-    `다른 아군 도시의 명령 창에서 금 ${S.CAPITAL.moveCost}을 들여 수도를 옮길 수 있고, 옮긴 뒤 ${S.CAPITAL.moveCooldown}개월 동안은 다시 옮길 수 없습니다.`,
-    "수도를 잃으면 다른 도시 일부가 적에게 항복하고, 충성 높은 무장은 새 수도로 향하며, 남은 가장 큰 도시가 새 수도가 됩니다.",
-  ].join("\n");
-  const COMMAND_HELP = "무장 한 명이 한 달에 한 번 명령을 실행합니다. 버튼을 누른 뒤 실행할 무장을 고릅니다.\n" +
-    "이미 명령한 무장, 담당 중인 무장, 길 위에 있는 무장은 고를 수 없습니다. 매달 1일에 다시 명령할 수 있습니다.\n" +
-    "포상은 무장의 명령을 쓰지 않습니다. 연구는 수도에서만 할 수 있습니다.";
+  const H = UI.HELP; // the words behind each "?" (js/ui/help.js)
 
   // ---------- top bar ----------
   const chip = (label, value, extra) => `<span class="chip"><i>${label}</i><b>${value}</b>${extra || ""}</span>`;
@@ -38,12 +18,12 @@
     UI.setHTML($("#status"),
       `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>` +
       `<span class="banner" style="--force:${f.color}"><b>${f.name}군</b><i>군주 ${ruler.name}</i></span>` +
-      (cap ? chip(S.capitalLabel(state, state.playerForce), cap.name, helpTip(CAPITAL_HELP)) : "") +
+      (cap ? chip(S.capitalLabel(state, state.playerForce), cap.name, helpTip(H.capital)) : "") +
       (S.houseOf(state, state.playerForce) ? chip("가문", S.HOUSES[S.houseOf(state, state.playerForce)].name, helpTip(S.HOUSES[S.houseOf(state, state.playerForce)].help)) : "") +
       chip("체제", S.regime(state, state.playerForce).label) +
       chip("도시", t.cities) + chip("무장", t.officers) +
       chip("병력", fmt(t.troops)) + chip("병역 인구", fmt(t.manpower)) +
-      chip("전쟁 피로", `<span class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</span>`, helpTip(WEARINESS_HELP)) +
+      chip("전쟁 피로", `<span class="${f.weariness >= 40 ? "bad" : ""}">${Math.round(f.weariness)} ${S.wearinessLabel(f.weariness)}</span>`, helpTip(H.weariness)) +
       chip("금", fmt(t.gold)) + chip("군량", fmt(t.food)));
   };
 
@@ -104,9 +84,7 @@
   function delegateRow(c) {
     const cur = S.delegateOf(state, c) || "";
     const opts = [["", "직접 다스림"]].concat(Object.entries(S.DELEGATE).map(([k, v]) => [k, `위임: ${v}`]));
-    const tip = helpTip("위임하면 매달 1일이 지나 2일로 넘어갈 때 태수가 담당 배치, 관리 고용, 등용, 회유, 징병, 훈련, 포상을 알아서 합니다. " +
-      "내정 중시는 담당에 무장을 많이 두고 병력은 지킬 만큼만, 군비 확장은 무장을 남겨 징병과 훈련에 힘씁니다. " +
-      "출진, 수송, 이동, 계략, 연구, 포로 처리는 하지 않으며, 직접 명령도 그대로 내릴 수 있습니다.");
+    const tip = helpTip(H.delegate);
     return `<div class="row"><label>통치${tip}</label><select id="delegate" data-place="${c.id}">` +
       opts.map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
       `</select></div>`;
@@ -115,15 +93,14 @@
   // the road (요격) or hold the walls (농성).
   function policyRow(id) {
     const cur = S.defensePolicy(state, id);
-    const tip = helpTip("적 군단이 오면 태수가 요격과 농성 중 하나를 고릅니다. 태수에게 맡기면 야전에 강하고 과감한 장수는 나가 싸우고, " +
-      "신중하거나 수성에 강한 장수는 성을 지킵니다. 요격 우선이면 더 쉽게 나가고, 농성이면 나가지 않습니다.");
+    const tip = helpTip(H.policy);
     return `<div class="row"><label>방어 방침${tip}</label><select id="defPolicy" data-place="${id}">` +
       Object.entries(S.DEFENSE_POLICY).map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
       `</select></div>`;
   }
   function garrisonRow(id) {
     const p = S.place(state, id);
-    const tip = helpTip("성은 이 병력이 모두 함께 지킵니다. 요격하러 나갈 때는 다가오는 적에게 유리한 병종을 골라 내보냅니다.");
+    const tip = helpTip(H.garrison);
     return `<div class="row"><label>수비 병력${tip}</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>`;
   }
   // Moving the force capital here.
@@ -155,9 +132,7 @@
     const ttRow = `<tr><td>둔전</td><td>호족 ${Math.round(c.gentry)}</td><td>${tt ? holderName(c, "tuntian") : "미실시"}</td>` +
       `<td>${tt ? UI.tuntianText(S.postAbility(state, tt, "tuntian")) : "-"}</td>` +
       `<td><button data-action="post" data-kind="tuntian">변경</button></td></tr>`;
-    const tip = helpTip("담당관은 매달 자동으로 내정을 발전시킵니다. 공석이면 수치가 깎입니다. 담당 무장은 다른 명령을 할 수 없습니다.\n" +
-      "무장을 임명한 날 바로 빼면 명령을 쓰지 않은 것으로 칩니다. 하루라도 지나면 그달에는 뺄 수 없고, 다음 달부터는 1일에 빼야 그달 명령을 할 수 있습니다.\n" +
-      "둔전은 선택 정책입니다. 군량을 생산하고 호족 세력을 줄이지만, 실시하는 동안 호족 협력이 떨어집니다.");
+    const tip = helpTip(H.posts);
     return `<h3>내정 담당${tip}</h3><table><tr><th>분야</th><th>수치</th><th>담당</th><th>월 변화</th><th></th></tr>${rows}${ttRow}</table>`;
   }
 
@@ -202,7 +177,7 @@
     const tabs = [];
     if (own) {
       tabs.push(["cmd", "명령", () =>
-        `<p class="idle">대기 무장 <b>${idle}</b> / ${servants.length}명${helpTip(COMMAND_HELP)}</p>` +
+        `<p class="idle">대기 무장 <b>${idle}</b> / ${servants.length}명${helpTip(H.command)}</p>` +
         cmdGroup("군사", [cmdButton(c, "draft"), cmdButton(c, "train"), cmdButton(c, "attack"),
           S.reliefTargets(state, c.id).length ? cmdButton(c, "relieve") : "", cmdButton(c, "move"),
           S.buildSites(state, c.id).length ? cmdButton(c, "build") : ""]) +
@@ -236,7 +211,7 @@
     const tabs = [];
     if (own) {
       tabs.push(["cmd", "명령", () =>
-        `<p class="idle">대기 무장 <b>${S.idle(state, f.id).length}</b> / ${servants.length}명${helpTip(COMMAND_HELP)}</p>` +
+        `<p class="idle">대기 무장 <b>${S.idle(state, f.id).length}</b> / ${servants.length}명${helpTip(H.command)}</p>` +
         cmdGroup("군사", [cmdButton(f, "attack"), S.reliefTargets(state, f.id).length ? cmdButton(f, "relieve") : "", cmdButton(f, "move")]) +
         cmdGroup("인사", [cmdButton(f, "relocate")]) +
         `<h3>방비</h3>` + (f.kind === "pass" ? `<p class="hint">관문은 나가 싸우지 않고 지킵니다.</p>` : policyRow(f.id)) + garrisonRow(f.id)]);
@@ -278,8 +253,7 @@
       S.RES_KEYS.map((k) => stat(S.RESOURCES[k], `${fmt(c.res[k])}/${fmt(S.resCap(c, k))}/+${S.resYield(c, k)}`)).join("") +
       (own ? stat("수입", "+" + S.income(c)) + stat("병사 봉급", "-" + S.upkeep(c)) + stat("관리 봉급", "-" + S.salaries(c)) : "") +
       `</div>` +
-      `<h3>호족${own ? helpTip("호족 사병은 이 도시를 지킬 때는 함께 싸우지만 출진·이동하지 않습니다. " +
-        `호족 세력이 강하고 협력이 낮을수록 사병 비중이 커집니다. 협력 목표치 ${Math.round(S.consentTarget(state, c))}.`) : ""}</h3><div class="stats">` +
+      `<h3>호족${own ? helpTip(`${H.gentry} 협력 목표치 ${Math.round(S.consentTarget(state, c))}.`) : ""}</h3><div class="stats">` +
       stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
       stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString()) +
       `</div>`;
