@@ -104,6 +104,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--red2); }
 .banner i { font-style: normal; font-weight: 400; font-size: 12px; opacity: 0.9; }
 .badge { font-size: 12px; font-family: var(--sans); }
 .chip { white-space: nowrap; }
+.chip.auto b { color: var(--gold2); margin-right: 6px; }
+.chip.auto button { padding: 0 8px; font-size: 12px; }
+.chip .swatch { margin-right: 4px; }
+.watch { margin: 0 0 10px; gap: 10px; }
+.watch button { font-family: var(--serif); font-weight: 700; letter-spacing: 2px; padding: 6px 18px; }
 .chip i { font-style: normal; color: var(--muted); font-size: 12px; margin-right: 5px; }
 .chip b { color: var(--ink); }
 

@@ -68,7 +68,7 @@
   // ---------- diplomacy ----------
   function diplomacyCell(fid) {
     const me = state.playerForce;
-    if (fid === me || state.over) return "";
+    if (!me || fid === me || state.over) return "";
     if (S.allied(state, me, fid)) return `<button data-action="breakPact" data-force="${fid}">동맹 파기</button>`;
     const cd = S.pactCooldown(state, me, fid);
     if (cd) return `<span class="hint">${cd}개월 후</span>`;
@@ -91,7 +91,7 @@
 
   // ---------- the player's cities and officers ----------
   UI.showCities = lists.cities = function () {
-    const me = state.playerForce;
+    const me = UI.viewForce();
     const cols = [
       ["도시", (c) => c.name, (c) => `${S.isCapital(state, c.id) ? `<span class="capstar">★</span>` : ""}<b>${c.name}</b>`],
       ["주", (c) => S.PROVINCES[c.prov]], ["군현", (c) => S.fullName(c)],
@@ -104,7 +104,7 @@
       ["무장", (c) => S.serving(state, c.id).length, (c) => `${S.serving(state, c.id).length} <span class="hint">(대기 ${S.idle(state, c.id).length})</span>`],
       ["통치", (c) => S.delegateOf(state, c) || "", (c) => (S.delegateOf(state, c) ? S.DELEGATE[S.delegateOf(state, c)] : "직접")],
     ];
-    UI.openModal(title("도시 일람") + listTable("cities", cols, S.citiesOf(state, me), (c) => `class="pick" data-action="goto" data-city="${c.id}"`) +
+    UI.openModal(title(state.playerForce ? "도시 일람" : `${S.forceName(state, me)} 도시 일람`) + listTable("cities", cols, S.citiesOf(state, me), (c) => `class="pick" data-action="goto" data-city="${c.id}"`) +
       `<p class="hint">제목을 누르면 그 열로 정렬합니다. 줄을 누르면 그 도시로 갑니다.</p>` + closeBar, true);
   };
   const whereOf = (o) => S.placeName(state, o.city);
@@ -114,7 +114,7 @@
     return k ? `${S.POSTS[k].label} 담당` : o.done ? "완료" : "대기";
   }
   UI.showOfficers = lists.officers = function () {
-    const me = state.playerForce;
+    const me = UI.viewForce();
     const cols = [
       ["이름", (o) => o.name, (o) => `${S.isRuler(state, o) ? `<span class="crown" title="군주">主</span>` : ""}<b>${o.name}</b>${UI.personMarks(o)}`],
       ["소재", whereOf], ["나이", (o) => S.age(state, o)],
@@ -125,7 +125,7 @@
       ["특기", (o) => S.skillsOf(o).join(" "), UI.skillTags],
     ];
     const list = S.officersOf(state, me);
-    UI.openModal(title(`무장 일람 (${list.length})`) + listTable("officers", cols, list, (o) => `class="pick" data-action="goto" data-city="${o.city}"`) +
+    UI.openModal(title(`${state.playerForce ? "" : S.forceName(state, me) + " "}무장 일람 (${list.length})`) + listTable("officers", cols, list, (o) => `class="pick" data-action="goto" data-city="${o.city}"`) +
       `<p class="hint">제목을 누르면 그 열로 정렬합니다. 줄을 누르면 그 무장이 있는 곳으로 갑니다.</p>` + closeBar, true);
   };
 
@@ -141,9 +141,9 @@
     return `<table><tr><th>기술</th><th>단계</th><th>다음 단계</th></tr>${rows}</table>`;
   };
   UI.showTech = function () {
-    const me = state.playerForce;
+    const me = UI.viewForce();
     const cap = S.capitalOf(state, me);
-    UI.openModal(title("기술") + UI.techTable(me) +
+    UI.openModal(title(state.playerForce ? "기술" : `${S.forceName(state, me)} 기술`) + UI.techTable(me) +
       `<p class="hint">연구는 ${S.capitalLabel(state, me)}에서 무장 한 명이 한 달 동안 금 ${S.TECH_COST}을 들여 합니다. 기술은 세력 전체의 것이고, 단계가 오르면 그 계열의 상위 병종을 뽑을 수 있습니다.</p>` +
       `<div class="footer">${cap ? `<button data-action="goto" data-city="${cap}">${state.cities[cap].name}에서 연구하기</button>` : ""}<button class="primary" data-action="close">닫기</button></div>`);
   };
@@ -151,7 +151,7 @@
   // ---------- the Han court ----------
   function courtPending() {
     const han = state.han;
-    if (!han || !han.pending || han.holder !== state.playerForce) return "";
+    if (!han || !han.pending || !state.playerForce || han.holder !== state.playerForce) return "";
     const p = han.pending;
     if (p.type === "abdicate") {
       return `<h3>선양 조서</h3><p>헌제가 제위를 물려주겠다고 합니다. 받으면 황제에 오르고 한 왕조는 끝납니다. ` +
@@ -183,7 +183,7 @@
         stat("헌제의 우호도", `${han.favor} ${S.favorLabel(han.favor)}`) +
         (h ? stat("옹립 세력 영토", `${Math.round(S.cityShare(state, h) * 100)}%`) : "") + `</div>`;
       html += courtPending();
-      if (h === me) {
+      if (me && h === me) {
         const dist = S.reachable(state, state.emperor);
         const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
         const wait = han.movedAt != null ? han.movedAt + S.COURT.moveCooldown - S.monthsElapsed(state) : 0;
@@ -199,8 +199,8 @@
     }
     const emperors = Object.values(state.forces).filter((f) => f.alive && f.emperor);
     html += `<h3>황제</h3><p>${emperors.length ? emperors.map((f) => `${f.name} (${f.emperorYear}년${f.hanHeir ? ", 한 황실 계승" : ""})`).join(", ") : "아직 황제를 칭한 군주가 없습니다."}</p>`;
-    const can = S.canProclaim(state, me);
-    if (!state.forces[me].emperor) {
+    const can = me ? S.canProclaim(state, me) : { ok: false };
+    if (me && !state.forces[me].emperor) {
       const heir = S.isHanHeir(state, me);
       html += `<p class="hint">${heir
         ? "한 왕조가 끝났으므로, 한조를 중시하는 군주는 한 황실을 잇는다는 명분으로 칭제할 수 있습니다. 무장의 충성이 떨어지지 않습니다."
@@ -220,14 +220,19 @@
       `<div class="sysmenu">` +
       `<button data-action="save"><b>저장</b><span>지금 상태를 기록합니다. 매달 1일에도 저절로 저장됩니다.</span></button>` +
       `<button data-action="clockSettings"><b>시간 설정</b><span>배속과 자동 일시정지를 정합니다.</span></button>` +
+      (state.playerForce ? `<button data-action="auto"><b>세력 위임</b><span>${state.auto
+        ? "지금 세력 전체를 맡겨 두었습니다. 누르면 다시 직접 다스립니다."
+        : "세력 전체를 컴퓨터에 맡깁니다. 도시와 군대, 외교와 황실, 포로 처우까지 알아서 하고, 시간이 저절로 멈추지 않습니다. 언제든 되돌릴 수 있습니다."}</span></button>` : "") +
       `<button data-action="title"><b>타이틀로</b><span>저장한 뒤 첫 화면으로 돌아갑니다.</span></button>` +
       `</div>` + closeBar);
   };
 
   UI.showEnd = function () {
     const o = state.over;
-    const win = o.result === "win" && o.force === state.playerForce;
-    UI.openModal(`<div class="title-hero end"><h1>${win ? "천하통일" : "패배"}</h1><p>${win
+    const win = o.result === "win" && (o.force === state.playerForce || !state.playerForce);
+    UI.openModal(`<div class="title-hero end"><h1>${win ? "천하통일" : "패배"}</h1><p>${!state.playerForce
+      ? `${state.year}년 ${state.month}월, ${state.forces[o.force].name}군이 천하를 통일했습니다.`
+      : win
       ? `${state.year}년 ${state.month}월, ${state.forces[state.playerForce].name}군이 천하를 통일했습니다!`
       : o.result === "win" ? `${state.forces[o.force].name}군이 천하를 통일했습니다.` : "모든 도시를 잃었습니다."}</p></div>` +
       `<div class="footer"><button class="primary" data-action="title">타이틀로</button></div>`);
@@ -250,7 +255,7 @@
           (S.traitsOf(r).length ? `<div class="fc-traits">${S.traitsOf(r).map((x) => `<span class="trait">${x}</span>`).join(" ")}</div>` : "") + `</button>`;
       }).join("");
     UI.openModal(`<div class="title-hero"><div class="seal">SoW</div><h1>삼국지</h1><p class="scn">${sc.title}</p><p>${sc.desc}</p></div>` +
-      (saved && !saved.over ? `<div class="footer center"><button class="primary big" data-action="continue">이어하기 — ${saved.year}년 ${saved.month}월 · ${saved.forces[saved.playerForce].name}군</button></div>` : "") +
+      (saved && !saved.over ? `<div class="footer center"><button class="primary big" data-action="continue">이어하기 — ${saved.year}년 ${saved.month}월 · ${saved.playerForce ? saved.forces[saved.playerForce].name + "군" : "관전"}</button></div>` : "") +
       `<h3>수명</h3><div class="links">` +
       Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "real" ? " checked" : ""}> ${v}</label>`).join(" ") +
       `</div><p class="hint">무장은 16세가 되면 등장합니다. 사실 수명에서는 병으로 죽은 인물은 정사의 사망 연도 2년 전부터 매년 72면체 주사위를, ` +
@@ -261,7 +266,9 @@
       `<label><input type="checkbox" id="optWomen" checked> 여성 <span class="mark f">女</span></label></div>` +
       `<p class="hint">정사에 기록된 인물은 늘 나옵니다. 삼국지연의에만 나오는 인물(주창, 초선, 형도영 등)과 여성(채염, 손상향, 왕이 등)은 뺄 수 있습니다. ` +
       `세력에 속하지 않은 인물은 고향 도시의 재야 인재로 나오고, 아직 어린 인물은 16세가 되는 해에 등장합니다.</p>` +
-      `<h3>세력을 고르세요</h3><div class="forcegrid">${cards}</div>`, true);
+      `<h3>세력을 고르세요</h3>` +
+      `<div class="links watch"><button data-action="start" data-force="">관전 모드</button><span class="hint">세력을 고르지 않고 모든 세력을 컴퓨터에 맡긴 채 지켜봅니다.</span></div>` +
+      `<div class="forcegrid">${cards}</div>`, true);
     $("#modal .box").classList.add("titlebox");
   };
 
@@ -287,6 +294,12 @@
     tech: () => state && UI.showTech(),
     system: () => state && UI.showSystem(),
     save: () => state && UI.saveGame(),
+    auto: () => {
+      if (!state || !state.playerForce) return;
+      if (!state.auto && !confirm("세력 전체를 컴퓨터에 맡길까요? 언제든 되돌릴 수 있습니다.")) return;
+      UI.result(S.setAuto(state, !state.auto));
+      if (UI.modalOpen()) UI.closeModal();
+    },
     demand: (d) => { if (UI.result(S.answerDemand(state, !!d.yes))) UI.showCourt(); },
     abdicate: (d) => {
       if (d.yes && !confirm("선양을 받아 황제에 오를까요? 한 왕조가 끝납니다.")) return;
@@ -304,15 +317,16 @@
     },
     start: (d) => {
       const pick = document.querySelector('input[name="lifespan"]:checked');
-      UI.setState(S.newGame(S.SCENARIO_191, d.force, null, {
+      UI.setState(S.newGame(S.SCENARIO_191, d.force || null, null, {
         lifespan: pick ? pick.value : "real", fiction: $("#optFiction").checked, women: $("#optWomen").checked,
       }));
+      if (!d.force) { begin(state.cities[state.emperor] || S.cityList(state)[0], "관전을 시작합니다. 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다."); return; }
       begin(S.citiesOf(state, d.force)[0], `${state.forces[d.force].name}군으로 천하통일을 시작합니다! 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`);
     },
     continue: () => {
       UI.setState(S.migrate(UI.loadSaved()));
-      const cap = S.capitalOf(state, state.playerForce);
-      begin(state.cities[cap] || S.citiesOf(state, state.playerForce)[0], "스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.");
+      const cap = state.playerForce ? S.capitalOf(state, state.playerForce) : S.capitalOf(state, UI.viewForce());
+      begin(state.cities[cap] || UI.myCities()[0] || S.cityList(state)[0], "스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.");
     },
   });
 })(globalThis.SAM = globalThis.SAM || {});

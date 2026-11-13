@@ -26,7 +26,20 @@
 
   UI.fmt = (n) => (n >= 10000 ? (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "만" : String(n));
   UI.forceColor = (fid) => (fid && state.forces[fid] ? state.forces[fid].color : "#9c9c9c");
-  UI.mine = (c) => !!c && c.owner === state.playerForce;
+  // A game may have no player at all (관전): then nothing is "mine".
+  UI.mine = (c) => !!c && !!state.playerForce && c.owner === state.playerForce;
+  UI.myCities = () => (state.playerForce ? S.citiesOf(state, state.playerForce) : []);
+  // The force whose lists are shown: the player's, or when only watching,
+  // that of the selected place, else the largest.
+  UI.viewForce = function () {
+    if (state.playerForce) return state.playerForce;
+    const p = UI.selected && S.place(state, UI.selected);
+    if (p && p.owner) return p.owner;
+    const fs = Object.values(state.forces).filter((f) => f.alive);
+    return fs.length ? fs.reduce((a, b) => (S.citiesOf(state, b.id).length > S.citiesOf(state, a.id).length ? b : a)).id : null;
+  };
+  // Nothing needs the player's answer: no one plays, or the force runs itself.
+  UI.handsOff = () => !state.playerForce || S.spectating(state);
   UI.signed = (n) => `<span class="${n >= 0 ? "good" : "bad"}">${n >= 0 ? "+" : ""}${n}</span>`;
   UI.stat = (label, value) => `<div><span>${label}</span><b>${value}</b></div>`;
   // A small "?" that shows its text when the pointer rests on it.

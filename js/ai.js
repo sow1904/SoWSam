@@ -299,8 +299,16 @@
   // the player only watches.
   S.DELEGATE = { domestic: "내정 중시", military: "군비 확장", full: "완전 위임" };
   S.spectating = function (state) {
-    const cs = state.playerForce ? S.citiesOf(state, state.playerForce) : [];
+    if (!state.playerForce) return false;
+    if (state.auto) return true; // 세력 위임: the whole force, whatever its cities are set to
+    const cs = S.citiesOf(state, state.playerForce);
     return cs.length > 0 && cs.every((c) => S.delegateOf(state, c) === "full");
+  };
+  // 세력 위임: hand the whole force over, or take it back.
+  S.setAuto = function (state, on) {
+    if (!state.playerForce) return { ok: false, msg: "맡길 세력이 없습니다." };
+    state.auto = !!on;
+    return { ok: true, msg: on ? "세력을 모두 맡겼습니다. 도시와 군대, 외교와 황실, 포로 처우까지 알아서 합니다." : "세력을 다시 직접 다스립니다. 도시마다의 위임 방침은 그대로입니다." };
   };
   S.delegateOf = (state, c) => (c.delegate && c.delegate.fid === c.owner ? c.delegate.policy : null);
   S.setDelegate = function (state, cid, policy) {

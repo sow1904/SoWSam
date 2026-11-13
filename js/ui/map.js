@@ -214,7 +214,7 @@
       const p = S.marchPos(state, m, frac);
       const x = at(p.x), y = at(p.y);
       const dest = S.place(state, m.target);
-      const threat = m.kind === "army" && dest.owner === me && m.force !== me;
+      const threat = !!me && m.kind === "army" && dest.owner === me && m.force !== me;
       const color = UI.forceColor(m.force);
       if (m.force === me || threat) {
         svg += `<line class="mroute${threat ? " threat" : ""}" x1="${x}" y1="${y}" x2="${dest.x}" y2="${dest.y}"/>`;

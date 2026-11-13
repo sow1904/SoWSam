@@ -11,13 +11,24 @@
   // ---------- top bar ----------
   const chip = (label, value, extra) => `<span class="chip"><i>${label}</i><b>${value}</b>${extra || ""}</span>`;
   UI.renderStatus = function () {
+    const date = `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>`;
+    if (!state.playerForce) {
+      // Only watching: the state of the land.
+      const fs = Object.values(state.forces).filter((x) => x.alive).map((x) => ({ x, n: S.citiesOf(state, x.id).length })).sort((a, b) => b.n - a.n);
+      const vacant = S.cityList(state).filter((c) => !c.owner).length;
+      UI.setHTML($("#status"), date + `<span class="banner" style="--force:#6b5b3a"><b>관전</b><i>모든 세력을 컴퓨터가</i></span>` +
+        chip("세력", fs.length) + fs.slice(0, 5).map((r) => chip(`<span class="swatch" style="--force:${r.x.color}"></span>${r.x.name}`, `${r.n}성`)).join("") +
+        (vacant ? chip("공백지", vacant) : ""));
+      return;
+    }
     const f = state.forces[state.playerForce];
     const t = S.totals(state, state.playerForce);
     const ruler = state.officers[f.ruler];
     const cap = state.cities[S.capitalOf(state, state.playerForce)];
-    UI.setHTML($("#status"),
-      `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>` +
+    UI.setHTML($("#status"), date +
       `<span class="banner" style="--force:${f.color}"><b>${f.name}군</b><i>군주 ${ruler.name}</i></span>` +
+      (state.auto ? `<span class="chip auto"><b>세력 위임 중</b><button data-action="auto" title="다시 직접 다스립니다">해제</button></span>`
+        : S.spectating(state) ? chip("통치", "모든 도시 완전 위임") : "") +
       (cap ? chip(S.capitalLabel(state, state.playerForce), cap.name, helpTip(H.capital)) : "") +
       (S.houseOf(state, state.playerForce) ? chip("가문", S.HOUSES[S.houseOf(state, state.playerForce)].name, helpTip(S.HOUSES[S.houseOf(state, state.playerForce)].help)) : "") +
       chip("체제", S.regime(state, state.playerForce).label) +
@@ -279,7 +290,7 @@
 
   // The player's cities in map-list order, for stepping through them.
   UI.cycleCity = function (step) {
-    const own = S.citiesOf(state, state.playerForce);
+    const own = UI.myCities();
     if (!own.length) return;
     const i = own.findIndex((c) => c.id === UI.selected);
     const next = own[((i < 0 ? 0 : i + step) + own.length) % own.length];
@@ -292,9 +303,11 @@
     if (!UI.selected) {
       UI.winOpen = false;
       win.classList.add("hidden");
-      UI.setHTML(info, `<h2>도시를 선택하세요</h2><p class="hint">지도에서 도시를 누르면 정보와 명령이 나옵니다. ` +
+      UI.setHTML(info, !state.playerForce
+        ? `<h2>관전</h2><p class="hint">지도에서 도시를 누르면 그곳의 정보가 나옵니다. 위쪽 메뉴의 도시·무장·기술은 고른 도시의 세력 것을 보여 줍니다. 시간은 「▶ 진행」이나 스페이스 바로 흐르게 합니다.</p>`
+        : `<h2>도시를 선택하세요</h2><p class="hint">지도에서 도시를 누르면 정보와 명령이 나옵니다. ` +
         `무장마다 한 달에 한 번 명령할 수 있습니다. 시간은 「▶ 진행」이나 스페이스 바로 흐르게 합니다.</p>` +
-        `<h3>내 도시</h3><div class="links">${S.citiesOf(state, state.playerForce)
+        `<h3>내 도시</h3><div class="links">${UI.myCities()
           .map((c) => `<button data-action="select" data-city="${c.id}">${c.name} (${S.idle(state, c.id).length})</button>`).join("")}</div>`);
       return;
     }
@@ -309,7 +322,7 @@
     UI.tab = cur[0];
     win.classList.toggle("wide", cur[0] === "men"); // the officer table needs the room
     const own = UI.mine(p);
-    const many = S.citiesOf(state, state.playerForce).length > 1;
+    const many = UI.myCities().length > 1;
     UI.setHTML(win,
       `<div class="cwh">` +
       (many ? `<button data-action="cycle" data-step="-1" title="이전 아군 도시 (Q)">◀</button>` : "") +

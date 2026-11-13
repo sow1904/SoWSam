@@ -93,24 +93,24 @@
     UI.renderMarches(clock.acc / dayMs);
   }
 
-  const involves = (b, me) => b.att.force === me || b.def.force === me;
+  const involves = (b, me) => !!me && (b.att.force === me || b.def.force === me);
   function stepDay() {
     const me = state.playerForce;
     const reports = [];
-    const held = new Set(S.citiesOf(state, me).map((c) => c.id));
+    const held = new Set(UI.myCities().map((c) => c.id));
     const month = S.tickDay(state, (r) => {
-      if (r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
+      if (me && r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
     });
     for (const r of reports) addBattle(r);
     // Those we have just taken alive: their fate is asked at once.
     const caught = reports.filter((r) => r.attacker === me).flatMap((r) => r.captured)
-      .filter((id) => state.officers[id].status === "captive" && state.officers[id].captor === me && !S.spectating(state));
+      .filter((id) => state.officers[id].status === "captive" && state.officers[id].captor === me && !UI.handsOff());
     const fighting = (state.battles || []).some((b) => involves(b, me));
     if (fighting || reports.length || clock.wasFighting) UI.renderBattles();
     clock.wasFighting = fighting;
     // Battles that just began against us.
     const seen = clock.seenBattles || (clock.seenBattles = new Set());
-    const started = (state.battles || []).filter((b) => !seen.has(b.id) && (b.def.force === me || (b.kind !== "siege" && b.att.force === me)));
+    const started = !me ? [] : (state.battles || []).filter((b) => !seen.has(b.id) && (b.def.force === me || (b.kind !== "siege" && b.att.force === me)));
     for (const b of state.battles || []) seen.add(b.id);
     // New lines are at the end of the log.
     const fresh = [];
@@ -123,9 +123,11 @@
     if (big) { UI.renderMap(); UI.keepScroll(UI.renderPanel); }
     if (month) UI.saveGame(true);
     if (state.over) { setRunning(false); return UI.showEnd(); }
+    // With no one playing, or the force left to itself, nothing stops the clock.
+    if (UI.handsOff()) { clock.pending = state.han && state.han.pending; return; }
     const s = clock.settings;
     // A city just taken stands unstaffed: show it so posts and policy can be set.
-    const taken = S.citiesOf(state, me).filter((c) => !held.has(c.id));
+    const taken = UI.myCities().filter((c) => !held.has(c.id));
     if (s.captured && taken.length) {
       UI.selected = taken[0].id;
       UI.winOpen = true;
