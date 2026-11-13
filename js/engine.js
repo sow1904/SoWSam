@@ -100,7 +100,8 @@
     for (const [id, [name, prov, seat, lat, lon, size, gentry]] of Object.entries(S.MAP.cities)) {
       const [x, y] = S.placeXY(id, lat, lon);
       state.cities[id] = {
-        id, name: S.cityName(id, scenario.year), prov: S.cityProv(id, scenario.year), seat, x, y, size,
+        id, name: S.cityName(id, scenario.year), prov: S.cityProv(id, scenario.year),
+        jun: S.cityJun(id, scenario.year), seat: S.citySeat(id, scenario.year), x, y, size,
         owner: null,
         gold: 200 + size * 100,
         food: 4000 + size * 2000,
@@ -1258,6 +1259,8 @@
       const y0 = (state.start && state.start.year) || state.year;
       c.name = S.cityName(c.id, y0);
       c.prov = S.cityProv(c.id, y0);
+      c.jun = S.cityJun(c.id, y0);
+      c.seat = S.citySeat(c.id, y0);
     }
     for (const f of Object.values(state.forts)) [f.x, f.y] = S.placeXY(f.id, f.lat, f.lon);
     // Older saves used 통솔/무력/지력/정치.

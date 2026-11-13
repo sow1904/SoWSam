@@ -56,8 +56,12 @@
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       const saved = raw ? JSON.parse(raw) : null;
-      // A save from a map that is gone (the 99-commandery map) cannot be played on.
-      return saved && S.MAPS[saved.map] ? saved : null;
+      // A save from a map that is gone, or from before cities were added or
+      // removed, cannot be played on.
+      const map = saved && S.MAPS[saved.map];
+      if (!map) return null;
+      const now = Object.keys(map.cities), then = Object.keys(saved.cities || {});
+      return now.length === then.length && now.every((id) => saved.cities[id]) ? saved : null;
     } catch (e) {
       return null;
     }

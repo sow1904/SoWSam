@@ -1,13 +1,18 @@
-// The map: seventeen provinces and seventy-six cities. Not every
+// The map: seventeen provinces and seventy-seven cities. Not every
 // commandery of the Later Han is here: the list keeps the ones that mattered
 // in the Three Kingdoms, about four to a province, so that no province is
 // won with two cities (docs/city-plan.md). 요동, 남중, 형북 and 형남 are this
 // game's own divisions.
 //
+// A city has a short name for the map and the news, and a full one: its
+// commandery and the county the city itself is, as in 남양군 완현. The short
+// name is the commandery's, or the city's own where that is better known
+// (낙양, 업) or where a commandery has more than one city (신야).
+//
 // Names and provinces are given as of 220. Where a place was called
-// something else, or belonged to another province, in an earlier or later
-// year, `names` and `provs` below say so, and a scenario shows what was true
-// in its own year.
+// something else, or belonged to another commandery or province, in an
+// earlier or later year, `names`, `juns`, `seats` and `provs` below say so,
+// and a scenario shows what was true in its own year.
 //
 // size (1-5) is a rough rank of registered population, raised a little where
 // a city stands for neighbours that were left out.
@@ -94,6 +99,7 @@
     yongchang:  ["영창", "nanzhong", "불위", 25.10, 99.20, 2, 45],
     // 형북
     nanyang:    ["남양", "jingbei", "완", 33.00, 112.53, 5, 65],
+    xinye:      ["신야", "jingbei", "신야", 32.52, 112.36, 2, 45],
     xiangyang:  ["양양", "jingbei", "양양", 32.01, 112.14, 4, 70],
     xincheng:   ["신성", "jingbei", "방릉", 32.06, 110.73, 1, 45],
     jiangxia:   ["강하", "jingbei", "안륙", 31.26, 113.68, 2, 50],
@@ -131,6 +137,31 @@
     wuchang:   [[0, "하구"], [214, "서릉"], [221, "무창"]],
     jiujiang:  [[0, "구강"], [197, "회남"], [199, "구강"], [221, "회남"]],
     danyang:   [[0, "단양"], [212, "건업"]],
+    qiao:      [[0, "초"], [213, "초군"]],
+  };
+  // The commandery each city belongs to, where it is not simply the city's
+  // name with 군 added, and how that changed. Kingdoms (국) are as the Later
+  // Han lists have them; many were commanderies again by 220.
+  const juns = {
+    henan: [[0, "하남윤"]], yingchuan: [[0, "영천군"]], peiguo: [[0, "패국"]], qiao: [[0, "패국"], [213, "초군"]],
+    dongjun: [[0, "동군"]], weijun: [[0, "위군"]], changshan: [[0, "상산국"]], hejian: [[0, "하간국"]],
+    zhuo: [[0, "탁군"], [226, "범양군"]], daijun: [[0, "대군"]], daifang: [[0, "낙랑군"], [204, "대방군"]],
+    xiapi: [[0, "하비국"]], pengcheng: [[0, "팽성국"]], donghai: [[0, "동해국"]],
+    qiguo: [[0, "제국"]], beihai: [[0, "북해국"]], jinan: [[0, "제남국"]],
+    jingzhao: [[0, "경조윤"], [220, "경조군"]], zuopingyi: [[0, "좌빙익"], [220, "빙익군"]], youfufeng: [[0, "우부풍"], [220, "부풍군"]],
+    hanyang: [[0, "한양군"], [220, "천수군"]],
+    shujun: [[0, "촉군"]], bajun: [[0, "파군"]], badong: [[0, "파군"], [195, "고릉군"], [201, "파동군"]], yizhoujun: [[0, "익주군"]],
+    xinye: [[0, "남양군"]], xiangyang: [[0, "남군"], [208, "양양군"]], xincheng: [[0, "한중군"], [215, "상용군"], [220, "신성군"]],
+    nanjun: [[0, "남군"]], wuchang: [[0, "강하군"], [214, "서릉군"], [221, "무창군"]],
+    jiujiang: [[0, "구강군"], [197, "회남군"], [199, "구강군"], [221, "회남군"]],
+    wujun: [[0, "오군"]], danyang: [[0, "단양군"]],
+  };
+  // The county the city is, where it changed (the third column of `cities`
+  // gives it as of 220).
+  const seats = {
+    danyang: [[0, "말릉"], [212, "건업"]],
+    wuchang: [[0, "악"], [221, "무창"]],
+    xincheng: [[0, "상용"], [220, "방릉"]],
   };
   // Which province a place belonged to from a given year on.
   // why: there was no 옹주 before 194, and the 옹주 of 194-213 was the far
@@ -155,6 +186,10 @@
     return v;
   };
   S.cityName = (id, year) => inYear(S.MAP.names[id], year, S.MAP.cities[id][0]);
+  S.cityJun = (id, year) => inYear(S.MAP.juns[id], year, S.MAP.cities[id][0] + "군");
+  S.citySeat = (id, year) => inYear(S.MAP.seats[id], year, S.MAP.cities[id][2]);
+  // 남양군 완현
+  S.fullName = (c) => (c.jun ? `${c.jun} ${c.seat}${c.seat.endsWith("현") ? "" : "현"}` : c.name);
   S.cityProv = (id, year) => inYear(S.MAP.provs[id], year, S.MAP.cities[id][1]);
 
   // Map projection. The far west and the far south are squeezed so the
@@ -287,7 +322,7 @@
     ["chenliu", "dongjun"], ["chenliu", "shanyang"], ["chenliu", "yingchuan"], ["chenliu", "qiao"],
     ["dongjun", "shanyang"], ["dongjun", "taishan"], ["shanyang", "taishan"], ["shanyang", "peiguo"], ["shanyang", "pengcheng"],
     ["yingchuan", "runan"], ["yingchuan", "nanyang"], ["yingchuan", "qiao"],
-    ["runan", "qiao"], ["runan", "nanyang"], ["runan", "jiangxia"], ["runan", "jiujiang"],
+    ["runan", "qiao"], ["runan", "nanyang"], ["runan", "jiujiang"],
     ["qiao", "peiguo"], ["peiguo", "pengcheng"], ["peiguo", "jiujiang"],
     // 서주, 청주
     ["pengcheng", "xiapi"], ["pengcheng", "donghai"], ["donghai", "xiapi"], ["donghai", "guangling"], ["donghai", "beihai"],
@@ -296,7 +331,7 @@
     // 바닷길
     ["donglai", "liaodong"], ["donglai", "daifang"], ["donglai", "wujun"],
     // 형북, 형남
-    ["nanyang", "xiangyang"], ["xiangyang", "nanjun"], ["xiangyang", "xincheng"], ["xiangyang", "jiangxia"],
+    ["nanyang", "xinye"], ["xinye", "xiangyang"], ["xiangyang", "nanjun"], ["xiangyang", "xincheng"], ["xiangyang", "jiangxia"],
     ["xincheng", "hanzhong"], ["jiangxia", "wuchang"],
     ["nanjun", "wuchang"], ["nanjun", "wuling"], ["nanjun", "changsha"], ["nanjun", "badong"],
     ["wuchang", "changsha"], ["wuchang", "lujiang"], ["wuchang", "yuzhang"],
@@ -368,7 +403,7 @@
       jincheng: [588, 476], jiuquan: [230, 172], zhangye: [366, 243], shujun: [546, 999],
       hanzhong: [792, 776], bajun: [740, 1090], guanghan: [618, 932],
       badong: [948, 968], zangke: [742, 1343], yuexi: [425, 1224], yizhoujun: [423, 1489],
-      yongchang: [177, 1471], nanyang: [1130, 789], xiangyang: [1154, 911], xincheng: [989, 874],
+      yongchang: [177, 1471], nanyang: [1130, 789], xinye: [1140, 850], xiangyang: [1154, 911], xincheng: [989, 874],
       jiangxia: [1289, 919], nanjun: [1196, 1050], wuling: [1128, 1160], lingling: [1145, 1342],
       changsha: [1237, 1223], guiyang: [1260, 1387], wuchang: [1319, 1024], jiujiang: [1466, 823],
       lujiang: [1470, 983], wujun: [1725, 914], kuaiji: [1798, 980], danyang: [1601, 873],
@@ -383,6 +418,8 @@
   S.MAPS["main"] = {
     cities,
     names,
+    juns,
+    seats,
     provs,
     land: proj(land),
     islands: islands.map(proj),

@@ -94,7 +94,7 @@
     const me = state.playerForce;
     const cols = [
       ["도시", (c) => c.name, (c) => `${S.isCapital(state, c.id) ? `<span class="capstar">★</span>` : ""}<b>${c.name}</b>`],
-      ["주", (c) => S.PROVINCES[c.prov]],
+      ["주", (c) => S.PROVINCES[c.prov]], ["군현", (c) => S.fullName(c)],
       ["병력", (c) => c.troops, (c) => fmt(c.troops)], ["훈련", (c) => c.train],
       ["금", (c) => c.gold, (c) => fmt(c.gold)], ["군량", (c) => c.food, (c) => fmt(c.food)],
       ["월 수지", (c) => S.balance(c), (c) => UI.signed(S.balance(c))],

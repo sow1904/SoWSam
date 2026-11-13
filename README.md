@@ -378,7 +378,7 @@ node tools/sim.js 20 40
 
 ## 파일 구조
 
-- `js/data/map.js`: 지도 (17주 76성, 도로, 해안선, 강, 연도별 지명과 소속 주). 성을 고른 기준은 `docs/city-plan.md`
+- `js/data/map.js`: 지도 (17주 77성, 도로, 해안선, 강, 연도별 지명과 소속 주). 성을 고른 기준은 `docs/city-plan.md`
 - `js/data/people.js`: 무장의 출생·사망 연도와 가문 (모든 시나리오 공통)
 - `js/data/scenario191.js`: 191년 시나리오 (세력, 무장, 재야 인재)
 - `js/data/abilities.js`: 무장의 능력

@@ -105,7 +105,7 @@
       },
       {
         id: "yuanshu", name: "원술", color: "#d2691e",
-        cities: { nanyang: 20000 },
+        cities: { nanyang: 17000, xinye: 4000 },
         officers: [
           "원술 @nanyang", "기령 @nanyang", "장훈 @nanyang",
           "염상 @nanyang", "뇌박 @nanyang", "교유 @nanyang",
@@ -291,7 +291,7 @@
       "주환 @wujun",
       "하제 @kuaiji", "우번 @kuaiji", "감택 @kuaiji",
       "위연 @nanyang", "화흠 @nanyang", "등애 @nanyang",
-      "등지 @nanyang",
+      "등지 @xinye",
       "제갈량 @xiangyang", "방통 @xiangyang", "마량 @xiangyang",
       "마속 @xiangyang", "동윤 @nanjun",
       "비의 @jiangxia", "장완 @lingling", "유파 @lingling",

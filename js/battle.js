@@ -33,7 +33,7 @@
     ["henan", "henei"], ["henan", "hedong"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
     ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["pingyuan", "jinan"],
     // 한수: 번성에서 양양으로 건넌다
-    ["nanyang", "xiangyang"],
+    ["xinye", "xiangyang"],
     // 바닷길
     ["donglai", "liaodong"], ["donglai", "daifang"], ["donglai", "wujun"],
   ]) WATER[S.roadKey(a, b)] = true;
