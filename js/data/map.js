@@ -403,7 +403,7 @@
       jincheng: [588, 476], jiuquan: [230, 172], zhangye: [366, 243], shujun: [546, 999],
       hanzhong: [792, 776], bajun: [740, 1090], guanghan: [618, 932],
       badong: [948, 968], zangke: [742, 1343], yuexi: [425, 1224], yizhoujun: [423, 1489],
-      yongchang: [177, 1471], nanyang: [1130, 789], xinye: [1140, 850], xiangyang: [1154, 911], xincheng: [989, 874],
+      yongchang: [177, 1471], nanyang: [1164, 780], xinye: [1181, 858], xiangyang: [1165, 937], xincheng: [989, 874],
       jiangxia: [1289, 919], nanjun: [1196, 1050], wuling: [1128, 1160], lingling: [1145, 1342],
       changsha: [1237, 1223], guiyang: [1260, 1387], wuchang: [1319, 1024], jiujiang: [1466, 823],
       lujiang: [1470, 983], wujun: [1725, 914], kuaiji: [1798, 980], danyang: [1601, 873],
