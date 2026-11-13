@@ -304,6 +304,7 @@
         d.status = "captive";
         d.captor = A.force;
         d.tries = 0;
+        d.caught = S.today(state); // the day's three free tries (S.persuade)
         if (fort) d.city = S.place(state, A.origin) && S.place(state, A.origin).owner === A.force ? A.origin : (S.citiesOf(state, A.force)[0] || {}).id || d.city;
         S.officersMoved(state);
         report.captured.push(d.id);

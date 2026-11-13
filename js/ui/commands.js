@@ -92,10 +92,10 @@
     },
     recruit() {
       const c = state.cities[UI.selected];
-      const targets = S.visibleFree(state, c.id);
-      if (!targets.length) { UI.toast("이 도시에는 등용할 재야 인재가 없습니다. 「탐색」으로 찾아보세요. 포로는 「포로」에서 설득합니다."); return; }
+      const targets = S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, c.owner));
+      if (!targets.length) { UI.toast("이 도시에는 등용할 인재가 없습니다. 「탐색」으로 재야 인재를 찾아보세요."); return; }
       UI.openModal(title("등용") + `<p class="hint">설득할 대상을 고르세요.</p>` +
-        UI.officerTable(targets, { pick: "recruitTarget", extraHead: "신분", extra: () => "재야" }) + footer(), true);
+        UI.officerTable(targets, { pick: "recruitTarget", extraHead: "신분", extra: (o) => (o.status === "free" ? "재야" : "포로") }) + footer(), true);
     },
     captives() { UI.showCaptives(null); },
     post(kind) {
@@ -267,9 +267,10 @@
     },
   });
 
-  // The fate of captives. ids: those just taken, each needing an answer (등용,
-  // 포로, 해방 or 참수); with none given, the captives held in the selected
-  // place, who can still be persuaded, freed or put to death.
+  // The fate of captives. ids: those just taken, each needing an answer (등용
+  // with the day's free tries, 포로, 해방 or 참수); with none given, the
+  // captives held in the selected place, who can be freed or put to death
+  // (recruiting them is then the 등용 command's work).
   UI.showCaptives = function (ids) {
     const me = state.playerForce;
     if (ids !== undefined) UI.captives = ids; // null: the selected place's
@@ -284,15 +285,17 @@
       return;
     }
     const buttons = (o) => {
-      const left = S.captiveTries(o), pct = S.persuadeChance(state, o);
-      return `<button data-action="captRecruit" data-oid="${o.id}"${left && pct ? "" : " disabled"}>등용 ${pct}% <span class="hint">(${left}번 남음)</span></button>` +
-        (fresh ? `<button data-action="captHold" data-oid="${o.id}">포로</button>` : "") +
+      const left = S.captiveTries(state, o), pct = S.persuadeChance(state, o);
+      return (fresh ? `<button data-action="captRecruit" data-oid="${o.id}"${left && pct ? "" : " disabled"}>등용 ${pct}% <span class="hint">(${left}번 남음)</span></button>` +
+        `<button data-action="captHold" data-oid="${o.id}">포로</button>` : "") +
         `<button data-action="captRelease" data-oid="${o.id}">해방</button>` +
         `<button data-action="captBehead" data-oid="${o.id}">참수</button>`;
     };
     UI.openModal(title(fresh ? "포로 처우" : "포로") +
-      `<p class="hint">${fresh ? "사로잡은 무장을 어떻게 할지 정합니다. " : ""}<b>등용</b>은 그곳에서 언변이 가장 높은 아군 무장이 설득하며, 한 사람에게 ${S.CAPTIVE_TRIES}번까지 할 수 있고 매번 새로 주사위를 굴립니다. ` +
-      `<b>포로</b>로 두면 그 도시에 가두어 두고 나중에 「포로」 명령에서 다시 정할 수 있습니다(매달 조금씩 탈출하기도 합니다). ` +
+      `<p class="hint">` + (fresh
+        ? `사로잡은 무장을 어떻게 할지 정합니다. 지금은 무장의 명령을 쓰지 않고 한 사람에게 ${S.CAPTIVE_TRIES}번까지 <b>등용</b>을 권할 수 있습니다. 그곳에서 언변이 가장 높은 아군 무장이 설득하고, 매번 새로 주사위를 굴립니다. ` +
+          `<b>포로</b>로 두면 그 도시에 가두어 둡니다. 그 뒤로는 「등용」 명령(무장의 한 달 명령)으로 언제든 다시 설득할 수 있고, 「포로」 명령에서 해방하거나 참수할 수 있습니다. `
+        : `가두어 둔 포로입니다. 설득은 「등용」 명령으로 합니다(무장의 한 달 명령). 포로는 매달 조금씩 탈출하기도 합니다. `) +
       `<b>해방</b>하면 원래 세력의 가장 가까운 도시로 돌아가고, 그 세력이 멸망했으면 재야가 됩니다. <b>참수</b>하면 죽습니다.</p>` +
       UI.officerTable(list, { loyalty: true, extraHead: "원 소속 · 처우", extra: (o) =>
         `<span class="capt"><span class="hint">${o.force && state.forces[o.force] ? S.forceName(state, o.force) : "재야"} · ${S.placeName(state, o.city)}</span>${buttons(o)}</span>` }) +

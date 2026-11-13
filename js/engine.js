@@ -568,8 +568,8 @@
     if (err) return fail(err);
     const t = state.officers[targetId];
     if (!t || t.city !== cid) return fail("대상이 이 도시에 없습니다.");
-    if (t.status === "captive") return fail("포로는 포로 메뉴에서 설득합니다.");
-    if (t.status !== "free" || t.hidden) return fail("등용할 수 없는 대상입니다.");
+    const valid = (t.status === "free" && !t.hidden) || (t.status === "captive" && t.captor === c.owner);
+    if (!valid) return fail("등용할 수 없는 대상입니다.");
     const pct = S.recruitChance(state, o, t);
     if (pct <= 0) return fail(`${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
     o.done = true;
@@ -603,12 +603,14 @@
   };
 
   // ---------- captives (포로) ----------
-  // A captive's fate is settled by whoever holds him: persuade him to serve
-  // (등용, three tries in all, each a fresh throw), keep him (포로), let him
-  // go (해방) or put him to death (참수). The player is asked the moment a
-  // captive is taken, and can come back to it from the city's 포로 menu.
+  // A captive's fate is settled by whoever holds him. On the day he is taken
+  // the captor may try three times to win him over (등용), each a fresh throw,
+  // without spending any officer's command; then keep him (포로), let him go
+  // (해방) or put him to death (참수). A captive who is kept can be recruited
+  // later like anyone else, by an officer's monthly command, and freed or
+  // killed from the city's 포로 menu.
   S.CAPTIVE_TRIES = 3;
-  S.captiveTries = (t) => Math.max(0, S.CAPTIVE_TRIES - (t.tries || 0));
+  S.captiveTries = (state, t) => (t.caught === S.today(state) ? Math.max(0, S.CAPTIVE_TRIES - (t.tries || 0)) : 0);
   const heldBy = (state, t, fid) => !!t && t.status === "captive" && (!fid || t.captor === fid);
   // Who speaks to the captive: the captor's best talker in that place.
   S.persuader = function (state, t) {
@@ -623,7 +625,7 @@
   S.persuade = function (state, targetId) {
     const t = state.officers[targetId];
     if (!heldBy(state, t)) return fail("포로가 아닙니다.");
-    if (S.captiveTries(t) <= 0) return fail(`${S.josa(t.name, "은", "는")} 더 설득할 수 없습니다. (${S.CAPTIVE_TRIES}번까지)`);
+    if (S.captiveTries(state, t) <= 0) return fail(`${S.josa(t.name, "은", "는")} 지금은 더 설득할 수 없습니다. 「등용」 명령으로 설득하십시오.`);
     const who = S.persuader(state, t);
     if (!who) return fail("그곳에 설득할 무장이 없습니다.");
     const pct = S.recruitChance(state, who, t);
@@ -641,7 +643,7 @@
       const from = old && old !== t.force ? ` (${S.forceName(state, old)} 출신)` : "";
       return { ok: true, joined: true, msg: `${who.name}의 설득으로 포로 ${S.josa(t.name, "이", "가")} ${S.forceName(state, t.force)}에 합류했습니다!${from}` };
     }
-    const left = S.captiveTries(t);
+    const left = S.captiveTries(state, t);
     return { ok: true, joined: false, msg: `${S.josa(who.name, "이", "가")} 포로 ${S.josa(t.name, "을", "를")} 설득했지만 거절당했습니다. (${left ? `${left}번 남음` : "더 설득할 수 없음"})` };
   };
   // Let a captive go: to his own force's nearest city, or out of office if

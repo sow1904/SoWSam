@@ -217,8 +217,8 @@
     };
     const frontier = enemyNeighbors(state, c).length > 0;
 
-    // Recruit visible free officers first. (Captives are dealt with when taken.)
-    for (const t of S.visibleFree(state, c.id)) {
+    // Recruit visible free officers and captives first.
+    for (const t of S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, fid))) {
       const o = take(byDesc("speech"));
       if (!o) return;
       if (S.recruitChance(state, o, t) > 0) S.recruit(state, o.id, c.id, t.id);
