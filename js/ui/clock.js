@@ -104,7 +104,7 @@
     for (const r of reports) addBattle(r);
     // Those we have just taken alive: their fate is asked at once.
     const caught = reports.filter((r) => r.attacker === me).flatMap((r) => r.captured)
-      .filter((id) => state.officers[id].status === "captive" && state.officers[id].captor === me);
+      .filter((id) => state.officers[id].status === "captive" && state.officers[id].captor === me && !S.spectating(state));
     const fighting = (state.battles || []).some((b) => involves(b, me));
     if (fighting || reports.length || clock.wasFighting) UI.renderBattles();
     clock.wasFighting = fighting;

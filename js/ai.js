@@ -293,7 +293,15 @@
   // recruits, wins over the gentry, drafts and drills, and rewards wavering
   // officers. He never attacks, moves troops or officers, schemes, researches
   // or releases captives: those stay the player's. Direct commands still work.
-  S.DELEGATE = { domestic: "내정 중시", military: "군비 확장" };
+  // 완전 위임 leaves everything to the governor, as a computer force would
+  // run the city: it attacks, moves troops, schemes and researches too. With
+  // every city so delegated the whole force runs itself (S.spectating) and
+  // the player only watches.
+  S.DELEGATE = { domestic: "내정 중시", military: "군비 확장", full: "완전 위임" };
+  S.spectating = function (state) {
+    const cs = state.playerForce ? S.citiesOf(state, state.playerForce) : [];
+    return cs.length > 0 && cs.every((c) => S.delegateOf(state, c) === "full");
+  };
   S.delegateOf = (state, c) => (c.delegate && c.delegate.fid === c.owner ? c.delegate.policy : null);
   S.setDelegate = function (state, cid, policy) {
     const c = state.cities[cid];
@@ -301,6 +309,10 @@
     if (policy && !S.DELEGATE[policy]) return { ok: false, msg: "알 수 없는 방침입니다." };
     c.delegate = policy ? { fid: c.owner, policy } : null;
     if (!policy) return { ok: true, msg: `${c.name}을 직접 다스립니다.` };
+    if (policy === "full") {
+      return { ok: true, msg: `${c.name}을 태수에게 모두 맡겼습니다(완전 위임). 다음 달부터 출진과 수송, 계략까지 알아서 합니다.` +
+        (S.spectating(state) ? " 모든 도시를 맡겼으므로 외교와 황실, 포로 처우도 알아서 합니다." : "") };
+    }
     const did = S.govern(state, c);
     return { ok: true, msg: `${c.name}을 태수에게 맡겼습니다(${S.DELEGATE[policy]}).` + (did ? ` 이번 달: ${did}` : "") };
   };
@@ -308,6 +320,17 @@
   S.govern = function (state, c) {
     const policy = S.delegateOf(state, c);
     if (!policy) return "";
+    if (policy === "full") {
+      // The governor does whatever a computer force would do with this city.
+      const fid = c.owner;
+      state._plans = state._plans || {};
+      state._plans[fid] = planCampaign(state, fid);
+      const armies = (state.marches || []).filter((m) => m.kind === "army" && m.origin === c.id).length;
+      tryAttack(state, c, () => {});
+      const sent = (state.marches || []).filter((m) => m.kind === "army" && m.origin === c.id);
+      if (c.owner === fid) domestic(state, c, fid);
+      return sent.length > armies ? `${S.ro(S.placeName(state, sent[sent.length - 1].target))} 출진` : "";
+    }
     const mil = policy === "military";
     const frontier = enemyNeighbors(state, c).length > 0;
     const done = {};
@@ -450,7 +473,9 @@
     const stamp = state.year * 100 + state.month;
     if (state.day === 1 && state.playerForce && state.governed !== stamp) {
       state.governed = stamp;
-      for (const c of S.citiesOf(state, state.playerForce)) {
+      // With every city wholly delegated the force runs itself, like any other.
+      if (S.spectating(state)) S.runAI(state, state.playerForce, onEvent);
+      else for (const c of S.citiesOf(state, state.playerForce)) {
         const did = S.govern(state, c);
         if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
       }

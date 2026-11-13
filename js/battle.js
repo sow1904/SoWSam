@@ -301,6 +301,7 @@
         S.officersMoved(state);
         say(b, `${S.josa(d.name, "은", "는")} ${S.ro(S.placeName(state, d.city))} 달아났습니다.`);
       } else {
+        d.lord = S.isRuler(state, d); // a ruler is freed or killed, never kept
         d.status = "captive";
         d.captor = A.force;
         d.tries = 0;
@@ -332,6 +333,11 @@
     for (const o of atk) o.city = b.place;
     S.officersMoved(state);
     report.attackerWon = true;
+    if (!fort) {
+      const from = S.place(state, A.origin);
+      const base = from && state.cities[S.homeCity(state, from.id)];
+      t.delegate = base && base.owner === A.force && S.delegateOf(state, base) === "full" ? { fid: A.force, policy: "full" } : null;
+    }
     if (defForce && !fort && state.forces[defForce].capital === t.id && S.citiesOf(state, defForce).length) S.capitalFell(state, defForce, A.force, report);
     if (defForce) S.checkForce(state, defForce, report);
   }
@@ -682,11 +688,15 @@
       : (report.attackerWon ? `${S.forceName(state, A.force)}이 ${where} 앞에서 ${S.forceName(state, D.force)}의 요격을 물리쳤습니다.`
         : `${S.forceName(state, D.force)}이 ${where} 앞에서 ${S.forceName(state, A.force)}을 요격해 물리쳤습니다.`);
     S.addLog(state, text, report.attackerWon ? "war" : "warfail");
-    // A computer force tries three times to win a captive over, then keeps
-    // him. (When it frees or kills one is yet to be decided.)
-    if (A.force !== state.playerForce) {
+    // A computer force (or the player's, left wholly to its governors) tries
+    // three times to win a captive over, then keeps him. A captured ruler it
+    // sets free. (When it would rather kill is yet to be decided.)
+    if (A.force !== state.playerForce || S.spectating(state)) {
       for (const pid of report.captured) {
-        for (let i = 0; i < S.CAPTIVE_TRIES && state.officers[pid].status === "captive"; i++) {
+        const p = state.officers[pid];
+        if (p.status !== "captive") continue;
+        if (p.lord) { S.release(state, p.city, pid); continue; }
+        for (let i = 0; i < S.CAPTIVE_TRIES && p.status === "captive"; i++) {
           if (!S.persuade(state, pid).ok) break;
         }
       }

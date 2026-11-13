@@ -556,7 +556,8 @@
     const court = S.courtRecruitBonus(state, recruiter, target);
     if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2 + court), 5, 95);
     if (target.status === "captive") {
-      if (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id) return 0;
+      // A ruler taken captive serves no one: he is freed or put to death.
+      if (target.lord || (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id)) return 0;
       const trait = S.hasTrait(target, "의리") ? -25 : S.hasTrait(target, "변심") ? 15 : 0;
       return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6 + court + trait), 3, 90);
     }
@@ -609,6 +610,9 @@
   // (해방) or put him to death (참수). A captive who is kept can be recruited
   // later like anyone else, by an officer's monthly command, and freed or
   // killed from the city's 포로 menu.
+  // A ruler taken captive (t.lord) is another matter: he will not serve and
+  // is not kept. He is freed, and leads his force again if it still stands,
+  // or he is put to death.
   S.CAPTIVE_TRIES = 3;
   S.captiveTries = (state, t) => (t.caught === S.today(state) ? Math.max(0, S.CAPTIVE_TRIES - (t.tries || 0)) : 0);
   const heldBy = (state, t, fid) => !!t && t.status === "captive" && (!fid || t.captor === fid);
@@ -639,6 +643,7 @@
       t.hidden = false;
       t.captor = null;
       t.tries = 0;
+      t.lord = false;
       t.done = true;
       const from = old && old !== t.force ? ` (${S.forceName(state, old)} 출신)` : "";
       return { ok: true, joined: true, msg: `${who.name}의 설득으로 포로 ${S.josa(t.name, "이", "가")} ${S.forceName(state, t.force)}에 합류했습니다!${from}` };
@@ -653,7 +658,9 @@
     const c = S.place(state, cid);
     if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("해방할 수 없는 대상입니다.");
     freeCaptive(state, t);
-    const where = t.status === "serving" ? `${S.forceName(state, t.force)}의 ${S.ro(S.placeName(state, t.city))} 돌아갔습니다` : "재야로 돌아갔습니다";
+    const where = t.status !== "serving" ? "재야로 돌아갔습니다"
+      : S.isRuler(state, t) ? `${S.ro(S.placeName(state, t.city))} 돌아가 다시 세력을 이끕니다`
+      : `${S.forceName(state, t.force)}의 ${S.ro(S.placeName(state, t.city))} 돌아갔습니다`;
     return { ok: true, msg: `포로 ${S.josa(t.name, "을", "를")} 해방했습니다. ${S.josa(t.name, "은", "는")} ${where}.` };
   };
   S.behead = function (state, cid, targetId) {
@@ -664,6 +671,7 @@
     t.status = "dead";
     t.hidden = true;
     t.captor = null;
+    t.lord = false;
     const msg = `${S.forceName(state, c.owner)}이 포로 ${from}${S.josa(t.name, "을", "를")} 참수했습니다.`;
     if (c.owner !== state.playerForce) S.addLog(state, msg, "info");
     return { ok: true, msg };
@@ -674,11 +682,21 @@
   function freeCaptive(state, t) {
     t.captor = null;
     t.tries = 0;
+    const lord = t.lord;
+    t.lord = false;
     const home = t.force && state.forces[t.force] && state.forces[t.force].alive ? S.citiesOf(state, t.force) : [];
     if (home.length) {
       t.status = "serving";
       t.city = home.reduce((a, b) => (S.nodeKm(state, t.city, b.id) < S.nodeKm(state, t.city, a.id) ? b : a)).id;
       S.officersMoved(state);
+      // A ruler set free takes his place again.
+      const f = state.forces[t.force];
+      if (lord && f.ruler !== t.id) {
+        f.ruler = t.id;
+        f.name = t.name;
+        t.loyalty = 100;
+        S.addLog(state, `풀려난 ${S.josa(t.name, "이", "가")} 돌아와 다시 세력을 이끕니다.`, t.force === state.playerForce ? "sys" : "info");
+      }
     } else {
       t.status = "free";
       t.force = null;

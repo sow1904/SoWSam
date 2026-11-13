@@ -81,6 +81,7 @@
     box.scrollTop = 0;
     $("#modal").classList.remove("hidden");
     UI.modalOnInput = null;
+    UI.modalOnClose = null;
     // Time stands still while a window is open, and runs again when it closes.
     UI.holdClock();
     UI.renderClock();
@@ -88,6 +89,9 @@
   UI.closeModal = function () {
     $("#modal").classList.add("hidden");
     UI.modalOnInput = null;
+    const closing = UI.modalOnClose; // run once, when the window really closes
+    UI.modalOnClose = null;
+    if (closing) closing();
     UI.listOpen = null;
     // Keep waiting while the command window behind is still open.
     if (!UI.cityWinOpen()) UI.releaseClock();
