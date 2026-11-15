@@ -96,10 +96,11 @@
   const involves = (b, me) => !!me && (b.att.force === me || b.def.force === me);
   function stepDay() {
     const me = state.playerForce;
-    const reports = [];
+    const reports = [], asked = [];
     const held = new Set(UI.myCities().map((c) => c.id));
     const month = S.tickDay(state, (r) => {
       if (me && r.report && (r.report.defender === me || r.report.attacker === me)) reports.push(r.report);
+      if (r.envoy) asked.push(r.envoy);
     });
     for (const r of reports) addBattle(r);
     // Those we have just taken alive: their fate is asked at once.
@@ -139,6 +140,8 @@
       return;
     }
     if (caught.length) { pause("무장을 사로잡았습니다"); UI.showCaptives(caught); return; }
+    // An envoy with something to ask: the answer is the player's to give.
+    if (asked.length) { pause(`${S.forceName(state, asked[0].from)}의 사자가 도착했습니다`); UI.showDiplomacy(); return; }
     const han = state.han;
     const courtNew = han && han.pending && han.holder === me && han.pending !== clock.pending;
     clock.pending = han && han.pending;

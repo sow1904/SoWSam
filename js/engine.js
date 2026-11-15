@@ -185,6 +185,7 @@
       for (const [name, p] of Object.entries(S.PEOPLE)) if (p.home && wanted(name)) addOfficer(`${name} @${p.home}`, null, 0);
     }
     for (const [a, b] of scenario.alliances || []) S.makePact(state, a, b);
+    S.initRelations(state, scenario);
     for (const [cid, over] of Object.entries(scenario.cityState || {})) {
       const c = state.cities[cid];
       Object.assign(c, over);
@@ -657,6 +658,7 @@
     const t = state.officers[targetId];
     const c = S.place(state, cid);
     if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("해방할 수 없는 대상입니다.");
+    S.relAdd(state, c.owner, t.force, t.lord ? S.DIPLO.releaseLord : S.DIPLO.release);
     freeCaptive(state, t);
     const where = t.status !== "serving" ? "재야로 돌아갔습니다"
       : S.isRuler(state, t) ? `${S.ro(S.placeName(state, t.city))} 돌아가 다시 세력을 이끕니다`
@@ -668,6 +670,7 @@
     const c = S.place(state, cid);
     if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("참수할 수 없는 대상입니다.");
     const from = t.force && state.forces[t.force] ? `${S.forceName(state, t.force)}의 ` : "";
+    S.relAdd(state, c.owner, t.force, t.lord ? S.DIPLO.beheadLord : S.DIPLO.behead);
     t.status = "dead";
     t.hidden = true;
     t.captor = null;
@@ -935,6 +938,7 @@
     if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
     unit = S.takeTroops(c, counts);
     c.food -= foodNeed;
+    if (t.owner) S.relAdd(state, c.owner, t.owner, S.DIPLO.attack);
     const m = S.launch(state, { kind: "army", force: c.owner, path: way.path, km: way.km, speed,
       officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
     const names = oids.map((id) => state.officers[id].name).join(", ");
@@ -1091,6 +1095,7 @@
       for (const o of Object.values(state.officers)) rollDeath(state, o);
     }
     runPacts(state);
+    S.runRelations(state);
     S.runForts(state);
     S.runCourt(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
@@ -1162,6 +1167,7 @@
   // ---------- diplomacy ----------
   // An alliance means the two forces will not attack each other. It lasts until
   // one side breaks it; a broken alliance cannot be renewed for a year.
+  // Standing between forces and envoys are in js/diplomacy.js.
   const pactKey = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
   S.PACT_COOLDOWN = 12;
   S.PACT_COST = 200;
@@ -1186,68 +1192,32 @@
     p.active = false;
     p.brokenAt = S.monthsElapsed(state);
     for (const c of S.citiesOf(state, fid)) c.order = Math.max(0, c.order - 5);
+    S.relAdd(state, fid, other, S.DIPLO.breakPact);
     const msg = `${S.josa(S.forceName(state, fid), "이", "가")} ${S.josa(S.forceName(state, other), "과", "와")}의 동맹을 파기했습니다.`;
     S.addLog(state, msg, fid === state.playerForce || other === state.playerForce ? "warn" : "info");
     return { ok: true, msg };
   };
   S.forcePower = (state, fid) => S.citiesOf(state, fid).reduce((s, c) => s + c.troops, 0);
   const touches = S.touches = (state, a, b) => S.citiesOf(state, a).some((c) => S.neighbors(c.id).some((n) => state.cities[n].owner === b));
-  // How likely a computer force is to accept an alliance.
-  S.pactChance = function (state, from, to) {
-    if (!state.forces[to].alive || S.allied(state, from, to) || S.pactCooldown(state, from, to)) return 0;
-    const envoys = S.officersOf(state, from);
-    const envoy = envoys.length ? S.best(envoys, "speech") : null;
-    const mine = S.forcePower(state, from);
-    const theirs = S.forcePower(state, to) || 1;
-    let p = 15 + (envoy ? envoy.speech / 3 : 0);
-    if (mine >= theirs) p += 15; // a strong friend is worth having
-    if (state.forces[to].weariness > 30) p += 10;
-    if (touches(state, from, to) && theirs > mine * 1.5) p -= 25; // they would rather conquer
-    // A common threat: a third force on their border that outmatches them.
-    const threat = Object.keys(state.forces).some((f) => f !== from && f !== to && state.forces[f].alive &&
-      !S.allied(state, to, f) && touches(state, to, f) && S.forcePower(state, f) > theirs);
-    if (threat) p += 15;
-    const toRuler = state.officers[state.forces[to].ruler];
-    if (S.hasTrait(toRuler, "야심")) p -= 10;
-    if (S.hasTrait(toRuler, "무욕")) p += 10;
-    return clamp(Math.round(p), 5, 85);
-  };
-  // The player sends an envoy with a gift from their richest city.
-  S.proposePact = function (state, from, to) {
-    state.pactTried = state.pactTried || {};
-    if (state.pactTried[to] === S.monthsElapsed(state)) return fail("이번 달에는 이미 사신을 보냈습니다.");
-    const cd = S.pactCooldown(state, from, to);
-    if (cd) return fail(`동맹이 깨진 지 얼마 되지 않았습니다. ${cd}개월 뒤에 다시 제의할 수 있습니다.`);
-    if (S.allied(state, from, to)) return fail("이미 동맹 중입니다.");
-    const purse = S.citiesOf(state, from).reduce((a, b) => (b.gold > a.gold ? b : a));
-    if (purse.gold < S.PACT_COST) return fail(`예물로 보낼 금 ${S.PACT_COST}이 있는 도시가 없습니다.`);
-    const chance = S.pactChance(state, from, to);
-    purse.gold -= S.PACT_COST;
-    state.pactTried[to] = S.monthsElapsed(state);
-    if (S.chance(state, chance)) {
-      S.makePact(state, from, to);
-      S.addLog(state, `${S.josa(S.forceName(state, from), "과", "와")} ${S.josa(S.forceName(state, to), "이", "가")} 동맹을 맺었습니다.`,
-        from === state.playerForce ? "sys" : "info");
-      return { ok: true, msg: `${S.josa(S.forceName(state, to), "이", "가")} 동맹을 받아들였습니다.` };
-    }
-    return { ok: true, msg: `${S.josa(S.forceName(state, to), "이", "가")} 동맹 제의를 거절했습니다. (예물 금 ${S.PACT_COST})` };
-  };
+  // Offers of alliance go by envoy: js/diplomacy.js.
   // A computer force drops an alliance once the ally is all that stands between
   // it and further conquest, and now and then turns on a far weaker ally.
+  // The better the two stand, the longer it holds.
   function runPacts(state) {
     for (const [key, p] of Object.entries(state.pacts)) {
       if (!p.active) continue;
       const [a, b] = key.split("|");
       if (!state.forces[a].alive || !state.forces[b].alive) { p.active = false; continue; }
       for (const [me, other] of [[a, b], [b, a]]) {
-        if (me === state.playerForce || !S.allied(state, me, other) || !touches(state, me, other)) continue;
+        if ((me === state.playerForce && !S.spectating(state)) || !S.allied(state, me, other) || !touches(state, me, other)) continue;
         const otherFront = S.citiesOf(state, me).some((c) => S.neighbors(c.id).some((n) => {
           const o = state.cities[n].owner;
           return o !== me && !S.allied(state, me, o);
         }));
         const weak = S.citiesOf(state, me).length >= 3 * S.citiesOf(state, other).length &&
           S.forcePower(state, me) > 3 * S.forcePower(state, other);
-        if ((!otherFront && S.chance(state, 10)) || (weak && S.chance(state, 2))) S.breakPact(state, me, other);
+        const ease = clamp((100 - S.rel(state, me, other)) / 30, 0.3, 1.5);
+        if ((!otherFront && S.chance(state, 10 * ease)) || (weak && S.chance(state, 2 * ease))) S.breakPact(state, me, other);
       }
     }
   }
@@ -1329,6 +1299,8 @@
     }
     for (const f of Object.values(state.forces)) if (f.weariness == null) f.weariness = 0;
     if (!state.pacts) state.pacts = {};
+    if (!state.rel) S.initRelations(state, null);
+    if (!state.envoys) state.envoys = [];
     if (!state.marches) state.marches = [];
     if (!state.forts) S.initForts(state);
     S.addMissingForts(state);

@@ -114,7 +114,9 @@
     // The ruler's temperament sets how sure a win must look.
     const ruler = state.officers[state.forces[c.owner].ruler];
     const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
-    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve) return;
+    // Those it stands well with are left alone unless the chance is plain.
+    const amity = best && best.t.owner ? Math.max(0, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
+    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity) return;
     if (!S.chance(state, 45)) return;
     S.attack(state, c.id, best.t.id, ids, troops, best.unit);
   }
@@ -398,7 +400,7 @@
     state._plans = state._plans || {};
     state._plans[fid] = planCampaign(state, fid);
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
-    seekAlly(state, fid);
+    S.diploAI(state, fid);
     S.courtAI(state, fid);
     S.capitalAI(state, fid);
   };
@@ -440,25 +442,6 @@
     }
   }
 
-  // Now and then a computer force sends an envoy to another computer force.
-  function seekAlly(state, fid) {
-    if (!S.chance(state, 3) || S.allies(state, fid).length >= 2) return;
-    // Only neighbours, or forces that share a neighbour with this one, are worth courting.
-    // The forces each one borders, worked out once per force.
-    const borders = new Map();
-    const nb = (f) => {
-      if (!borders.has(f)) borders.set(f, new Set(S.citiesOf(state, f).flatMap((c) => S.neighbors(c.id).map((n) => state.cities[n].owner))));
-      return borders.get(f);
-    };
-    const near = (to) => nb(fid).has(to) || [...nb(fid)].some((x) =>
-      x && x !== fid && x !== to && state.forces[x].alive && nb(to).has(x));
-    const others = Object.values(state.forces).filter((f) => f.alive && f.id !== fid && f.id !== state.playerForce &&
-      !S.allied(state, fid, f.id) && !S.pactCooldown(state, fid, f.id) && near(f.id));
-    if (!others.length) return;
-    const to = others[Math.floor(S.rand(state) * others.length)].id;
-    if (S.pactChance(state, fid, to) >= 40) S.proposePact(state, fid, to);
-  }
-
   // All non-player forces act, then the month advances.
   // ---------- the clock ----------
   // Time runs in days, 30 to a month. Each computer force acts on its own day
@@ -491,6 +474,7 @@
     S.runMarches(state, onEvent);
     S.runBattles(state, onEvent);
     if (state.over) return null;
+    S.runEnvoys(state, onEvent);
     for (const [fid, d] of Object.entries(state.aiDays)) {
       if (d !== state.day || !state.forces[fid].alive) continue;
       S.runAI(state, fid, onEvent);

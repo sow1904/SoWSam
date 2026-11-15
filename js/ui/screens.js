@@ -66,28 +66,97 @@
   };
 
   // ---------- diplomacy ----------
-  function diplomacyCell(fid) {
-    const me = state.playerForce;
-    if (!me || fid === me || state.over) return "";
-    if (S.allied(state, me, fid)) return `<button data-action="breakPact" data-force="${fid}">동맹 파기</button>`;
-    const cd = S.pactCooldown(state, me, fid);
-    if (cd) return `<span class="hint">${cd}개월 후</span>`;
-    if (state.pactTried && state.pactTried[fid] === S.monthsElapsed(state)) return `<span class="hint">이번 달 제의함</span>`;
-    return `<button data-action="proposePact" data-force="${fid}">동맹 제의 (${S.pactChance(state, me, fid)}%)</button>`;
+  const relCell = (v) => `<span class="rel r${Math.min(4, Math.floor(v / 20))}"><b>${v}</b> ${S.relLabel(v)}</span>`;
+  const capNames = (ids) => ids.map((id) => `${state.officers[id].name}<span class="hint">(${S.captiveWorth(state.officers[id])})</span>`).join(", ");
+  // What a waiting envoy asks, and the buttons to answer.
+  function askRow(e) {
+    const o = state.officers[e.officer];
+    const what = e.kind === "pact" ? `동맹을 청합니다. 예물로 금 ${e.gold}을 가져왔습니다.`
+      : [e.give.length && `돌려주겠다는 포로: ${capNames(e.give)}`, e.take.length && `돌려받으려는 포로: ${capNames(e.take)}`, e.gold && `몸값 금 ${e.gold}`].filter(Boolean).join(" · ");
+    const left = Math.max(0, e.expires - S.today(state));
+    return `<div class="ask"><div><b>${S.forceName(state, e.from)}</b>의 사자 <b>${o.name}</b> <span class="hint">(언변 ${o.speech}, ${left}일 더 기다림)</span><br>${what}</div>` +
+      `<span><button class="primary" data-action="answerEnvoy" data-id="${e.id}" data-yes="1">수락</button> <button data-action="answerEnvoy" data-id="${e.id}">거절</button></span></div>`;
+  }
+  function envoyRow(e) {
+    const o = state.officers[e.officer];
+    const now = S.today(state);
+    const where = e.phase === "out" ? `가는 중 (${Math.max(0, e.arrive - now)}일 뒤 도착)` : e.phase === "wait" ? "답을 기다리는 중" : `돌아오는 중 (${Math.max(0, e.back - now)}일 뒤)`;
+    return `<tr><td>${o.name}</td><td>${S.forceName(state, e.to)}</td><td>${S.envoyKind[e.kind]}${e.kind === "tribute" ? ` 금 ${e.gold}` : ""}</td><td>${where}</td></tr>`;
   }
   UI.showDiplomacy = function () {
-    const me = state.playerForce;
+    const me = UI.viewForce();
+    const play = !!state.playerForce && !state.over;
+    const out = play ? S.envoysOf(state, me) : [];
+    const cell = (fid) => {
+      if (!play) return "";
+      const busy = out.some((e) => e.to === fid);
+      return (busy ? `<span class="hint">사자 파견 중</span>` : `<button data-action="envoy" data-force="${fid}">사자 보내기</button>`) +
+        (S.allied(state, me, fid) ? ` <button data-action="breakPact" data-force="${fid}">동맹 파기</button>` : "");
+    };
     const rows = aliveForces().filter((r) => r.f.id !== me).sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
-      .map(({ f, t }) => `<tr><td>${swatch(f)}${f.name}군${f.emperor ? " (황제)" : ""}</td><td>${state.officers[f.ruler].name}</td>` +
-        `<td>${t.cities}</td><td>${fmt(t.troops)}</td>` +
-        `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span>` : "-"}</td>` +
-        `<td>${S.allies(state, f.id).filter((a) => a !== me).map((a) => state.forces[a].name).join(", ") || "-"}</td>` +
-        `<td>${diplomacyCell(f.id)}</td></tr>`).join("");
-    UI.openModal(title("외교") +
-      `<table><tr><th>세력</th><th>군주</th><th>도시</th><th>병력</th><th>우리와</th><th>다른 동맹</th><th></th></tr>${rows}</table>` +
-      `<p class="hint">동맹을 맺은 세력끼리는 서로 공격하지 않습니다. 동맹 제의에는 예물로 금 ${S.PACT_COST}이 들고, 같은 세력에는 한 달에 한 번만 제의할 수 있습니다. ` +
-      `동맹을 파기하면 내 모든 도시의 치안이 5 떨어지고, ${S.PACT_COOLDOWN}개월 동안 다시 동맹을 맺을 수 없습니다. 컴퓨터 세력도 더 싸울 상대가 없거나 동맹이 훨씬 약해지면 동맹을 깰 수 있습니다.</p>` + closeBar, true);
+      .map(({ f, t }) => {
+        const cd = S.pactCooldown(state, me, f.id);
+        const sw = S.swappable(state, me, f.id);
+        return `<tr><td>${swatch(f)}${f.name}군${f.emperor ? " (황제)" : ""}</td><td>${state.officers[f.ruler].name}</td>` +
+          `<td>${t.cities}</td><td>${fmt(t.troops)}</td><td>${relCell(S.rel(state, me, f.id))}</td>` +
+          `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span>` : cd ? `<span class="hint">파기 후 ${cd}개월</span>` : "-"}</td>` +
+          `<td>${S.allies(state, f.id).filter((a) => a !== me).map((a) => state.forces[a].name).join(", ") || "-"}</td>` +
+          `<td>${sw.give.length || sw.take.length ? `우리가 ${sw.give.length} · 저쪽이 ${sw.take.length}` : "-"}</td>` +
+          `<td>${S.envoyDays(state, me, f.id)}일</td><td>${cell(f.id)}</td></tr>`;
+      }).join("");
+    const asks = play && !UI.handsOff() ? S.asksFor(state, me) : [];
+    UI.openModal(title(state.playerForce ? "외교" : `${S.forceName(state, me)}의 외교`) +
+      (asks.length ? `<h3>답을 기다리는 사자</h3>${asks.map(askRow).join("")}` : "") +
+      `<table><tr><th>세력</th><th>군주</th><th>도시</th><th>병력</th><th>우호도</th><th>우리와</th><th>다른 동맹</th><th>포로</th><th>사자 길</th><th></th></tr>${rows}</table>` +
+      (out.length ? `<h3>보낸 사자</h3><table><tr><th>사자</th><th>상대</th><th>용건</th><th>상황</th></tr>${out.map(envoyRow).join("")}</table>` : "") +
+      `<p class="hint">${UI.HELP.diplomacy.replace(/\n/g, "<br>")}</p>` + closeBar, true);
   };
+
+  // Sending an envoy: who goes, and on what errand.
+  UI.showEnvoy = function (fid) {
+    const me = state.playerForce;
+    const who = S.envoyCandidates(state, me);
+    const cap = state.cities[S.capitalOf(state, me)];
+    if (!who.length) { UI.toast(`${cap.name}(세력 수도)에 쉬고 있는 무장이 없습니다. 군주는 사자로 갈 수 없습니다.`); return; }
+    const sw = S.swappable(state, me, fid);
+    const pactNo = S.allied(state, me, fid) ? "이미 동맹 중" : S.pactCooldown(state, me, fid) ? `파기 후 ${S.pactCooldown(state, me, fid)}개월` : S.pactSnub(state, me, fid) ? `거절당한 지 얼마 안 됨 (${S.pactSnub(state, me, fid)}개월)` : "";
+    const swapNo = sw.give.length || sw.take.length ? "" : "서로 잡아 둔 포로 없음";
+    const kind = (k, label, no) => `<label><input type="radio" name="envKind" value="${k}"${k === "tribute" ? " checked" : ""}${no ? " disabled" : ""}> ${label}${no ? ` <span class="hint">(${no})</span>` : ""}</label>`;
+    const boxes = (list, cls) => list.map((o) => `<label><input type="checkbox" class="${cls}" value="${o.id}" checked> ${o.name} <span class="hint">(가치 ${S.captiveWorth(o)} · ${S.placeName(state, o.city)})</span></label>`).join("") || `<span class="hint">없음</span>`;
+    UI.openModal(title(`${S.forceName(state, fid)}에 사자 보내기`) +
+      `<p class="hint">사자는 ${cap.name}(세력 수도)에서 ${S.placeName(state, S.capitalOf(state, fid))}까지 ${S.envoyDays(state, me, fid)}일을 가고, 도착한 날 용건을 전한 뒤 같은 길을 돌아옵니다. ` +
+      `그동안 다른 명령은 받지 못합니다. 지금 우호도는 ${relCell(S.rel(state, me, fid))}입니다.</p>` +
+      `<div class="row"><label>사자</label><select id="envWho">${who.map((o) => `<option value="${o.id}">${o.name} (언변 ${o.speech})</option>`).join("")}</select></div>` +
+      `<div class="row"><label>용건</label><span class="links">${kind("tribute", "조공")}${kind("pact", "동맹 제의", pactNo)}${kind("swap", "포로 교환", swapNo)}</span></div>` +
+      `<div id="envTribute"><div class="row"><label>금</label><input type="number" id="envGold" min="${S.DIPLO.tributeMin}" step="100" value="${Math.min(300, Math.floor(cap.gold / 100) * 100)}"> <span class="hint">${cap.name}의 금 ${fmt(cap.gold)}</span></div></div>` +
+      `<div id="envPact" class="hidden"><p class="hint">예물로 금 ${S.PACT_COST}을 가져갑니다. 거절당해도 돌려받지 못합니다.</p></div>` +
+      `<div id="envSwap" class="hidden"><h3>돌려줄 포로 <span class="hint">우리가 잡아 둔 ${state.forces[fid].name}군 무장</span></h3><div class="checks">${boxes(sw.give, "envGive")}</div>` +
+      `<h3>돌려받을 포로 <span class="hint">저쪽에 잡혀 있는 우리 무장</span></h3><div class="checks">${boxes(sw.take, "envTake")}</div>` +
+      `<div class="row"><label>몸값</label><input type="number" id="envRansom" min="0" step="50" value="0"> <span class="hint">모자라는 값을 금으로 채웁니다. 거절당하면 돌려받습니다.</span></div></div>` +
+      `<div class="row"><label>전망</label><span id="envEst" class="est"></span></div>` +
+      `<div class="footer"><button data-action="diplomacy">돌아가기</button><button class="primary" data-action="doEnvoy" data-force="${fid}">사자 출발</button></div>`);
+    UI.modalOnInput = () => updateEnvoy(fid);
+    updateEnvoy(fid);
+  };
+  function envoyForm() {
+    const pick = document.querySelector('input[name="envKind"]:checked');
+    const ids = (cls) => [...document.querySelectorAll("." + cls)].filter((el) => el.checked).map((el) => el.value);
+    return { kind: pick ? pick.value : "tribute", oid: $("#envWho").value, gold: +$("#envGold").value || 0,
+      give: ids("envGive"), take: ids("envTake"), ransom: Math.max(0, +$("#envRansom").value || 0) };
+  }
+  function updateEnvoy(fid) {
+    const me = state.playerForce, f = envoyForm();
+    const o = state.officers[f.oid];
+    for (const [id, k] of [["envTribute", "tribute"], ["envPact", "pact"], ["envSwap", "swap"]]) $("#" + id).classList.toggle("hidden", f.kind !== k);
+    let text;
+    if (f.kind === "tribute") text = `우호도 +${S.tributeGain(state, fid, f.gold, o.speech)} <span class="hint">(금이 많을수록, 사자의 언변이 높을수록, 상대 세력이 작을수록 큽니다. 한 번에 ${S.DIPLO.tributeMax}까지)</span>`;
+    else if (f.kind === "pact") text = `수락 확률 ${S.pactChance(state, me, fid, o.speech)}%`;
+    else {
+      const worth = (ids) => ids.reduce((s, id) => s + S.captiveWorth(state.officers[id]), 0);
+      text = `주는 값 ${worth(f.give) + f.ransom} · 받는 값 ${worth(f.take)} · 수락 확률 ${S.swapChance(state, me, fid, f.give, f.take, f.ransom, o.speech)}%`;
+    }
+    $("#envEst").innerHTML = text;
+  }
 
   // ---------- the player's cities and officers ----------
   UI.showCities = lists.cities = function () {
@@ -109,7 +178,7 @@
   };
   const whereOf = (o) => S.placeName(state, o.city);
   function officerStatus(o) {
-    if (o.transit) return "이동 중";
+    if (o.transit) return String(o.transit)[0] === "e" ? "사자" : "이동 중";
     const k = S.postOf(state, o);
     return k ? `${S.POSTS[k].label} 담당` : o.done ? "완료" : "대기";
   }
@@ -310,9 +379,15 @@
       if (!confirm("황제를 칭할까요?")) return;
       if (UI.result(S.proclaim(state, state.playerForce))) UI.showCourt();
     },
-    proposePact: (d) => { if (UI.result(S.proposePact(state, state.playerForce, d.force))) UI.showDiplomacy(); },
+    envoy: (d) => UI.showEnvoy(d.force),
+    doEnvoy: (d) => {
+      const f = envoyForm();
+      const opts = f.kind === "tribute" ? { gold: f.gold } : f.kind === "swap" ? { give: f.give, take: f.take, gold: f.ransom } : {};
+      if (UI.result(S.sendEnvoy(state, state.playerForce, d.force, f.oid, f.kind, opts))) UI.showDiplomacy();
+    },
+    answerEnvoy: (d) => { if (UI.result(S.answerEnvoy(state, +d.id, !!d.yes))) UI.showDiplomacy(); },
     breakPact: (d) => {
-      if (!confirm(`${state.forces[d.force].name}군과의 동맹을 파기할까요? 내 모든 도시의 치안이 5 떨어집니다.`)) return;
+      if (!confirm(`${state.forces[d.force].name}군과의 동맹을 파기할까요? 내 모든 도시의 치안이 5 떨어지고 우호도가 크게 떨어집니다.`)) return;
       if (UI.result(S.breakPact(state, state.playerForce, d.force))) UI.showDiplomacy();
     },
     start: (d) => {

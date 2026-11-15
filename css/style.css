@@ -424,3 +424,9 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
   #cityWin { left: 4px; top: 4px; width: auto; right: 4px; }
   .cmds { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* diplomacy */
+.rel b { display: inline-block; min-width: 1.6em; text-align: right; }
+.rel.r0 { color: #d4553f; } .rel.r1 { color: #c98a5a; } .rel.r3 { color: #8fb86a; } .rel.r4 { color: #6fc27a; }
+.ask { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; margin: 4px 0; border: 1px solid rgba(201, 162, 77, 0.5); background: rgba(201, 162, 77, 0.08); }
+.ask > span { white-space: nowrap; }

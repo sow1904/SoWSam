@@ -312,10 +312,13 @@
         say(b, `${S.josa(d.name, "을", "를")} 사로잡았습니다.`);
       }
     }
+    // Those the defenders held: our own men walk free, the rest change gaolers.
     for (const p of S.officersIn(state, b.place, (x) => x.status === "captive" && x.captor === defForce)) {
       if (p.force === A.force) { p.status = "serving"; p.captor = null; say(b, `포로였던 ${S.josa(p.name, "이", "가")} 풀려나 합류했습니다.`); }
-      else S.freeCaptive(state, p);
+      else if (p.lord) S.freeCaptive(state, p);
+      else { p.captor = A.force; p.tries = 0; say(b, `갇혀 있던 포로 ${S.josa(p.name, "을", "를")} 넘겨받았습니다.`); }
     }
+    if (defForce) S.relAdd(state, A.force, defForce, S.DIPLO.capture);
     const remainingD = Math.max(0, t.troops);
     t.owner = A.force;
     t.posts = S.emptyPosts();

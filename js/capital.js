@@ -124,7 +124,8 @@
       for (const o of turned) { o.force = captor; o.loyalty = 50; o.done = true; }
       for (const p of S.officersIn(state, c.id, (x) => x.status === "captive" && x.captor === fid)) {
         if (p.force === captor) { p.status = "serving"; p.captor = null; }
-        else S.freeCaptive(state, p);
+        else if (p.lord) S.freeCaptive(state, p);
+        else p.captor = captor; // the captives go with the city
       }
       c.owner = captor;
       c.posts = S.emptyPosts();
