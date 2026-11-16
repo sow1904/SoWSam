@@ -114,8 +114,9 @@
     // The ruler's temperament sets how sure a win must look.
     const ruler = state.officers[state.forces[c.owner].ruler];
     const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
-    // Those it stands well with are left alone unless the chance is plain.
-    const amity = best && best.t.owner ? Math.max(0, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
+    // Those it stands well with are left alone unless the chance is plain,
+    // and those it hates are struck a little sooner.
+    const amity = best && best.t.owner ? Math.max(-0.15, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
     if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity) return;
     if (!S.chance(state, 45)) return;
     S.attack(state, c.id, best.t.id, ids, troops, best.unit);

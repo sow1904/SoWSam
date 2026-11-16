@@ -30,6 +30,31 @@
       ["caocao", "yuanshao"], ["liubiao", "yuanshao"], ["yuanshu", "gongsunzan"], ["taoqian", "gongsunzan"],
       ["caocao", "zhangmiao"], ["caocao", "baoxin"],
     ],
+    // How the forces stand with one another at the start (0-100; 50 when not
+    // listed, 70 for allies). Feuds and friendships of 190-191.
+    relations: [
+      // 동탁 against the league of 190. He had the 원 clan in the capital killed.
+      ["dongzhuo", "yuanshao", 10], ["dongzhuo", "yuanshu", 10], ["dongzhuo", "sunjian", 10],
+      ["dongzhuo", "caocao", 15], ["dongzhuo", "zhangmiao", 25], ["dongzhuo", "zhangchao", 25],
+      ["dongzhuo", "baoxin", 25], ["dongzhuo", "liudai", 25], ["dongzhuo", "kongrong", 30],
+      ["dongzhuo", "taoqian", 35], ["dongzhuo", "liuyu", 35], ["dongzhuo", "liuyan", 40],
+      // The two 원 fell out, and their leagues with them.
+      ["yuanshao", "yuanshu", 20], ["yuanshao", "gongsunzan", 20], ["yuanshao", "sunjian", 25],
+      ["yuanshao", "liubei", 35], ["yuanshao", "taoqian", 35],
+      ["yuanshu", "liubiao", 20], ["sunjian", "liubiao", 15], ["yuanshu", "caocao", 30],
+      ["caocao", "gongsunzan", 40], ["caocao", "taoqian", 35], ["liubiao", "gongsunzan", 40],
+      // 유우 and 공손찬 quarrelled over how to deal with the northern peoples;
+      // 원소 wished to make 유우 emperor.
+      ["liuyu", "gongsunzan", 25], ["liuyu", "yuanshao", 60], ["liuyu", "liubei", 40],
+      // Friends and kin.
+      ["sunjian", "yuanshu", 75], ["liubei", "gongsunzan", 80], ["caocao", "baoxin", 85],
+      ["caocao", "zhangmiao", 80], ["zhangmiao", "zhangchao", 90], ["caocao", "zhangchao", 60],
+      ["yuanshao", "zhangmiao", 45], ["yuanshao", "liudai", 60], ["baoxin", "zhangmiao", 60],
+      ["liubei", "kongrong", 60], ["liubei", "taoqian", 60],
+      // 장로 held 한중 for 유언; 마등 and 한수 were sworn brothers.
+      ["liuyan", "zhanglu", 75], ["mateng", "hansui", 70],
+      ["dongzhuo", "mateng", 55], ["dongzhuo", "hansui", 55],
+    ],
     // Cities whose starting state differs from the defaults.
     cityState: {
       // 낙양 was burned and its people driven west to 장안 in 190.
