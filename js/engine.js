@@ -685,6 +685,12 @@
     const c = S.place(state, cid);
     if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("참수할 수 없는 대상입니다.");
     const from = t.force && state.forces[t.force] ? `${S.forceName(state, t.force)}의 ` : "";
+    // He may plead for his life, once.
+    if (S.chance(state, S.begChance(state, t))) {
+      t.begged = true;
+      return { ok: true, begged: true, msg: `형장에 끌려 나온 ${S.josa(t.name, "이", "가")} 목숨을 구걸합니다. "살려만 주신다면 견마지로를 다하겠습니다!"` };
+    }
+    t.begged = true; // the chance is spent either way
     S.relAdd(state, c.owner, t.force, t.lord ? S.DIPLO.beheadLord : S.DIPLO.behead);
     t.status = "dead";
     t.hidden = true;
@@ -693,7 +699,7 @@
     const shaken = S.grieve(state, t, c.owner);
     const msg = `${S.forceName(state, c.owner)}이 포로 ${from}${S.josa(t.name, "을", "를")} 참수했습니다.` +
       (shaken.length ? ` 가까웠던 ${S.josa(shaken.join(", "), "이", "가")} 크게 흔들립니다.` : "");
-    if (c.owner !== state.playerForce) S.addLog(state, msg, "info");
+    if (c.owner !== state.playerForce) S.addLog(state, msg, t.force === state.playerForce ? "warn" : "info");
     return { ok: true, msg };
   };
 
@@ -702,6 +708,7 @@
   function freeCaptive(state, t) {
     t.captor = null;
     t.tries = 0;
+    t.begged = false;
     const lord = t.lord;
     t.lord = false;
     const home = t.force && state.forces[t.force] && state.forces[t.force].alive ? S.citiesOf(state, t.force) : [];

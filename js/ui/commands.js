@@ -288,6 +288,7 @@
       const left = S.captiveTries(state, o), pct = S.persuadeChance(state, o);
       return (fresh && !o.lord ? `<button data-action="captRecruit" data-oid="${o.id}"${left && pct ? "" : " disabled"}>등용 ${pct}% <span class="hint">(${left}번 남음)</span></button>` +
         `<button data-action="captHold" data-oid="${o.id}">포로</button>` : "") +
+        (o.begged ? `<button data-action="captSpare" data-oid="${o.id}">살려 준다</button>` : "") +
         `<button data-action="captRelease" data-oid="${o.id}">해방</button>` +
         `<button data-action="captBehead" data-oid="${o.id}">참수</button>`;
     };
@@ -299,7 +300,7 @@
       `<b>해방</b>하면 원래 세력의 가장 가까운 도시로 돌아가고, 그 세력이 멸망했으면 재야가 됩니다. <b>참수</b>하면 죽습니다.</p>` +
       (list.some((o) => o.lord) ? `<p class="hint"><b>군주</b>는 남을 섬기지 않고 가두어 둘 수도 없습니다. 해방하거나 참수해야 하며, 정하지 않고 창을 닫으면 해방합니다. 해방된 군주는 세력이 남아 있으면 돌아가 다시 세력을 이끕니다.</p>` : "") +
       UI.officerTable(list, { loyalty: true, extraHead: "원 소속 · 처우", extra: (o) =>
-        `<span class="capt"><span class="hint">${o.lord ? "군주 · " : ""}${o.force && state.forces[o.force] ? S.forceName(state, o.force) : "재야"} · ${S.placeName(state, o.city)}${S.liegeOf(state, o) ? ` · <b>옛 주군 ${S.josa(state.officers[o.liege].name, "을", "를")} 기다림</b>` : S.recruitBar(state, me, o) ? " · <b>옛 주군을 기려 섬기지 않음</b>" : ""}</span>${buttons(o)}</span>` }) +
+        `<span class="capt"><span class="hint">${o.lord ? "군주 · " : ""}${o.force && state.forces[o.force] ? S.forceName(state, o.force) : "재야"} · ${S.placeName(state, o.city)}${o.begged ? " · <b>목숨을 구걸함</b>" : ""}${S.liegeOf(state, o) ? ` · <b>옛 주군 ${S.josa(state.officers[o.liege].name, "을", "를")} 기다림</b>` : S.recruitBar(state, me, o) ? " · <b>옛 주군을 기려 섬기지 않음</b>" : ""}</span>${buttons(o)}</span>` }) +
       `<div class="footer"><button class="primary" data-action="close">${fresh ? "나머지는 포로로 둔다" : "닫기"}</button></div>`, true);
     // A ruler left undecided goes free.
     UI.modalOnClose = () => {
@@ -441,9 +442,10 @@
     captRecruit: (d) => { UI.result(S.persuade(state, d.oid)); UI.showCaptives(); },
     captHold: (d) => { UI.captives = (UI.captives || []).filter((id) => id !== d.oid); UI.showCaptives(); },
     captRelease: (d) => { UI.result(S.release(state, state.officers[d.oid].city, d.oid)); UI.showCaptives(); },
+    captSpare: (d) => { UI.result(S.spare(state, state.officers[d.oid].city, d.oid)); UI.showCaptives(); },
     captBehead: (d) => {
       const t = state.officers[d.oid];
-      if (!confirm(`${S.josa(t.name, "을", "를")} 참수할까요? 되돌릴 수 없습니다.`)) return;
+      if (!confirm(t.begged ? `목숨을 구걸하는 ${S.josa(t.name, "을", "를")} 그래도 참수할까요? 되돌릴 수 없습니다.` : `${S.josa(t.name, "을", "를")} 참수할까요? 되돌릴 수 없습니다.`)) return;
       UI.result(S.behead(state, t.city, d.oid));
       UI.showCaptives();
     },

@@ -41,20 +41,33 @@
     return best;
   }
 
-  // A captive who will never serve his captor is not worth feeding. A hard
-  // ruler puts an able one to death rather than see him serve another; the
-  // rest are let go. Returns true when his fate was settled.
-  S.judgeCaptive = function (state, t) {
+  // What a computer force does with a captive. fresh: he was just taken and
+  // has refused to serve. By how the two forces stand, the ruler's own feuds
+  // and grudges and his temper (S.beheadWish) the captive is put to death;
+  // if he pleads for his life the ruler may take him in. One who would never
+  // serve, and a ruler, are otherwise let go; the rest are kept. Kept
+  // captives are weighed again only if they would never serve.
+  // Returns true when his fate was settled.
+  S.judgeCaptive = function (state, t, fresh) {
     const fid = t.captor;
-    if (t.status !== "captive" || t.lord || !S.recruitBar(state, fid, t)) return false;
-    const ruler = state.officers[state.forces[fid].ruler];
-    const able = Math.max(t.cmd, t.war, t.wit, t.pol) >= 80;
-    const hard = S.hasTrait(ruler, "야심") && !S.hasTrait(ruler, "의리");
-    if (able && hard && S.chance(state, 60)) S.behead(state, t.city, t.id);
-    else {
-      const r = S.release(state, t.city, t.id);
-      if (r.ok) S.addLog(state, `${S.josa(S.forceName(state, fid), "이", "가")} 뜻을 굽히지 않는 포로 ${S.josa(t.name, "을", "를")} 놓아주었습니다.`, "info");
+    if (t.status !== "captive") return false;
+    const never = t.lord || !!S.recruitBar(state, fid, t);
+    if (!fresh && !never) return false;
+    if (S.chance(state, S.beheadWish(state, fid, t))) {
+      const r = S.behead(state, t.city, t.id);
+      if (r.ok && r.begged) {
+        const ruler = state.officers[state.forces[fid].ruler];
+        const able = Math.max(t.cmd, t.war, t.wit, t.pol) >= 80;
+        const hates = S.tieOf(ruler, t) < 0 || S.feelFor(ruler, t.force) < 0;
+        if (!hates && S.chance(state, able ? 60 : 35)) S.spare(state, t.city, t.id);
+        else S.behead(state, t.city, t.id);
+      }
+      return true;
     }
+    if (!never) return false;
+    const lord = t.lord;
+    const r = S.release(state, t.city, t.id);
+    if (r.ok && !lord) S.addLog(state, `${S.josa(S.forceName(state, fid), "이", "가")} 뜻을 굽히지 않는 포로 ${S.josa(t.name, "을", "를")} 놓아주었습니다.`, "info");
     return true;
   };
 

@@ -305,6 +305,7 @@
         d.status = "captive";
         d.captor = A.force;
         d.tries = 0;
+        d.begged = false;
         d.caught = S.today(state); // the day's three free tries (S.persuade)
         if (fort) d.city = S.place(state, A.origin) && S.place(state, A.origin).owner === A.force ? A.origin : (S.citiesOf(state, A.force)[0] || {}).id || d.city;
         S.officersMoved(state);
@@ -695,17 +696,17 @@
         : `${S.forceName(state, D.force)}이 ${where} 앞에서 ${S.forceName(state, A.force)}을 요격해 물리쳤습니다.`);
     S.addLog(state, text, report.attackerWon ? "war" : "warfail");
     // A computer force (or the player's, left wholly to its governors) tries
-    // three times to win a captive over, then keeps him. A captured ruler it
-    // sets free. (When it would rather kill is yet to be decided.)
+    // three times to win a captive over, then weighs whether to put him to
+    // death (S.judgeCaptive) or keep him. A captured ruler it kills or frees.
     if (A.force !== state.playerForce || S.spectating(state)) {
       for (const pid of report.captured) {
         const p = state.officers[pid];
         if (p.status !== "captive") continue;
-        if (p.lord) { S.release(state, p.city, pid); continue; }
+        if (p.lord) { S.judgeCaptive(state, p, true); continue; }
         for (let i = 0; i < S.CAPTIVE_TRIES && p.status === "captive"; i++) {
           if (!S.persuade(state, pid).ok) break;
         }
-        if (p.status === "captive") S.judgeCaptive(state, p);
+        if (p.status === "captive") S.judgeCaptive(state, p, true);
       }
     }
     if (onEvent) onEvent({ ok: true, report, msg: b.last });

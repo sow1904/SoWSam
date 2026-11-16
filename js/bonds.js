@@ -57,6 +57,7 @@
     o.bond = S.baseBond(state, o, base);
     o.mourn = false;
     o.liege = null;
+    o.begged = false;
     if (o.vows) o.vows = o.vows.filter((f) => f !== o.force); // he followed his lord there
   };
   S.bondAdd = function (state, o, d) {
@@ -161,6 +162,61 @@
     for (const o of Object.values(state.officers)) {
       if (o.id !== t.id && o.status !== "dead" && o.status !== "young" && S.tieOf(o, t) >= B.close) S.feelAdd(o, fid, B.thanksClose);
     }
+  };
+
+  // ---------- pleading for life (목숨 구걸) ----------
+  // Ordered to the block, a captive may plead for his life, once. Whether he
+  // does is a matter of fidelity, not a trait of its own: the fickle plead,
+  // the steadfast seldom do, and one who keeps faith with his lord never.
+  // The ambitious cling to life, the bold scorn to ask. A ruler pleads only
+  // when his force is gone.
+  S.begChance = function (state, t) {
+    if (t.status !== "captive" || t.begged) return 0;
+    const stands = !!(t.force && state.forces[t.force] && state.forces[t.force].alive);
+    if (S.faithful(t) || t.mourn || S.liegeOf(state, t) || (t.lord && stands)) return 0;
+    const by = { 변심: 35, 의리: -20, 야심: 10, 과감: -10, 신중: 5 };
+    const trait = S.traitsOf(t).reduce((s, k) => s + (by[k] || 0), 0);
+    const p = 20 + trait - (stands ? (t.bond || 0) * 0.2 : 0);
+    return clamp(Math.round(p), 0, S.hasTrait(t, "의리") ? 10 : 80);
+  };
+  // Grant the plea: he serves his captor, for now.
+  S.spare = function (state, cid, targetId) {
+    const t = state.officers[targetId];
+    const c = S.place(state, cid);
+    if (!c || !t || t.status !== "captive" || t.captor !== c.owner || t.city !== cid || !t.begged) return { ok: false, msg: "살려 줄 수 있는 대상이 아닙니다." };
+    const fid = c.owner;
+    t.force = fid;
+    t.status = "serving";
+    t.captor = null;
+    t.lord = false;
+    t.tries = 0;
+    t.hidden = false;
+    t.loyalty = 40;
+    t.done = true;
+    S.joinBond(state, t, 5);
+    S.feelAdd(t, fid, 10);
+    S.officersMoved(state);
+    const msg = `목숨을 구걸한 ${S.josa(t.name, "을", "를")} 살려 주어 ${S.forceName(state, fid)}에 받아들였습니다.`;
+    if (fid !== state.playerForce) S.addLog(state, msg, "info");
+    return { ok: true, joined: true, msg };
+  };
+
+  // How much the ruler of fid wants this captive dead, in percent. Bad blood
+  // between the forces, his own feuds and grudges, and his temper all count;
+  // a friend is never killed.
+  S.beheadWish = function (state, fid, t) {
+    const r = rulerOf(state, fid);
+    if (!r) return 0;
+    const tie = S.tieOf(r, t);
+    if (tie >= B.close) return 0;
+    const rel = t.force ? S.rel(state, fid, t.force) : 50;
+    const by = { 야심: 6, 과감: 3, 무욕: -15, 의리: -5 };
+    const temper = S.traitsOf(r).reduce((s, k) => s + (by[k] || 0), 0);
+    const able = !t.lord && Math.max(t.cmd, t.war, t.wit, t.pol) >= 85 ? 5 : 0;
+    const never = !t.lord && S.recruitBar(state, fid, t) ? 20 : 0;
+    const p = (t.lord ? 8 : 2) + Math.max(0, 50 - rel) * (t.lord ? 0.6 : 0.3) - Math.max(0, rel - 50) * 0.3 +
+      Math.max(0, -tie) / 2 + Math.max(0, -S.feelFor(r, t.force)) / 2 + temper + able + never;
+    return clamp(Math.round(p), 0, 80);
   };
 
   // Each month: those who withdrew come back; each January bonds deepen.
