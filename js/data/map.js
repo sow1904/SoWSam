@@ -297,7 +297,7 @@
     ["henan", "henei"], ["henan", "hedong"], ["henan", "hongnong"], ["henan", "chenliu"],
     ["henei", "weijun"], ["henei", "shangdang"],
     ["hedong", "hongnong"], ["hedong", "shangdang"], ["hedong", "xihe"], ["hedong", "taiyuan"], ["hedong", "zuopingyi"],
-    ["hongnong", "zuopingyi"], ["hongnong", "nanyang"], ["hongnong", "jingzhao"],
+    ["hongnong", "nanyang"], ["hongnong", "jingzhao"],
     ["jingzhao", "youfufeng"], ["jingzhao", "zuopingyi"],
     ["youfufeng", "hanyang"], ["youfufeng", "hanzhong"],
     // 량주

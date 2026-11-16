@@ -17,8 +17,12 @@
 //     ally. He is a small force of his own here, allied to 손권.
 //   - 요동 answers to 공손강, who kept on good terms with 조조.
 //   - 남중 obeys 유비 for now; its great men are out of office at home.
-// There is no alliance between 유비 and 손권: it had worn thin by 219, and
-// before the year was out 여몽 took 강릉.
+// 유비 and 손권 are still allies, as they were in name: the alliance has a
+// year to run and little goodwill left in it. 손권's turn against 관우 was a
+// secret; here he is free to let the term run out.
+// Held cities start better developed than in 191 (develop), so that the
+// armies listed can be paid and fed, and officers the lists do not place by
+// name are spread over their force's cities (spread).
 // Troop numbers are this game's own, set so the three stand roughly as four
 // to one to one.
 (function (S) {
@@ -34,13 +38,15 @@
     hanFavor: 25,
     // Most had served their lords for many years by 219: added to every bond.
     bondBonus: 20,
-    alliances: [["sunquan", "shixie"]],
+    alliances: [["sunquan", "shixie"], ["liubei", "sunquan", 12]],
+    develop: 0.75,
+    spread: 5,
     relations: [
       // 조조 and 유비 had just fought two years over 한중.
       ["caocao", "liubei", 5],
       // 손권 submitted to 조조 in 217 after 유수; neither trusted the other.
       ["caocao", "sunquan", 40],
-      // The quarrel over 형주, patched up in 215.
+      // Allies in name: the quarrel over 형주 was only patched up in 215.
       ["liubei", "sunquan", 35],
       ["caocao", "gongsunkang", 65], ["sunquan", "shixie", 85],
       ["liubei", "shixie", 45], ["caocao", "shixie", 45],
@@ -48,16 +54,17 @@
     ],
     cityState: {
       // 조조 moved the people of 한중 north before he left it.
-      hanzhong: { pop: 60000, farm: 120, trade: 80 },
       // The land between the 회 and the river was emptied by the wars.
       guangling: { pop: 50000 }, lujiang: { pop: 70000 },
       // 낙양 was rebuilt slowly; 업 was 조조's seat and 성도, 건업 the others'.
       henan: { pop: 120000, wall: 500 },
-      weijun: { pop: 320000, wall: 900, farm: 600, trade: 600 },
+      weijun: { pop: 320000, wall: 900, gold: 5000 },
+      // War chests where the great armies stand: they cost more than the city yields.
+      jingzhao: { gold: 7000 }, hanzhong: { pop: 60000, farm: 150, trade: 100, gold: 9000 },
       yingchuan: { wall: 800 },
-      shujun: { wall: 800 }, danyang: { pop: 220000, wall: 800, farm: 500, trade: 500 },
+      shujun: { wall: 800 }, danyang: { pop: 220000, wall: 800, gold: 5000 },
       // The frontier cities had been fortified for years.
-      xinye: { wall: 600, wallMax: 800 }, xiangyang: { wall: 900 }, nanjun: { wall: 900 }, jiujiang: { wall: 700 },
+      xinye: { wall: 600, wallMax: 800, gold: 4500 }, xiangyang: { wall: 900 }, nanjun: { wall: 900, gold: 4000 }, jiujiang: { wall: 700, gold: 3500 },
     },
     // People who appear in the lists below or in the roster but were dead
     // by June: 하후연 at 정군산, 하후덕 with him in the novel.
@@ -109,6 +116,10 @@
           "화흠 @yingchuan", "종회 @yingchuan",
           "가규 @hongnong", "하후패 @qiao",
           "장패 @donghai", "유종 @qiguo", "왕기 @donglai",
+          // posts the histories give for these years (확인 필요: the exact year)
+          "두기 @hedong", "양습 @taiyuan", "온회 @jiujiang", "장제(蔣濟) @jiujiang",
+          "소칙 @jincheng", "양부 @hanyang", "조엄 @jingzhao", "장기 @jingzhao",
+          "유엽 @jingzhao", "양수 @jingzhao", "여건 @taishan", "동소 @weijun",
         ],
       },
       {
@@ -138,6 +149,7 @@
           "허정 @shujun", "이적 @shujun", "진진 @shujun",
           "진도 @hanzhong", "오반 @hanzhong", "장익 @hanzhong",
           "풍습 @badong", "장남 @badong",
+          "왕보 @nanjun", "조루 @nanjun", "양홍(楊洪) @shujun", "이회 @yizhoujun", "여개 @yongchang",
         ],
       },
       {
@@ -158,6 +170,7 @@
           "주치 @wujun", "주환 @wujun",
           "하제 @kuaiji",
           "보즐 @nanhai", "여대 @cangwu",
+          "주연 @wuchang", "손교 @wuchang", "고옹 @danyang", "여범 @danyang", "손소(孫韶) @danyang",
         ],
       },
       {
@@ -175,11 +188,11 @@
     // home city if the force holds it, else in the force's capital; those not
     // yet of age join the force when they turn 16.
     join: {
-      caocao: "동소 유엽 장제(蔣濟) 두기 정혼 양습 장기 소칙 온회 여건 조엄 두습 서혁 하기 형옹 화흡 한기 위기 배잠 유방 손자 고당륭 고유 사마지 양수 정의 양무 왕관 원환 유이 환계 포훈 진교 서선 왕숙 노육 환범 하안 등양 정밀 이승 위풍 마균 " +
+      caocao: "정혼 두습 서혁 하기 형옹 화흡 한기 위기 배잠 유방 손자 고당륭 고유 사마지 정의 양무 왕관 원환 유이 환계 포훈 진교 서선 왕숙 노육 환범 하안 등양 정밀 이승 위풍 마균 " +
         "조예 조우 조상 조희 하후상 하후무 하후위 하후혜 하후화 하후현 주령 왕충 오돈 윤례 손례 왕쌍 비요 대릉 견초 악침 장호 허의 전만 진랑 진태 왕창 왕릉 영호우 관구검 문흠 문앙 제갈탄 호준 호질 석포 주태(州泰) 등충 사찬 종육 제갈서 호열 호분 견홍 왕경 가충 " +
-        "사마사 사마소 사마염 사마망 양호 두예 왕준 위관 배수 순의 장특 전속 방회 성공영 양부 강서 윤봉 조앙(趙昂) 양표 이부 황화 방육 장공 창자 변씨 조절 하후씨 견씨 곽여왕 신헌영 장춘화 왕원희 장창포 양휘유 왕이 채염 한덕 최량 호반",
-      liubei: "유염 향랑 향총 나헌 요립 곽익 조루 고상 염우 부융 부첨 동궐 번건 호제 종예 범강 장달 유순 이이 주군 팽양 진밀 비시 왕보 정기 양홍(楊洪) 초주 극정 진지 황호 마충 구부 진식 황숭 조광 제갈첨 마막 장서 이회 여개 왕항 찬습 신탐 신의 황월영 관색 주창",
-      sunquan: "여범 여거 주연 주적 전종 정봉 송겸 진표 엄준 정병 설종 호종 제갈각 제갈융 고옹 고담 육적 육항 육개 장온 장승 보천 주거 주이 당자 유찬 한종 손교 손소(孫韶) 손랑 손환 손등 손려 손화 손패 손휴 손준 손침 주방 주처 오찬 오언 종리목 낙통 위소 도황 장제(張悌) 손상향 손노반 손노육 서씨 대교 소교 보연사 시의 원요",
+        "사마사 사마소 사마염 사마망 양호 두예 왕준 위관 배수 순의 장특 전속 방회 성공영 강서 윤봉 조앙(趙昂) 양표 이부 황화 방육 장공 창자 변씨 조절 하후씨 견씨 곽여왕 신헌영 장춘화 왕원희 장창포 양휘유 왕이 채염 한덕 최량 호반",
+      liubei: "유염 향랑 향총 나헌 요립 곽익 고상 염우 부융 부첨 동궐 번건 호제 종예 범강 장달 유순 이이 주군 팽양 진밀 비시 정기 초주 극정 진지 황호 마충 구부 진식 황숭 조광 제갈첨 마막 장서 왕항 찬습 신탐 신의 황월영 관색 주창",
+      sunquan: "여거 주적 전종 정봉 송겸 진표 엄준 정병 설종 호종 제갈각 제갈융 고담 육적 육항 육개 장온 장승 보천 주거 주이 당자 유찬 한종 손랑 손환 손등 손려 손화 손패 손휴 손준 손침 주방 주처 오찬 오언 종리목 낙통 위소 도황 장제(張悌) 손상향 손노반 손노육 서씨 대교 소교 보연사 시의 원요",
       gongsunkang: "공손연 공손황 비연 양조 윤직 가범 공손모 장창",
       shixie: "사광",
     },

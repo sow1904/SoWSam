@@ -161,6 +161,11 @@
         c.food = troops * 2 + 5000;
         c.order = 60;
         c.consent = 55;
+        // A scenario may start its held cities better developed.
+        if (scenario.develop) {
+          c.farm = Math.round(c.farmMax * scenario.develop);
+          c.trade = Math.round(c.tradeMax * scenario.develop);
+        }
         c.retainers = Math.round(troops * (c.gentry / 100) * (1 - c.consent / 100));
         // Existing administration: low-grade clerks in every development post.
         for (const k of S.DEV_KEYS) c.posts[k] = { type: "clerk", tier: 0 };
@@ -177,11 +182,18 @@
       if (placed.has(name) || absent.has(name) || p.died < state.year) return false;
       return !(p.fiction && opts.fiction === false) && !(p.female && opts.women === false);
     };
+    const staff = (cid) => Object.values(state.officers).filter((o) => o.city === cid && o.status !== "young").length;
+    const emptiest = (fid) => Object.values(state.cities).filter((c) => c.owner === fid)
+      .map((c) => ({ c, n: staff(c.id) })).sort((x, y) => x.n - y.n || y.c.troops - x.c.troops)[0].c.id;
     for (const [fid, names] of Object.entries(scenario.join || {})) {
       const f = state.forces[fid];
       for (const name of names.split(/\s+/).filter(wanted)) {
         const home = S.PEOPLE[name].home;
-        const city = state.cities[home] && state.cities[home].owner === fid ? home : f.capital || state.officers[f.ruler].city;
+        const atHome = state.cities[home] && state.cities[home].owner === fid;
+        let city = atHome ? home : f.capital || state.officers[f.ruler].city;
+        // A scenario may spread them out: past so many in one city, the next
+        // goes to the force's city with the fewest officers.
+        if (scenario.spread && (!atHome || staff(city) >= scenario.spread)) city = emptiest(fid);
         addOfficer(`${name} @${city}`, fid, 80 + Math.floor(n % 5) * 4);
         placed.add(name);
       }
@@ -189,7 +201,7 @@
     if (scenario.freeRest) {
       for (const [name, p] of Object.entries(S.PEOPLE)) if (p.home && wanted(name)) addOfficer(`${name} @${p.home}`, null, 0);
     }
-    for (const [a, b] of scenario.alliances || []) S.makePact(state, a, b);
+    for (const [a, b, months] of scenario.alliances || []) S.makePact(state, a, b, months);
     S.initRelations(state, scenario);
     S.initBonds(state);
     if (scenario.bondBonus) for (const o of Object.values(state.officers)) if (o.status === "serving" && !S.isRuler(state, o)) o.bond = Math.min(100, (o.bond || 0) + scenario.bondBonus);
@@ -1216,9 +1228,25 @@
     return !!(p && p.active);
   };
   S.allies = (state, fid) => Object.keys(state.forces).filter((f) => S.allied(state, fid, f));
-  S.makePact = function (state, a, b) {
-    state.pacts[pactKey(a, b)] = { active: true, since: S.monthsElapsed(state) };
+  // An alliance is made for a term of months, a year at most, and lapses
+  // when the term runs out unless it is renewed in its last months.
+  S.PACT_MAX = 12;
+  S.PACT_RENEW = 3; // months before the end when it can be renewed
+  S.makePact = function (state, a, b, months) {
+    const now = S.monthsElapsed(state);
+    const m = clamp(Math.round(months || S.PACT_MAX), 1, S.PACT_MAX);
+    const old = state.pacts[pactKey(a, b)];
+    state.pacts[pactKey(a, b)] = { active: true, since: old && old.active ? old.since : now, until: now + m };
   };
+  S.pactLeft = function (state, a, b) {
+    const p = state.pacts[pactKey(a, b)];
+    if (!p || !p.active) return 0;
+    return Math.max(0, (p.until == null ? S.monthsElapsed(state) + S.PACT_MAX : p.until) - S.monthsElapsed(state));
+  };
+  // Allied, and near enough the end of the term to ask for more.
+  S.pactRenewable = (state, a, b) => S.allied(state, a, b) && S.pactLeft(state, a, b) <= S.PACT_RENEW;
+  // What the length asked for does to the chance of a yes: a little.
+  S.pactTermMod = (months) => Math.round(6 - clamp(months || S.PACT_MAX, 1, S.PACT_MAX));
   S.pactCooldown = function (state, a, b) {
     const p = state.pacts[pactKey(a, b)];
     if (!p || p.active || p.brokenAt == null) return 0;
@@ -1247,6 +1275,14 @@
       if (!p.active) continue;
       const [a, b] = key.split("|");
       if (!state.forces[a].alive || !state.forces[b].alive) { p.active = false; continue; }
+      if (p.until == null) p.until = S.monthsElapsed(state) + S.PACT_MAX; // a save from before terms
+      if (S.monthsElapsed(state) >= p.until) {
+        p.active = false;
+        p.endedAt = S.monthsElapsed(state);
+        const mine = a === state.playerForce || b === state.playerForce;
+        S.addLog(state, `${S.josa(S.forceName(state, a), "과", "와")} ${S.forceName(state, b)}의 동맹이 기한이 다 되어 끝났습니다.`, mine ? "warn" : "info");
+        continue;
+      }
       for (const [me, other] of [[a, b], [b, a]]) {
         if ((me === state.playerForce && !S.spectating(state)) || !S.allied(state, me, other) || !touches(state, me, other)) continue;
         const otherFront = S.citiesOf(state, me).some((c) => S.neighbors(c.id).some((n) => {

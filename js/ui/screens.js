@@ -71,7 +71,7 @@
   // What a waiting envoy asks, and the buttons to answer.
   function askRow(e) {
     const o = state.officers[e.officer];
-    const what = e.kind === "pact" ? `동맹을 청합니다. 예물로 금 ${e.gold}을 가져왔습니다.`
+    const what = e.kind === "pact" ? `${S.allied(state, e.from, e.to) ? "동맹을 연장하자고" : "동맹을"} 청합니다. 기간은 ${e.months || S.PACT_MAX}개월이고, 예물로 금 ${e.gold}을 가져왔습니다.`
       : [e.give.length && `돌려주겠다는 포로: ${capNames(e.give)}`, e.take.length && `돌려받으려는 포로: ${capNames(e.take)}`, e.gold && `몸값 금 ${e.gold}`].filter(Boolean).join(" · ");
     const left = Math.max(0, e.expires - S.today(state));
     return `<div class="ask"><div><b>${S.forceName(state, e.from)}</b>의 사자 <b>${o.name}</b> <span class="hint">(언변 ${o.speech}, ${left}일 더 기다림)</span><br>${what}</div>` +
@@ -99,7 +99,7 @@
         const sw = S.swappable(state, me, f.id);
         return `<tr><td>${swatch(f)}${f.name}군${f.emperor ? " (황제)" : ""}</td><td>${state.officers[f.ruler].name}</td>` +
           `<td>${t.cities}</td><td>${fmt(t.troops)}</td><td>${relCell(S.rel(state, me, f.id))}</td>` +
-          `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span>` : cd ? `<span class="hint">파기 후 ${cd}개월</span>` : "-"}</td>` +
+          `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span> <span class="hint">${S.pactLeft(state, me, f.id)}개월 남음</span>` : cd ? `<span class="hint">파기 후 ${cd}개월</span>` : "-"}</td>` +
           `<td>${S.allies(state, f.id).filter((a) => a !== me).map((a) => state.forces[a].name).join(", ") || "-"}</td>` +
           `<td>${sw.give.length || sw.take.length ? `우리가 ${sw.give.length} · 저쪽이 ${sw.take.length}` : "-"}</td>` +
           `<td>${S.envoyDays(state, me, f.id)}일</td><td>${cell(f.id)}</td></tr>`;
@@ -109,7 +109,7 @@
       (asks.length ? `<h3>답을 기다리는 사자</h3>${asks.map(askRow).join("")}` : "") +
       `<table><tr><th>세력</th><th>군주</th><th>도시</th><th>병력</th><th>우호도</th><th>우리와</th><th>다른 동맹</th><th>포로</th><th>사자 길</th><th></th></tr>${rows}</table>` +
       (out.length ? `<h3>보낸 사자</h3><table><tr><th>사자</th><th>상대</th><th>용건</th><th>상황</th></tr>${out.map(envoyRow).join("")}</table>` : "") +
-      `<p class="hint">${UI.HELP.diplomacy.replace(/\n/g, "<br>")}</p>` + closeBar, true);
+      `<div class="footer"><button data-action="help" data-topic="diplomacy">외교 도움말</button><button class="primary" data-action="close">닫기</button></div>`, true);
   };
 
   // Sending an envoy: who goes, and on what errand.
@@ -119,7 +119,8 @@
     const cap = state.cities[S.capitalOf(state, me)];
     if (!who.length) { UI.toast(`${cap.name}(세력 수도)에 쉬고 있는 무장이 없습니다. 군주는 사자로 갈 수 없습니다.`); return; }
     const sw = S.swappable(state, me, fid);
-    const pactNo = S.allied(state, me, fid) ? "이미 동맹 중" : S.pactCooldown(state, me, fid) ? `파기 후 ${S.pactCooldown(state, me, fid)}개월` : S.pactSnub(state, me, fid) ? `거절당한 지 얼마 안 됨 (${S.pactSnub(state, me, fid)}개월)` : "";
+    const renew = S.pactRenewable(state, me, fid);
+    const pactNo = S.allied(state, me, fid) && !renew ? `동맹 중, ${S.pactLeft(state, me, fid)}개월 남음` : S.pactCooldown(state, me, fid) ? `파기 후 ${S.pactCooldown(state, me, fid)}개월` : S.pactSnub(state, me, fid) ? `거절당한 지 얼마 안 됨 (${S.pactSnub(state, me, fid)}개월)` : "";
     const swapNo = sw.give.length || sw.take.length ? "" : "서로 잡아 둔 포로 없음";
     const kind = (k, label, no) => `<label><input type="radio" name="envKind" value="${k}"${k === "tribute" ? " checked" : ""}${no ? " disabled" : ""}> ${label}${no ? ` <span class="hint">(${no})</span>` : ""}</label>`;
     const boxes = (list, cls) => list.map((o) => `<label><input type="checkbox" class="${cls}" value="${o.id}" checked> ${o.name} <span class="hint">(가치 ${S.captiveWorth(o)} · ${S.placeName(state, o.city)})</span></label>`).join("") || `<span class="hint">없음</span>`;
@@ -127,9 +128,11 @@
       `<p class="hint">사자는 ${cap.name}(세력 수도)에서 ${S.placeName(state, S.capitalOf(state, fid))}까지 ${S.envoyDays(state, me, fid)}일을 가고, 도착한 날 용건을 전한 뒤 같은 길을 돌아옵니다. ` +
       `그동안 다른 명령은 받지 못합니다. 지금 우호도는 ${relCell(S.rel(state, me, fid))}입니다.</p>` +
       `<div class="row"><label>사자</label><select id="envWho">${who.map((o) => `<option value="${o.id}">${o.name} (언변 ${o.speech})</option>`).join("")}</select></div>` +
-      `<div class="row"><label>용건</label><span class="links">${kind("tribute", "조공")}${kind("pact", "동맹 제의", pactNo)}${kind("swap", "포로 교환", swapNo)}</span></div>` +
+      `<div class="row"><label>용건</label><span class="links">${kind("tribute", "조공")}${kind("pact", renew ? "동맹 연장" : "동맹 제의", pactNo)}${kind("swap", "포로 교환", swapNo)}</span></div>` +
       `<div id="envTribute"><div class="row"><label>금</label><input type="number" id="envGold" min="${S.DIPLO.tributeMin}" step="100" value="${Math.min(300, Math.floor(cap.gold / 100) * 100)}"> <span class="hint">${cap.name}의 금 ${fmt(cap.gold)}</span></div></div>` +
-      `<div id="envPact" class="hidden"><p class="hint">예물로 금 ${S.PACT_COST}을 가져갑니다. 거절당해도 돌려받지 못합니다.</p></div>` +
+      `<div id="envPact" class="hidden"><div class="row"><label>기간</label><select id="envMonths">${Array.from({ length: S.PACT_MAX }, (_, i) => i + 1).map((m) => `<option value="${m}"${m === S.PACT_MAX ? " selected" : ""}>${m}개월</option>`).join("")}</select> ` +
+      `<span class="hint">길게 청할수록 수락 확률이 조금 낮아집니다.</span></div>` +
+      `<p class="hint">예물로 금 ${S.PACT_COST}을 가져갑니다. 거절당해도 돌려받지 못합니다.${renew ? " 받아들이면 그날부터 새 기간을 셉니다." : ""}</p></div>` +
       `<div id="envSwap" class="hidden"><h3>돌려줄 포로 <span class="hint">우리가 잡아 둔 ${state.forces[fid].name}군 무장</span></h3><div class="checks">${boxes(sw.give, "envGive")}</div>` +
       `<h3>돌려받을 포로 <span class="hint">저쪽에 잡혀 있는 우리 무장</span></h3><div class="checks">${boxes(sw.take, "envTake")}</div>` +
       `<div class="row"><label>몸값</label><input type="number" id="envRansom" min="0" step="50" value="0"> <span class="hint">모자라는 값을 금으로 채웁니다. 거절당하면 돌려받습니다.</span></div></div>` +
@@ -141,7 +144,7 @@
   function envoyForm() {
     const pick = document.querySelector('input[name="envKind"]:checked');
     const ids = (cls) => [...document.querySelectorAll("." + cls)].filter((el) => el.checked).map((el) => el.value);
-    return { kind: pick ? pick.value : "tribute", oid: $("#envWho").value, gold: +$("#envGold").value || 0,
+    return { kind: pick ? pick.value : "tribute", oid: $("#envWho").value, gold: +$("#envGold").value || 0, months: +$("#envMonths").value || S.PACT_MAX,
       give: ids("envGive"), take: ids("envTake"), ransom: Math.max(0, +$("#envRansom").value || 0) };
   }
   function updateEnvoy(fid) {
@@ -150,7 +153,7 @@
     for (const [id, k] of [["envTribute", "tribute"], ["envPact", "pact"], ["envSwap", "swap"]]) $("#" + id).classList.toggle("hidden", f.kind !== k);
     let text;
     if (f.kind === "tribute") text = `우호도 +${S.tributeGain(state, fid, f.gold, o.speech)} <span class="hint">(금이 많을수록, 사자의 언변이 높을수록, 상대 세력이 작을수록 큽니다. 한 번에 ${S.DIPLO.tributeMax}까지)</span>`;
-    else if (f.kind === "pact") text = `수락 확률 ${S.pactChance(state, me, fid, o.speech)}%`;
+    else if (f.kind === "pact") text = `수락 확률 ${S.pactChance(state, me, fid, o.speech, f.months)}% <span class="hint">(${f.months}개월)</span>`;
     else {
       const worth = (ids) => ids.reduce((s, id) => s + S.captiveWorth(state.officers[id]), 0);
       text = `주는 값 ${worth(f.give) + f.ransom} · 받는 값 ${worth(f.take)} · 수락 확률 ${S.swapChance(state, me, fid, f.give, f.take, f.ransom, o.speech)}%`;
@@ -389,7 +392,7 @@
     envoy: (d) => UI.showEnvoy(d.force),
     doEnvoy: (d) => {
       const f = envoyForm();
-      const opts = f.kind === "tribute" ? { gold: f.gold } : f.kind === "swap" ? { give: f.give, take: f.take, gold: f.ransom } : {};
+      const opts = f.kind === "tribute" ? { gold: f.gold } : f.kind === "swap" ? { give: f.give, take: f.take, gold: f.ransom } : { months: f.months };
       if (UI.result(S.sendEnvoy(state, state.playerForce, d.force, f.oid, f.kind, opts))) UI.showDiplomacy();
     },
     answerEnvoy: (d) => { if (UI.result(S.answerEnvoy(state, +d.id, !!d.yes))) UI.showDiplomacy(); },

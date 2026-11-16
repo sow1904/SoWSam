@@ -31,7 +31,7 @@
     ["wuchang", "lujiang"], ["lujiang", "yuzhang"], ["jiangxia", "wuchang"], ["danyang", "hefei"], // 유수구
     // 황하
     ["henan", "henei"], ["henan", "hedong"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
-    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["hongnong", "zuopingyi"], ["pingyuan", "jinan"],
+    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["pingyuan", "jinan"],
     // 한수: 번성에서 양양으로 건넌다
     ["xinye", "xiangyang"],
     // 바닷길

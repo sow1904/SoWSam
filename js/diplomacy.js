@@ -132,8 +132,11 @@
   };
   // How likely a force is to accept an alliance: by standing, by who borders
   // whom and how strong each is, by who else each is tied to, and by the envoy.
-  S.pactChance = function (state, from, to, speech) {
-    if (!alive(state, to) || !alive(state, from) || S.allied(state, from, to) || S.pactCooldown(state, from, to)) return 0;
+  // months: the term asked for (a year if not given). Allies near the end of
+  // their term may ask again, and those who kept faith are heard more gladly.
+  S.pactChance = function (state, from, to, speech, months) {
+    const renew = S.pactRenewable(state, from, to);
+    if (!alive(state, to) || !alive(state, from) || (S.allied(state, from, to) && !renew) || S.pactCooldown(state, from, to)) return 0;
     const rel = S.rel(state, from, to);
     if (rel < 20) return 0; // too much blood between them
     if (speech == null) {
@@ -143,7 +146,7 @@
     const mine = S.forcePower(state, from);
     const theirs = S.forcePower(state, to) || 1;
     const near = S.touches(state, from, to);
-    let p = 10 + speech / 3 + (rel - 50) * 0.6;
+    let p = 10 + speech / 3 + (rel - 50) * 0.6 + S.pactTermMod(months) + (renew ? 10 : 0);
     if (mine >= theirs) p += 10; // a strong friend is worth having
     if (state.forces[to].weariness > 30) p += 10;
     if (near && theirs > mine * 1.5) p -= 25; // they would rather conquer
@@ -187,7 +190,7 @@
       gold = Math.floor(opts.gold || 0);
       if (gold < D.tributeMin) return fail(`조공은 금 ${D.tributeMin} 이상이어야 합니다.`);
     } else if (kind === "pact") {
-      if (S.allied(state, from, to)) return fail("이미 동맹 중입니다.");
+      if (S.allied(state, from, to) && !S.pactRenewable(state, from, to)) return fail(`이미 동맹 중입니다. 기한이 ${S.PACT_RENEW}개월 아래로 남으면 연장을 제의할 수 있습니다.`);
       const cd = S.pactCooldown(state, from, to);
       if (cd) return fail(`동맹이 깨진 지 얼마 되지 않았습니다. ${cd}개월 뒤에 다시 제의할 수 있습니다.`);
       const snub = S.pactSnub(state, from, to);
@@ -207,6 +210,7 @@
     state.envoySeq = (state.envoySeq || 0) + 1;
     const now = S.today(state);
     const e = { id: state.envoySeq, from, to, officer: oid, kind, gold, give, take, start: now, days, arrive: now + days, phase: "out" };
+    if (kind === "pact") e.months = clamp(Math.round(opts.months || S.PACT_MAX), 1, S.PACT_MAX);
     state.envoys.push(e);
     o.transit = "e" + e.id;
     o.done = true;
@@ -244,10 +248,11 @@
     const F = S.forceName(state, e.from), T = S.forceName(state, e.to);
     if (e.kind === "pact") {
       pay(state, e.to, e.gold); // the gift is kept either way
-      if (yes && !S.allied(state, e.from, e.to) && !S.pactCooldown(state, e.from, e.to)) {
-        S.makePact(state, e.from, e.to);
-        S.relAdd(state, e.from, e.to, D.pact);
-        say(state, e, `${S.josa(F, "과", "와")} ${S.josa(T, "이", "가")} 동맹을 맺었습니다. (사자 ${o.name})`);
+      const renew = S.pactRenewable(state, e.from, e.to);
+      if (yes && (renew || !S.allied(state, e.from, e.to)) && !S.pactCooldown(state, e.from, e.to)) {
+        S.makePact(state, e.from, e.to, e.months);
+        if (!renew) S.relAdd(state, e.from, e.to, D.pact);
+        say(state, e, `${S.josa(F, "과", "와")} ${S.josa(T, "이", "가")} ${renew ? "동맹을 연장했습니다" : "동맹을 맺었습니다"}. (${e.months || S.PACT_MAX}개월, 사자 ${o.name})`);
       } else {
         state.snubs = state.snubs || {};
         state.snubs[e.from + ">" + e.to] = S.monthsElapsed(state);
@@ -279,7 +284,7 @@
       if (involves(state, e)) say(state, e, `${S.forceName(state, e.from)}의 사자 ${S.josa(o.name, "이", "가")} ${S.forceName(state, e.to)}에 금 ${e.gold}을 바쳤습니다. (우호도 +${gain})`);
       return turnBack(state, e, false);
     }
-    if (e.kind === "pact" && (S.allied(state, e.from, e.to) || S.pactCooldown(state, e.from, e.to))) return turnBack(state, e, true);
+    if (e.kind === "pact" && ((S.allied(state, e.from, e.to) && !S.pactRenewable(state, e.from, e.to)) || S.pactCooldown(state, e.from, e.to))) return turnBack(state, e, true);
     if (e.kind === "swap") {
       prune(state, e);
       if (!e.give.length && !e.take.length) return turnBack(state, e, true);
@@ -292,7 +297,7 @@
       if (onEvent) onEvent({ envoy: e });
       return;
     }
-    const pct = e.kind === "pact" ? S.pactChance(state, e.from, e.to, o.speech)
+    const pct = e.kind === "pact" ? S.pactChance(state, e.from, e.to, o.speech, e.months)
       : S.swapChance(state, e.from, e.to, e.give, e.take, e.gold, o.speech);
     settle(state, e, S.chance(state, pct));
   }
@@ -324,7 +329,7 @@
       else if (e.phase === "wait" && (now >= e.expires || !alive(state, e.to) || S.spectating(state))) {
         if (!alive(state, e.to)) turnBack(state, e, true);
         else if (S.spectating(state)) {
-          const pct = e.kind === "pact" ? S.pactChance(state, e.from, e.to, o.speech) : S.swapChance(state, e.from, e.to, e.give, e.take, e.gold, o.speech);
+          const pct = e.kind === "pact" ? S.pactChance(state, e.from, e.to, o.speech, e.months) : S.swapChance(state, e.from, e.to, e.give, e.take, e.gold, o.speech);
           settle(state, e, S.chance(state, pct));
         } else settle(state, e, false); // no answer is a refusal
       } else if (e.phase === "back" && now >= e.back) {
@@ -407,9 +412,11 @@
     if (!best || best.w < 25) return;
     const x = best.x, rel = S.rel(state, fid, x);
     const allied = S.allied(state, fid, x);
-    if (!allied && rel >= 55 && S.allies(state, fid).length < 3 && cap.gold >= S.PACT_COST + 300 &&
-      !S.pactSnub(state, fid, x) && S.pactChance(state, fid, x, envoy.speech) >= 35) {
-      S.sendEnvoy(state, fid, x, envoy.id, "pact");
+    // A new alliance for a year, or more time for one that is running out.
+    const renew = S.pactRenewable(state, fid, x);
+    if ((renew ? rel >= 40 : !allied && rel >= 55 && S.allies(state, fid).length < 3) && cap.gold >= S.PACT_COST + 300 &&
+      !S.pactSnub(state, fid, x) && S.pactChance(state, fid, x, envoy.speech, S.PACT_MAX) >= 35) {
+      S.sendEnvoy(state, fid, x, envoy.id, "pact", { months: S.PACT_MAX });
       return;
     }
     // Otherwise a gift, to be better thought of.
