@@ -22,8 +22,13 @@
 // towers, ladders and stone-throwers. They are counted as soldiers like any
 // other part of a mix, fight poorly in the open and slow the march, and earn
 // their keep only before walls (S.GEAR below).
+//
+// Carts (수레) are another: wagons that make a moving wall against horsemen,
+// watch-tower carts, and the wooden oxen that carry grain. They help an army
+// by their share of it (S.AID below). 화선 is not drafted: it is what a force
+// with the third level of 조선 sends against the enemy fleet (js/battle.js).
 (function (S) {
-  S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", siege: "공성", navy: "수군" };
+  S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", siege: "공성", cart: "수레", navy: "수군" };
 
   // atk/def scale what a side deals and how much it shrugs off; tier and
   // special decide when it can be raised; cost is what each soldier is
@@ -53,10 +58,15 @@
     tower: { name: "정란", line: "siege", tier: 3, atk: 0.8, def: 0.8, slow: true, gear: "tower", cost: { wood: 4 }, note: "성 위의 수비군을 쏘아 수비 전력을 낮춥니다" },
     ladder: { name: "운제", line: "siege", tier: 3, atk: 0.8, def: 0.8, slow: true, gear: "ladder", cost: { wood: 2 }, note: "성벽을 넘어 성벽 효과를 줄입니다" },
     trebuchet: { name: "벽력거", line: "siege", tier: 4, atk: 0.8, def: 0.8, slow: true, gear: "treb", cost: { wood: 5, iron: 1 }, note: "돌을 날려 성벽을 크게 부수고 수비군을 죽입니다" },
+    // carts: aid is what they do for the army (S.AID)
+    wagon: { name: "편상거", line: "cart", tier: 2, atk: 0.6, def: 1, aid: "wagon", cost: { wood: 3 }, note: "들판에서 적 기병에게 입는 피해와 기습의 충격을 줄입니다" },
+    scout: { name: "소차", line: "cart", tier: 2, atk: 0.6, def: 1, aid: "scout", cost: { wood: 2 }, note: "기습, 책략, 보급로 습격, 땅굴을 미리 알아챕니다" },
+    woodox: { name: "목우유마", line: "cart", tier: 3, atk: 0.6, def: 1, aid: "ox", cost: { wood: 3 }, note: "성을 에워싼 동안 먹는 군량을 줄입니다" },
     // ships
     mengchong: { name: "몽충", line: "navy", tier: 1, atk: 1, def: 1 },
     douhan: { name: "투함", line: "navy", tier: 2, atk: 1.15, def: 1.15 },
     louchuan: { name: "누선", line: "navy", tier: 3, special: true, atk: 1.3, def: 1.3, cost: { wood: 4 } },
+    fireship: { name: "화선", line: "navy", tier: 3, atk: 1, def: 1, note: "강 위의 싸움에서 적 함대에 불을 놓습니다(징병하지 않음)" },
   };
   S.DEFAULT_UNIT = "jibing";
 
@@ -115,6 +125,37 @@
   S.gearSuppress = (g) => 1 - S.GEAR.tower * g.tower;
   S.gearBatter = (g) => S.GEAR.ram * g.ram + S.GEAR.treb * g.treb;
   S.gearKill = (g) => 1 + S.GEAR.trebLoss * g.treb;
+
+  // What carts do for an army. A kind works in full once it is a twentieth
+  // of the army (full), and in proportion below that.
+  //   wagon: the part of the losses dealt by horsemen it turns aside, and of
+  //     the shock of a surprise; scout: taken off the enemy's chance of a
+  //     surprise and of a ruse (points), and the part of his supply raids
+  //     that fail; ox: the part of a besieging army's daily food saved.
+  // why: 마륭 crossed 량주 in 279 behind 편상거, wagons with a wall on one
+  // side; 소차 is the watch-tower cart of the old armies; 목우유마 are the
+  // wooden oxen 제갈량 built to carry grain over the 촉 roads.
+  S.AID = { full: 0.05, wagon: 0.3, wagonShock: 0.5, scoutSurprise: 25, scoutRuse: 15, scoutRaid: 0.4, scoutTunnel: 3, ox: 0.3 };
+  S.aidOf = function (spec) {
+    const mix = S.mixOf(spec), g = { wagon: 0, scout: 0, ox: 0 };
+    for (const k in mix) if (S.UNITS[k].aid) g[S.UNITS[k].aid] += mix[k];
+    for (const k in g) g[k] = Math.min(1, g[k] / S.AID.full);
+    return g;
+  };
+  S.aidShare = function (spec) {
+    const mix = S.mixOf(spec);
+    let s = 0;
+    for (const k in mix) if (S.UNITS[k].aid) s += mix[k];
+    return s;
+  };
+  S.mountedShare = function (spec) {
+    const mix = S.mixOf(spec);
+    let s = 0;
+    for (const k in mix) if (MOUNTED[S.UNITS[k].line]) s += mix[k];
+    return s;
+  };
+  // What is left of a side's losses in the open, behind its wagons.
+  S.wagonGuard = (spec, foe) => 1 - S.AID.wagon * S.aidOf(spec).wagon * S.mountedShare(foe);
 
   S.unitOf = (id) => S.UNITS[id] || S.UNITS[S.DEFAULT_UNIT];
 

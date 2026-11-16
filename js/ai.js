@@ -166,6 +166,7 @@
     for (const k of Object.keys(S.UNITS)) luck[k] = 0.6 + S.rand(state) * 0.8;
     return S.pickTroops(c, troops, (k) => {
       if (S.unitOf(k).gear) return 3 * luck[k]; // engines go where the walls are
+      if (S.unitOf(k).aid) return 2 * luck[k];
       const walls = S.unitMul(k, gu, "siegeA", 1) / S.unitMul(gu, k, "siegeD", 1);
       const field = where === "water" ? 1 : S.unitEdge(k, gu, where, rough); // on a river both sides fight in ships
       return Math.pow(walls * field, 2) * luck[k];
@@ -184,8 +185,15 @@
       const mix = S.garrisonUnit(c);
       return gear.sort((a, b) => (mix[a] || 0) - (mix[b] || 0) || S.unitOf(b).tier - S.unitOf(a).tier)[0];
     }
+    // ...and a few carts: wagons only where the neighbours ride.
+    const riders = foes.some((p) => S.mountedShare(S.garrisonUnit(p)) > 0.3);
+    const carts = foes.length ? S.raisableAt(state, c).filter((k) => S.unitOf(k).aid && S.armable(c, k) >= 300 && (S.unitOf(k).aid !== "wagon" || riders)) : [];
+    if (carts.length && c.troops > 4000 && S.aidShare(S.garrisonUnit(c)) < 0.04 && S.chance(state, 20)) {
+      const mix = S.garrisonUnit(c);
+      return carts.sort((a, b) => (mix[a] || 0) - (mix[b] || 0))[0];
+    }
     for (const k of S.raisableAt(state, c)) {
-      if (S.armable(c, k) < 300 || S.unitOf(k).gear) continue;
+      if (S.armable(c, k) < 300 || S.unitOf(k).gear || S.unitOf(k).aid) continue;
       const edge = foes.length ? foes.reduce((s, p) => s + S.unitEdge(k, S.garrisonUnit(p), "field", 1), 0) / foes.length : 1;
       const v = Math.pow(edge, 2) * (0.5 + S.rand(state)) * (1 + (S.unitOf(k).tier - 1) * 0.3);
       if (!best || v > best.v) best = { k, v };
@@ -310,6 +318,11 @@
       }
     }
     marketAI(state, c, frontier);
+    // A frontier city with timber to spare lays stakes before its walls.
+    if (frontier && idle.length > 1 && !(c.stakes > 0) && c.res.wood > 5000 && S.chance(state, 10)) {
+      const o = [...idle].sort((a, b) => a.cmd - b.cmd)[0];
+      if (S.stake(state, o.id, c.id).ok) idle = idle.filter((x) => x !== o);
+    }
     // Frontier cities keep drafting while the treasury can pay the upkeep.
     const affordable = () => frontier
       ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36

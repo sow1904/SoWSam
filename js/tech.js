@@ -25,6 +25,7 @@
     horse: { name: "기마", group: "군사", line: "horse" },
     navy: { name: "조선", group: "군사", line: "navy" },
     siege: { name: "공성", group: "군사", line: "siege" },
+    train: { name: "치중", group: "군사", line: "cart" },
     // unit: the special type it opens; after: [field, level] needed first
     repeater: { name: "연노", group: "특수", unit: "repeater", after: ["bow", 2] },
     bodao: { name: "보도", group: "특수", unit: "bodao", after: ["sword", 2] },

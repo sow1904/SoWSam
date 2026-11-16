@@ -93,7 +93,8 @@
     else { onLose("att"); say(b, `일기토! ${S.josa(d.name, "이", "가")} ${S.josa(a.name, "을", "를")} 물리쳤습니다. ${S.forceName(state, a.force)}의 사기가 꺾입니다.`); }
   }
   // A schemer's ruse; the other side's sharpest mind may see through it.
-  function ruse(state, b, us, them, foes, names) {
+  //   watch: how well the other side's watch-tower carts see (0-1)
+  function ruse(state, b, us, them, foes, names, watch) {
     if (!us.length) return 0;
     const p = S.best(us, "plot");
     if (!S.chance(state, S.ruseAttempt(p) / 3)) return 0;
@@ -101,7 +102,7 @@
     const lead = them.length ? S.best(them, "cmd") : null;
     const temper = S.hasTrait(lead, "신중") ? -15 : S.hasTrait(lead, "과감") ? 10 : 0;
     const name = names[Math.floor(S.rand(state) * names.length)];
-    if (!S.chance(state, clamp(S.ruseChance(p, w) + temper, 5, 95))) {
+    if (!S.chance(state, clamp(S.ruseChance(p, w) + temper - S.AID.scoutRuse * (watch || 0), 5, 95))) {
       if (w) say(b, `${p.name}의 ${name}! 그러나 ${S.josa(w.name, "이", "가")} 간파했습니다.`);
       return 0;
     }
@@ -118,13 +119,13 @@
     const sp = list.filter((o) => S.hasSkill(o, water ? "수전" : "야전"));
     return sp.length ? sp.reduce((a, o) => (o.war + o.cmd > a.war + a.cmd ? o : a)) : null;
   };
-  S.surpriseChance = (sp, foes) => clamp(Math.round(20 + (sp.war + sp.cmd) / 2 - top(foes, "strat") * 0.7), 5, 90);
+  S.surpriseChance = (sp, foes, foeUnit) => clamp(Math.round(20 + (sp.war + sp.cmd) / 2 - top(foes, "strat") * 0.7 - (foeUnit ? S.AID.scoutSurprise * S.aidOf(foeUnit).scout : 0)), 5, 90);
   function surprise(state, b, dfs, atk) {
     const sp = S.surpriser(dfs, b.water);
     if (!sp) return;
-    const pct = S.surpriseChance(sp, atk);
+    const pct = S.surpriseChance(sp, atk, b.water ? null : b.att.unit);
     if (S.chance(state, pct)) {
-      b.att.morale -= 25;
+      b.att.morale -= Math.round(25 * (1 - (b.water ? 0 : S.AID.wagonShock * S.aidOf(b.att.unit).wagon)));
       b.def.morale += 15;
       say(b, `${S.josa(sp.name, "이", "가")} ${b.water ? "물길을 타고" : "샛길로 돌아"} 기습을 걸었습니다! ${S.forceName(state, b.att.force)}이 크게 흔들립니다. (성공률 ${pct}%)`);
     } else {
@@ -151,6 +152,10 @@
     const sup = guardSide.supply;
     if (!sup || !raiders.length) return;
     const pc = S.raidChance(raiders, guards, home);
+    // Watch-tower carts see the raiders coming.
+    const seen = 1 - S.AID.scoutRaid * (guardSide.unit ? S.aidOf(guardSide.unit).scout : 0);
+    pc.cut *= seen;
+    pc.burn *= seen;
     const who = S.best(raiders, raiders.some((o) => o.plot > o.strat) ? "plot" : "strat").name;
     if (!sup.burnt && S.chance(state, pc.burn)) {
       sup.burnt = true;
@@ -179,7 +184,7 @@
   function feedBesiegers(state, b) {
     const A = b.att;
     // A day's food, dearer the rougher the road it comes by.
-    const need = S.fieldFood(A.troops, 1, A.path ? S.pathRough(state, A.path) : 1);
+    const need = S.fieldFood(A.troops, 1, A.path ? S.pathRough(state, A.path) : 1) * (1 - S.AID.ox * S.aidOf(A.unit).ox);
     const home = S.place(state, A.origin);
     if (A.supply.line && home && home.owner === A.force) {
       const want = Math.min(Math.max(0, A.troops / 10 - A.rations), need * 2, home.food);
@@ -253,16 +258,20 @@
     // Siege engines: ladders over the wall, towers on the men upon it.
     const gear = S.gearOf(A.unit);
     wb = S.gearWall(wb, gear);
+    // Stakes before the wall (녹각) blunt the assault and keep engines from it
+    // until they are cleared.
+    const staked = t.stakes > 0;
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     // With a relief army in the field the besiegers must split their men.
     const split = b.relief ? 0.7 : 1;
     const gu = S.garrisonUnit(t);
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split;
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split * (staked ? S.STAKES.blunt : 1);
     const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state) * S.gearSuppress(gear);
     let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd() * S.gearKill(gear));
     let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd());
-    lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습", "땅굴"]);
-    lossA += ruse(state, b, defs, atk, A.troops, ["야습", "역습", "화공"]);
+    lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습"], S.aidOf(gu).scout);
+    lossA += ruse(state, b, defs, atk, A.troops, ["야습", "역습", "화공"], S.aidOf(A.unit).scout);
+    lossD += tunnelDay(state, b, t, atk, defs, gu);
     lossD = Math.min(t.troops, lossD);
     lossA = Math.min(A.troops, lossA);
     const D0 = t.troops;
@@ -270,7 +279,13 @@
     A.troops -= lossA;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
-    t.wall = Math.max(0, t.wall - Math.round((lossD * 0.02 + S.gearBatter(gear)) * (has(atk, "공성") ? 1.5 : 1)));
+    t.wall = Math.max(0, t.wall - Math.round((lossD * 0.02 + (staked ? 0 : S.gearBatter(gear))) * (has(atk, "공성") ? 1.5 : 1)));
+    if (staked) {
+      t.stakes = Math.max(0, t.stakes - S.STAKES.wear * (has(atk, "공성") ? 1.5 : 1));
+      if (t.stakes <= 0) say(b, `${S.forceName(state, A.force)}이 성 앞의 녹각을 모두 걷어 냈습니다.`);
+    }
+    // The computer digs once the siege has settled in.
+    if (A.force !== state.playerForce && b.day === S.TUNNEL.aiDay && t.wall >= S.TUNNEL.aiWall && A.troops > t.troops) S.dig(state, b);
     // Morale follows the day's exchange; a long siege wears the besiegers down,
     // and broken walls dishearten the defenders.
     A.morale += swing(lossA, lossD, 6) - (b.day > 20 ? 1 : 0);
@@ -288,6 +303,96 @@
     return null;
   }
 
+  // ---------- tunnels (땅굴) and stakes (녹각) ----------
+  // Besiegers may dig under the wall: it takes days, and each day the
+  // defenders may hear the digging and collapse it. If it comes through, the
+  // wall falls in over much of its length.
+  // why: 원소 took 공손찬's towers at 역경 by mining under them; at 진창 학소
+  // cut across 제갈량's tunnels with trenches inside the wall.
+  S.TUNNEL = { days: 10, tries: 2, wall: 0.25, kill: 0.05, morale: 25, lost: 0.03, lostMorale: 8, aiDay: 5, aiWall: 300 };
+  S.tunnelFind = function (atk, defs, gu) {
+    return clamp(Math.round((3 + (top(defs, "wit") - top(atk, "plot")) * 0.1 + S.AID.scoutTunnel * S.aidOf(gu).scout) * 10) / 10, 1, 10);
+  };
+  // Why a siege cannot start a tunnel now, or null.
+  S.digBlock = function (state, b) {
+    if (!b || b.kind !== "siege") return "성을 에워싼 군단만 땅굴을 팔 수 있습니다.";
+    if (b.tunnel) return "이미 땅굴을 파고 있습니다.";
+    if ((b.tunnels || 0) >= S.TUNNEL.tries) return "더는 땅굴을 팔 곳이 없습니다.";
+    if (S.place(state, b.place).wall <= 0) return "무너뜨릴 성벽이 없습니다.";
+    return null;
+  };
+  S.dig = function (state, b) {
+    const blk = S.digBlock(state, b);
+    if (blk) return fail(blk);
+    b.tunnel = { left: S.TUNNEL.days };
+    b.tunnels = (b.tunnels || 0) + 1;
+    if (b.att.force === state.playerForce) say(b, `성벽 밑으로 땅굴을 파기 시작했습니다. ${S.TUNNEL.days}일이 걸립니다.`);
+    return { ok: true, msg: `${S.placeName(state, b.place)}의 성벽 밑으로 땅굴을 파기 시작했습니다. (${S.TUNNEL.days}일)` };
+  };
+  // The player orders it.
+  S.orderTunnel = function (state, id) {
+    const b = S.battleOf(state, id);
+    if (!b || b.att.force !== state.playerForce) return fail("땅굴을 팔 수 있는 전투가 아닙니다.");
+    return S.dig(state, b);
+  };
+  // One day of digging. Returns defenders killed when the wall comes down.
+  function tunnelDay(state, b, t, atk, defs, gu) {
+    if (!b.tunnel) return 0;
+    const A = b.att;
+    if (S.chance(state, S.tunnelFind(atk, defs, gu))) {
+      const lost = Math.min(A.troops, Math.round(A.troops * S.TUNNEL.lost));
+      A.troops -= lost;
+      b.killedA = (b.killedA || 0) + lost;
+      A.morale -= S.TUNNEL.lostMorale;
+      b.tunnel = null;
+      const w = defs.length ? S.best(defs, "wit") : null;
+      say(b, `${w ? S.josa(w.name, "이", "가") : "수비군이"} 땅 파는 소리를 듣고 땅굴을 무너뜨렸습니다. 공격군 ${lost}명이 묻혔습니다.`);
+      return 0;
+    }
+    if (--b.tunnel.left > 0) return 0;
+    b.tunnel = null;
+    const before = t.wall;
+    t.wall = Math.round(t.wall * S.TUNNEL.wall);
+    b.def.morale -= S.TUNNEL.morale;
+    const killed = Math.round(t.troops * S.TUNNEL.kill);
+    say(b, `땅굴이 성벽 밑에 닿았습니다! 성벽이 무너져 내립니다. (성벽 ${before} → ${t.wall})`);
+    return killed;
+  }
+  S.STAKES = { wood: 500, blunt: 0.88, wear: 8 };
+  // An officer has stakes and caltrops laid before a city's walls.
+  S.stake = function (state, oid, cid) {
+    const o = state.officers[oid], c = state.cities[cid];
+    if (!o || !c) return fail("도시에서만 녹각을 세울 수 있습니다.");
+    if (o.status !== "serving" || o.city !== cid || o.force !== c.owner) return fail("이 도시의 무장이 아닙니다.");
+    if (o.done) return fail(`${S.josa(o.name, "은", "는")} 이번 달 이미 행동했습니다.`);
+    if (S.postOf(state, o)) return fail(`${S.josa(o.name, "은", "는")} 담당 업무 중입니다.`);
+    if (S.besieged(state, cid)) return fail("포위당한 도시에서는 성 밖에 녹각을 세울 수 없습니다.");
+    if (c.stakes >= 100) return fail("녹각이 이미 다 세워져 있습니다.");
+    if (c.res.wood < S.STAKES.wood) return fail(`목재가 부족합니다. (필요 ${S.STAKES.wood})`);
+    c.res.wood -= S.STAKES.wood;
+    c.stakes = 100;
+    o.done = true;
+    return { ok: true, msg: `${S.josa(o.name, "이", "가")} ${c.name}의 성 앞에 녹각과 철질려를 깔았습니다. (목재 ${S.STAKES.wood})` };
+  };
+
+  // Fire ships (화선): a force with the third level of 조선 sends them at the
+  // enemy fleet on a river. Tall ships burn best.
+  S.FIRESHIP = { chance: 12, loss: 0.06, tall: 1.5, morale: 10 };
+  function fireShips(state, b, us, them, side, foe, foeFleet) {
+    if (!S.lineLevel || S.lineLevel(state, side.force, "navy") < 3 || !S.chance(state, S.FIRESHIP.chance)) return 0;
+    const lead = us.length ? Math.max(top(us, "plot"), top(us, "strat")) : 40;
+    const w = them.length ? S.best(them, "wit") : null;
+    if (!S.chance(state, clamp(55 + lead - (w ? w.wit : 40), 20, 90))) {
+      say(b, `${S.forceName(state, side.force)}이 화선을 띄웠으나 ${w ? S.josa(w.name, "이", "가") + " 바람을 읽고 피했습니다" : "적이 피했습니다"}.`);
+      return 0;
+    }
+    const tall = foeFleet === "louchuan";
+    const loss = Math.round(foe.troops * S.FIRESHIP.loss * (tall ? S.FIRESHIP.tall : 1));
+    foe.morale -= S.FIRESHIP.morale;
+    say(b, `${S.forceName(state, side.force)}의 화선이 적 함대에 불을 붙였습니다! ${tall ? "높은 누선이 잘 탑니다. " : ""}적 ${loss}명이 쓰러집니다.`);
+    return loss;
+  }
+
   // The besiegers break in.
   function capture(state, b, report) {
     const t = S.place(state, b.place);
@@ -297,6 +402,7 @@
     const atk = crewOf(state, A.officers, A.force);
     const defs = S.serving(state, b.place).filter((o) => o.force === defForce);
     say(b, `${t.name} 함락! ${S.josa(S.forceName(state, A.force), "이", "가")} ${fort ? S.FORT_KINDS[t.kind] : "성"}을 차지했습니다.`);
+    t.stakes = 0;
     const escapes = defForce ? S.links(state, b.place).filter((n) => S.place(state, n).owner === defForce) : [];
     for (const d of defs) {
       if (escapes.length && S.chance(state, S.isRuler(state, d) ? 85 : 55)) {
@@ -516,11 +622,16 @@
     const aU = fightAs(state, A, atk, b.water), dU = fightAs(state, D, dfs, b.water);
     const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(aU, dU, where, b.rough) * skillMul(atk, b.water) * moraleMul(A.morale);
     const dPow = S.power(D.troops, S.sideStats(dfs, 35), D.train, 1) * S.unitMul(dU, aU, where, b.rough) * skillMul(dfs, b.water) * moraleMul(D.morale) * S.HOME_GROUND;
-    let lossD = Math.round(aPow * S.BATTLE_RATE.field * rnd());
-    let lossA = Math.round(dPow * S.BATTLE_RATE.field * rnd());
+    // Wagons turn aside part of what horsemen deal (not on the water).
+    let lossD = Math.round(aPow * S.BATTLE_RATE.field * rnd() * (b.water ? 1 : S.wagonGuard(D.unit, A.unit)));
+    let lossA = Math.round(dPow * S.BATTLE_RATE.field * rnd() * (b.water ? 1 : S.wagonGuard(A.unit, D.unit)));
     const names = b.water ? ["화공", "야습", "위계"] : ["매복", "화공", "야습", "위계"];
-    lossD += ruse(state, b, atk, dfs, D.troops, names);
-    lossA += ruse(state, b, dfs, atk, A.troops, names);
+    lossD += ruse(state, b, atk, dfs, D.troops, names, b.water ? 0 : S.aidOf(D.unit).scout);
+    lossA += ruse(state, b, dfs, atk, A.troops, names, b.water ? 0 : S.aidOf(A.unit).scout);
+    if (b.water) {
+      lossD += fireShips(state, b, atk, dfs, A, D, dU);
+      lossA += fireShips(state, b, dfs, atk, D, A, aU);
+    }
     lossD = Math.min(D.troops, lossD);
     lossA = Math.min(A.troops, lossA);
     A.troops -= lossA;
@@ -604,7 +715,7 @@
     const theirs = S.power(m.troops, S.sideStats(atk, 30), m.train, 1) * S.unitMul(tU, oU, where, rough) * skillMul(atk, water);
     const chief = S.best(team, "cmd");
     const sp = S.surpriser(team, water);
-    const surprisePct = sp ? S.surpriseChance(sp, atk) : 0;
+    const surprisePct = sp ? S.surpriseChance(sp, atk, water ? null : m.unit) : 0;
     let need = 1.0;
     if (S.hasTrait(chief, "과감")) need -= 0.25;
     if (S.hasTrait(chief, "신중")) need += 0.35;

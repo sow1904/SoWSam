@@ -178,6 +178,8 @@
       const attacking = b.att.force === me;
       return `<div class="bcard live" data-action="battleLive" data-b="${b.id}">` +
         `<div class="bh"><span>⚔ ${UI.battleTitle(b)} · ${b.day}일째</span>` +
+        (attacking && b.kind === "siege" && !S.digBlock(state, b) ? `<button data-action="tunnel" data-b="${b.id}" title="성벽 밑으로 땅굴을 팝니다. ${S.TUNNEL.days}일이 걸리고, 수비군이 알아채면 무너집니다.">땅굴</button>` : "") +
+        (attacking && b.tunnel ? `<span class="hint">땅굴 ${b.tunnel.left}일</span>` : "") +
         (attacking ? `<button data-action="retreat" data-b="${b.id}" title="퇴각 명령">퇴각</button>` : "") + `</div>` +
         bar(`${S.forceName(state, b.att.force)} ${S.unitName(b.att.unit)}`, b.att.troops, b.att.troops0, b.att.morale, UI.forceColor(b.att.force)) +
         bar(`${S.forceName(state, b.def.force)} ${S.unitName(b.kind === "siege" ? S.garrisonUnit(t) : b.def.unit)}`, dTroops, dMax, b.def.morale, UI.forceColor(b.def.force)) +
@@ -227,6 +229,7 @@
       if (b) UI.showReport({ from: b.from, to: UI.battleTitle(b), lines: b.log, captured: [], live: true });
     },
     retreat: (d) => UI.result(S.retreat(state, +d.b)),
+    tunnel: (d) => UI.result(S.orderTunnel(state, +d.b)),
     battleClose: (d) => { const i = battles.findIndex((x) => x.id === +d.b); if (i >= 0) battles.splice(i, 1); UI.renderBattles(); },
   });
   UI.stopClock = () => setRunning(false);

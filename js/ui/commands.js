@@ -41,6 +41,7 @@
       title: "회유", stat: "speech", run: (o, c) => S.woo(state, o, c),
       preview: (o) => `호족 협력 +${S.wooPreview(o)} (금 ${S.COST.woo})`,
     },
+    stake: { title: "녹각", stat: "cmd", run: (o, c) => S.stake(state, o, c), preview: () => `녹각 100 (목재 ${S.STAKES.wood})` },
     search: { title: "탐색", stat: "wit", run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${S.searchChance(o)}%` },
   };
 
