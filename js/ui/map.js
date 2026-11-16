@@ -92,13 +92,17 @@
 
   // City icons by size (1-5); the Han capital and an emperor's court show the palace.
   // Art: CroN (조조전 모드 클럽), see assets/CREDITS.md.
-  const CITY_ICONS = {
-    basic: [50, 58], town: [63, 70], city: [60, 68], metropolis: [71, 71], palace: [78, 73],
-  };
+  // Icons cut from the author's sheet (tools/cut_assets.py): [width, height].
+  const CITY_ICONS = { small: [231, 145], large: [282, 205], palace: [241, 204], ruin: [245, 171] };
+  // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
+  S.ruined = (p) => !!p && p.wallMax > 0 && p.wall < Math.max(150, p.wallMax * 0.2);
+  // A ruin while the walls are down; else the palace where an emperor sits,
+  // the great castle for a force's capital and the small one for the rest.
   function cityIcon(c) {
+    if (S.ruined(c)) return "ruin";
     if (c.id === state.emperor && !(state.han && state.han.ended)) return "palace";
     if (c.owner && state.forces[c.owner].emperor && S.isCapital(state, c.id)) return "palace";
-    return ["basic", "basic", "town", "city", "metropolis", "metropolis"][c.size] || "city";
+    return S.isCapital(state, c.id) ? "large" : "small";
   }
 
   // The layers of the map, bottom to top. Each is redrawn only when what it
@@ -167,14 +171,14 @@
     setGlyphs($("#cityLayer"), S.cityList(state).map((c) => {
       const r = (6 + c.size * 1.5) * k;
       const icon = cityIcon(c), [iw, ih] = CITY_ICONS[icon];
-      const w = (20 + c.size * 4 + (icon === "palace" ? 6 : 0)) * k, h = Math.round(w * ih / iw);
+      const w = (26 + c.size * 4 + (icon === "small" ? 0 : icon === "ruin" ? 2 : 8)) * k, h = Math.round(w * ih / iw);
       const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.mine(c) ? "mine" : ""].join(" ");
       return `<g class="${cls}" data-city="${c.id}">` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
-        `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.3}" rx="${w * 0.64}" ry="${w * 0.3}" fill="${UI.forceColor(c.owner)}"/>` +
-        `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.62}" width="${w}" height="${h}"/>` +
-        `<text class="name" x="${c.x}" y="${c.y + r + 13 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
-        `<text class="troops" x="${c.x}" y="${c.y + r + 22 * k}">${UI.fmt(c.troops)}</text></g>`;
+        `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>` +
+        `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
+        `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
+        `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 18 * k}">${UI.fmt(c.troops)}</text></g>`;
     }));
     UI.renderMarches();
     if (!(drag && UI.dragged)) applyView();
@@ -182,13 +186,13 @@
 
   // A stronghold on the map: a gatehouse for a pass, a walled square for a
   // fort. Unbuilt sites are drawn faintly.
-  const FORT_ICONS = { pass: [28, 17], fort: [19, 21], site: [17, 19] }; // display sizes
+  const FORT_ICONS = { pass: [28, 24], fort: [30, 22], site: [26, 16], ruin: [28, 20] }; // display sizes
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.mine(f) ? "mine" : ""].join(" ");
-    const icon = f.built ? f.kind : "site";
+    const icon = !f.built ? "site" : S.ruined(f) ? "ruin" : f.kind;
     const [iw, ih] = FORT_ICONS[icon];
-    const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.32}" rx="${iw * 0.55}" ry="${ih * 0.22}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      `<image class="ficon" href="assets/forts/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.62}" width="${iw}" height="${ih}"/>`;
+    const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
+      `<image class="ficon" href="assets/${icon === "ruin" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
@@ -203,6 +207,11 @@
 
   // Armies, convoys and travelling officers on the roads. Our own marches and
   // enemy armies heading for our cities show their route ahead.
+  const TOKEN = {
+    foot: "M-11 8h22v-10h-6v-7h-10v7h-6z", footLit: "M-4 -8h8M-10 -1h4M6 -1h4",
+    engine: "M-13 8h26v-8h-4v-5h-5v-4h-8v4h-5v5h-4z", engineLit: "M-3 -8h6M-8 -4h3M5 -4h3M-12 1h3M9 1h3",
+    horse: "M12 0l-19 -9l5 9l-5 9z",
+  };
   UI.renderMarches = function (frac) {
     const layer = $("#marchLayer");
     if (!layer || !state) return;
@@ -223,11 +232,18 @@
       const tip = `${S.forceName(state, m.force)} ${m.kind === "army" ? "군단" : m.kind === "sortie" ? "요격" : m.kind === "return" ? "귀환" : "이동"} → ${dest.name}` +
         `${m.troops ? ` · ${m.unit ? S.unitName(m.unit) : "병사"} ${m.troops}` : ""} · ${left}일 남음`;
       if (m.kind === "army" || m.kind === "sortie" || (m.kind === "return" && m.troops)) {
-        svg += `<g class="march army${threat ? " threat" : ""}"><title>${tip}</title>` +
-          `<rect x="${at(x - 13)}" y="${at(y - 8)}" width="26" height="16" rx="3" fill="${color}"/>` +
-          `<text x="${x}" y="${at(y + 4)}">${UI.fmt(m.troops)}</text></g>`;
+        // A token in the force's colour: 凸 for an army on foot, an arrowhead
+        // pointing down the road for horsemen, a broad block for one hauling
+        // siege engines. The number of men rides below it.
+        const kind = m.speed === "cavalry" ? "horse" : m.speed === "siege" ? "engine" : "foot";
+        const deg = Math.round(Math.atan2(dest.y - y, dest.x - x) * 180 / Math.PI);
+        svg += `<g class="march army ${kind}${threat ? " threat" : ""}" transform="translate(${x} ${y})"><title>${tip}</title>` +
+          `<ellipse class="shade" cx="1" cy="9" rx="13" ry="4"/>` +
+          (kind === "horse" ? `<path class="tok" transform="rotate(${deg})" d="${TOKEN.horse}" fill="${color}"/>`
+            : `<path class="tok" d="${TOKEN[kind]}" fill="${color}"/><path class="lit" d="${TOKEN[kind + "Lit"]}"/>`) +
+          `<text y="19">${UI.fmt(m.troops)}</text></g>`;
       } else {
-        svg += `<g class="march"><title>${tip}</title><circle cx="${x}" cy="${y}" r="5" fill="${color}"/></g>`;
+        svg += `<g class="march"><title>${tip}</title><path class="tok" d="M${x} ${at(y - 6)}l6 6l-6 6l-6-6z" fill="${color}"/></g>`;
       }
     }
     for (const b of state.battles || []) {

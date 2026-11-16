@@ -237,10 +237,11 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 .fort.mine text.name { fill: #7a1010; }
 .mroute { stroke: #2a2014; stroke-width: 2; stroke-dasharray: 2 5; opacity: 0.6; pointer-events: none; }
 .mroute.threat { stroke: #b31b1b; stroke-width: 3; opacity: 0.85; }
-.march rect { stroke: #2a2014; stroke-width: 1.5; }
-.march.threat rect { stroke: #b31b1b; stroke-width: 3; }
-.march circle { stroke: #2a2014; stroke-width: 1.5; }
-.march text { font-size: 10px; font-weight: 800; fill: #1d1a16; text-anchor: middle; pointer-events: none; }
+.march .tok { stroke: #15161f; stroke-width: 1.8; stroke-linejoin: miter; shape-rendering: crispEdges; }
+.march .lit { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 1.4; shape-rendering: crispEdges; }
+.march .shade { fill: rgba(0, 0, 0, 0.45); }
+.march.threat .tok { stroke: #e0281e; stroke-width: 2.6; }
+.march text { font-size: 9.5px; font-weight: 800; fill: #fbf1d0; text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: #15161f; stroke-width: 2.6px; }
 .city { cursor: pointer; }
 .city .node { stroke: #2a2014; stroke-width: 1.5; }
 .city:hover .node, .fort:hover .fnode { stroke: #ffd76a; stroke-width: 2.5; }
