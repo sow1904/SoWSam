@@ -1,11 +1,11 @@
 // Headless all-AI simulation for balance checks.
-// usage: node tools/sim.js [games=20] [years=30]
+// usage: node tools/sim.js [games=20] [years=30]   (SCENARIO=219 for the other scenario)
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
 const root = path.join(__dirname, "..", "js");
-for (const f of ["data/map.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/roster.js", "data/scenario191.js", "engine.js", "resources.js", "march.js", "units.js", "tech.js", "capital.js", "forts.js", "battle.js", "court.js", "houses.js", "diplomacy.js", "data/ties.js", "bonds.js", "ai.js"]) {
+for (const f of ["data/map.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/roster.js", "data/scenario191.js", "data/scenario219.js", "engine.js", "resources.js", "march.js", "units.js", "tech.js", "capital.js", "forts.js", "battle.js", "court.js", "houses.js", "diplomacy.js", "data/ties.js", "bonds.js", "ai.js"]) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;
@@ -18,7 +18,7 @@ const endYears = [];
 let battles = 0;
 
 for (let g = 0; g < games; g++) {
-  const state = S.newGame(S.SCENARIO_191, null, 1000 + g, { lifespan: process.env.LIFESPAN || "real" });
+  const state = S.newGame(S.scenarioOf(process.env.SCENARIO || "191"), null, 1000 + g, { lifespan: process.env.LIFESPAN || "real" });
   for (let m = 0; m < years * 12 && !state.over; m++) {
     S.advanceTurn(state, () => battles++);
     validate(state);

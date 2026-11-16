@@ -315,8 +315,11 @@
   // ---------- title ----------
   UI.showTitle = function () {
     const saved = UI.loadSaved();
-    const sc = S.SCENARIO_191;
+    const sc = S.scenarioOf(UI.scenario) || S.SCENARIOS[0];
+    UI.scenario = sc.id;
     const preview = S.newGame(sc, null, 1);
+    const picker = S.SCENARIOS.length > 1 ? `<div class="footer center">` + S.SCENARIOS.map((x) =>
+      `<button${x.id === sc.id ? ' class="primary"' : ""} data-action="pickScenario" data-id="${x.id}">${x.title}</button>`).join("") + `</div>` : "";
     const cards = Object.values(preview.forces).map((f) => ({ f, t: S.totals(preview, f.id) }))
       .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops).map(({ f, t }) => {
         const r = preview.officers[f.ruler];
@@ -327,7 +330,7 @@
           `<div class="fc-abil">${S.ABILITY_KEYS.map((k) => `${S.ABILITY_SHORT[k]}<b>${r[k]}</b>`).join(" ")}</div>` +
           (S.traitsOf(r).length ? `<div class="fc-traits">${S.traitsOf(r).map((x) => `<span class="trait">${x}</span>`).join(" ")}</div>` : "") + `</button>`;
       }).join("");
-    UI.openModal(`<div class="title-hero"><div class="seal">SoW</div><h1>삼국지</h1><p class="scn">${sc.title}</p><p>${sc.desc}</p></div>` +
+    UI.openModal(`<div class="title-hero"><div class="seal">SoW</div><h1>삼국지</h1><p class="scn">${sc.title}</p><p>${sc.desc}</p></div>` + (saved && !saved.over ? "" : picker) +
       (saved && !saved.over ? `<div class="footer center"><button class="primary big" data-action="continue">이어하기 — ${saved.year}년 ${saved.month}월 · ${saved.playerForce ? saved.forces[saved.playerForce].name + "군" : "관전"}</button></div>` : "") +
       `<h3>수명</h3><div class="links">` +
       Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "real" ? " checked" : ""}> ${v}</label>`).join(" ") +
@@ -394,9 +397,10 @@
       if (!confirm(`${state.forces[d.force].name}군과의 동맹을 파기할까요? 내 모든 도시의 치안이 5 떨어지고 우호도가 크게 떨어집니다.`)) return;
       if (UI.result(S.breakPact(state, state.playerForce, d.force))) UI.showDiplomacy();
     },
+    pickScenario: (d) => { UI.scenario = d.id; UI.showTitle(); },
     start: (d) => {
       const pick = document.querySelector('input[name="lifespan"]:checked');
-      UI.setState(S.newGame(S.SCENARIO_191, d.force || null, null, {
+      UI.setState(S.newGame(S.scenarioOf(UI.scenario) || S.SCENARIOS[0], d.force || null, null, {
         lifespan: pick ? pick.value : "real", fiction: $("#optFiction").checked, women: $("#optWomen").checked,
       }));
       if (!d.force) { begin(state.cities[state.emperor] || S.cityList(state)[0], "관전을 시작합니다. 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다."); return; }

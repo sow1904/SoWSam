@@ -326,4 +326,6 @@
       "장횡 @zuopingyi", "양흥 @zuopingyi",
     ],
   };
+  S.SCENARIOS = S.SCENARIOS || [];
+  S.SCENARIOS.unshift(S.SCENARIO_191);
 })(globalThis.SAM = globalThis.SAM || {});
