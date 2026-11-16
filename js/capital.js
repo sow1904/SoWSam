@@ -71,7 +71,7 @@
   const staysLoyal = (state, o, fid) => {
     const r = S.CLAN[state.officers[state.forces[fid].ruler].name];
     const kin = r && S.CLAN[o.name] && S.CLAN[o.name].clan === r.clan;
-    return kin || o.loyalty >= S.CAPITAL.loyal;
+    return kin || o.loyalty >= S.CAPITAL.loyal || S.hasTrait(o, "의리");
   };
   // Chance that a city gives itself up: loyal officers hold it, and the
   // ruler's own city never yields.
@@ -121,7 +121,7 @@
         }
       }
       const turned = staff.filter((o) => !loyal.includes(o));
-      for (const o of turned) { o.force = captor; o.loyalty = 50; o.done = true; }
+      for (const o of turned) { o.force = captor; o.loyalty = 50; o.done = true; S.joinBond(state, o, S.BOND.captive); }
       for (const p of S.officersIn(state, c.id, (x) => x.status === "captive" && x.captor === fid)) {
         if (p.force === captor) { p.status = "serving"; p.captor = null; }
         else if (p.lord) S.freeCaptive(state, p);

@@ -189,6 +189,7 @@
       ["소재", whereOf], ["나이", (o) => S.age(state, o)],
       ...S.ABILITY_KEYS.map((k) => [S.ABILITY_NAMES[k], (o) => o[k]]),
       ["충성", (o) => (S.isRuler(state, o) ? 101 : o.loyalty), (o) => (S.isRuler(state, o) ? "-" : o.loyalty)],
+      ["유대", (o) => (S.isRuler(state, o) ? 101 : o.bond || 0), (o) => (S.isRuler(state, o) ? "-" : o.bond || 0)],
       ["상태", officerStatus],
       ["성격", (o) => S.traitsOf(o).join(" "), UI.traitTags],
       ["특기", (o) => S.skillsOf(o).join(" "), UI.skillTags],

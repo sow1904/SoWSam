@@ -95,7 +95,7 @@
       const targets = S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, c.owner));
       if (!targets.length) { UI.toast("이 도시에는 등용할 인재가 없습니다. 「탐색」으로 재야 인재를 찾아보세요."); return; }
       UI.openModal(title("등용") + `<p class="hint">설득할 대상을 고르세요.</p>` +
-        UI.officerTable(targets, { pick: "recruitTarget", extraHead: "신분", extra: (o) => (o.status === "free" ? "재야" : "포로") }) + footer(), true);
+        UI.officerTable(targets, { pick: "recruitTarget", extraHead: "신분", extra: (o) => (o.status === "free" ? "재야" : "포로") + (S.liegeOf(state, o) ? ` · ${S.josa(state.officers[o.liege].name, "을", "를")} 기다림` : S.recruitBar(state, c.owner, o) ? " · 섬기지 않음" : "") }) + footer(), true);
     },
     captives() { UI.showCaptives(null); },
     post(kind) {
@@ -299,7 +299,7 @@
       `<b>해방</b>하면 원래 세력의 가장 가까운 도시로 돌아가고, 그 세력이 멸망했으면 재야가 됩니다. <b>참수</b>하면 죽습니다.</p>` +
       (list.some((o) => o.lord) ? `<p class="hint"><b>군주</b>는 남을 섬기지 않고 가두어 둘 수도 없습니다. 해방하거나 참수해야 하며, 정하지 않고 창을 닫으면 해방합니다. 해방된 군주는 세력이 남아 있으면 돌아가 다시 세력을 이끕니다.</p>` : "") +
       UI.officerTable(list, { loyalty: true, extraHead: "원 소속 · 처우", extra: (o) =>
-        `<span class="capt"><span class="hint">${o.lord ? "군주 · " : ""}${o.force && state.forces[o.force] ? S.forceName(state, o.force) : "재야"} · ${S.placeName(state, o.city)}</span>${buttons(o)}</span>` }) +
+        `<span class="capt"><span class="hint">${o.lord ? "군주 · " : ""}${o.force && state.forces[o.force] ? S.forceName(state, o.force) : "재야"} · ${S.placeName(state, o.city)}${S.liegeOf(state, o) ? ` · <b>옛 주군 ${S.josa(state.officers[o.liege].name, "을", "를")} 기다림</b>` : S.recruitBar(state, me, o) ? " · <b>옛 주군을 기려 섬기지 않음</b>" : ""}</span>${buttons(o)}</span>` }) +
       `<div class="footer"><button class="primary" data-action="close">${fresh ? "나머지는 포로로 둔다" : "닫기"}</button></div>`, true);
     // A ruler left undecided goes free.
     UI.modalOnClose = () => {

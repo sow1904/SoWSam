@@ -186,6 +186,7 @@
     }
     for (const [a, b] of scenario.alliances || []) S.makePact(state, a, b);
     S.initRelations(state, scenario);
+    S.initBonds(state);
     for (const [cid, over] of Object.entries(scenario.cityState || {})) {
       const c = state.cities[cid];
       Object.assign(c, over);
@@ -554,13 +555,21 @@
   S.searchChance = (o) => Math.min(100, Math.round(25 + o.wit / 2));
 
   S.recruitChance = function (state, recruiter, target) {
-    const court = S.courtRecruitBonus(state, recruiter, target);
+    // One who keeps faith with a fallen lord never serves its destroyer.
+    if (S.recruitBar(state, recruiter.force, target)) return 0;
+    const court = S.courtRecruitBonus(state, recruiter, target) + S.recruitFeel(state, recruiter.force, target);
     if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2 + court), 5, 95);
     if (target.status === "captive") {
       // A ruler taken captive serves no one: he is freed or put to death.
       if (target.lord || (target.force && state.forces[target.force] && state.forces[target.force].ruler === target.id)) return 0;
-      const trait = S.hasTrait(target, "의리") ? -25 : S.hasTrait(target, "변심") ? 15 : 0;
-      return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6 + court + trait), 3, 90);
+      // While his lord's force stands he is held by loyalty, by his bond and
+      // by his own steadfastness. Once it has fallen he may take a new lord.
+      if (target.force && state.forces[target.force] && state.forces[target.force].alive) {
+        const trait = S.hasTrait(target, "의리") ? -25 : S.hasTrait(target, "변심") ? 15 : 0;
+        return clamp(Math.round(30 + recruiter.speech / 3 - (target.loyalty - 50) * 0.6 - (target.bond || 0) * 0.2 + court + trait), 3, 90);
+      }
+      const lost = (S.hasTrait(target, "변심") ? 10 : 0) + (target.mourn ? S.BOND.mourning : 0);
+      return clamp(Math.round(45 + recruiter.speech / 3 + court + lost), 3, 90);
     }
     return 0;
   };
@@ -573,12 +582,14 @@
     const valid = (t.status === "free" && !t.hidden) || (t.status === "captive" && t.captor === c.owner);
     if (!valid) return fail("등용할 수 없는 대상입니다.");
     const pct = S.recruitChance(state, o, t);
-    if (pct <= 0) return fail(`${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
+    if (pct <= 0) return fail(S.recruitBar(state, c.owner, t) || `${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
     o.done = true;
     if (S.chance(state, pct)) {
       const old = t.force;
-      t.loyalty = t.status === "free" ? 75 : 65;
+      const wild = t.status === "free";
+      t.loyalty = wild ? 75 : 65;
       t.force = c.owner;
+      S.joinBond(state, t, wild ? S.BOND.join : S.BOND.captive);
       t.status = "serving";
       t.hidden = false;
       t.captor = null;
@@ -600,6 +611,7 @@
     c.gold -= S.COST.reward;
     const gain = Math.min(100 - t.loyalty, 6 + Math.floor(rand(state) * 6));
     t.loyalty += gain;
+    S.bondAdd(state, t, S.BOND.reward);
     t.rewarded = true;
     return { ok: true, msg: `${t.name}에게 금 ${S.josa(S.COST.reward, "을", "를")} 하사해 충성이 ${gain} 올랐습니다.` };
   };
@@ -634,12 +646,13 @@
     const who = S.persuader(state, t);
     if (!who) return fail("그곳에 설득할 무장이 없습니다.");
     const pct = S.recruitChance(state, who, t);
-    if (pct <= 0) return fail(`${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
+    if (pct <= 0) return fail(S.recruitBar(state, t.captor, t) || `${S.josa(t.name, "은", "는")} 등용할 수 없습니다.`);
     t.tries = (t.tries || 0) + 1;
     if (S.chance(state, pct)) {
       const old = t.force;
       t.loyalty = 65;
       t.force = t.captor;
+      S.joinBond(state, t, S.BOND.captive);
       t.status = "serving";
       t.hidden = false;
       t.captor = null;
@@ -659,8 +672,10 @@
     const c = S.place(state, cid);
     if (!c || !heldBy(state, t, c.owner) || t.city !== cid) return fail("해방할 수 없는 대상입니다.");
     S.relAdd(state, c.owner, t.force, t.lord ? S.DIPLO.releaseLord : S.DIPLO.release);
+    S.thank(state, t, c.owner);
     freeCaptive(state, t);
-    const where = t.status !== "serving" ? "재야로 돌아갔습니다"
+    const where = t.status === "retired" ? "옛 주군을 기리며 세상을 등졌습니다"
+      : t.status !== "serving" ? "재야로 돌아갔습니다"
       : S.isRuler(state, t) ? `${S.ro(S.placeName(state, t.city))} 돌아가 다시 세력을 이끕니다`
       : `${S.forceName(state, t.force)}의 ${S.ro(S.placeName(state, t.city))} 돌아갔습니다`;
     return { ok: true, msg: `포로 ${S.josa(t.name, "을", "를")} 해방했습니다. ${S.josa(t.name, "은", "는")} ${where}.` };
@@ -675,7 +690,9 @@
     t.hidden = true;
     t.captor = null;
     t.lord = false;
-    const msg = `${S.forceName(state, c.owner)}이 포로 ${from}${S.josa(t.name, "을", "를")} 참수했습니다.`;
+    const shaken = S.grieve(state, t, c.owner);
+    const msg = `${S.forceName(state, c.owner)}이 포로 ${from}${S.josa(t.name, "을", "를")} 참수했습니다.` +
+      (shaken.length ? ` 가까웠던 ${S.josa(shaken.join(", "), "이", "가")} 크게 흔들립니다.` : "");
     if (c.owner !== state.playerForce) S.addLog(state, msg, "info");
     return { ok: true, msg };
   };
@@ -700,6 +717,8 @@
         t.loyalty = 100;
         S.addLog(state, `풀려난 ${S.josa(t.name, "이", "가")} 돌아와 다시 세력을 이끕니다.`, t.force === state.playerForce ? "sys" : "info");
       }
+    } else if (t.mourn) {
+      S.retire(state, t);
     } else {
       t.status = "free";
       t.force = null;
@@ -796,7 +815,7 @@
     const wit = Math.max(t.wit, g ? g.wit : 0);
     const trait = { 의리: -20, 변심: 15, 야심: 10, 무욕: -5 };
     const mod = S.traitsOf(t).reduce((s, k) => s + (trait[k] || 0), 0);
-    return clamp(Math.round(20 + o.plot * 0.7 - wit * 0.5 - (t.loyalty - 50) * 0.4 + mod), 3, 85);
+    return clamp(Math.round(20 + o.plot * 0.7 - wit * 0.5 - (t.loyalty - 50) * 0.4 - (t.bond || 0) * 0.15 + mod), 3, 85);
   };
   S.schemeEffect = {
     rumor: (o) => ({ order: 8 + Math.floor(o.plot / 8), consent: 3 + Math.floor(o.plot / 25) }),
@@ -974,18 +993,16 @@
   };
 
   // After losing a city: pick a new ruler if needed, or destroy the force.
-  function checkForce(state, fid, report) {
+  // foe: the force that took its last city, if it fell to one.
+  function checkForce(state, fid, report, foe) {
     const f = state.forces[fid];
     const cities = S.citiesOf(state, fid);
     const ruler = state.officers[f.ruler];
     if (!cities.length) {
       f.alive = false;
-      for (const o of Object.values(state.officers)) {
-        if (o.force !== fid) continue;
-        if (o.status === "serving") { o.status = "free"; o.force = null; o.hidden = false; o.city = S.homeCity(state, o.city); S.officersMoved(state); }
-      }
+      const gone = S.forceFell(state, fid, foe);
       S.dropForts(state, fid);
-      const msg = `${f.name}군이 멸망했습니다.`;
+      const msg = `${f.name}군이 멸망했습니다.` + (gone.length ? ` ${S.josa(gone.join(", "), "은", "는")} 옛 주군을 기리며 세상을 등졌습니다.` : "");
       if (report) report.lines.push(msg);
       S.addLog(state, msg, "fall");
       return;
@@ -995,11 +1012,12 @@
       if (!heirs.length) {
         // No one left to lead; the cities fall vacant.
         cities.forEach((c) => (c.owner = null));
-        return checkForce(state, fid, report);
+        return checkForce(state, fid, report, foe);
       }
       const heir = S.pickHeir(ruler, heirs);
       f.ruler = heir.id;
       heir.loyalty = 100;
+      S.heirBonds(state, fid, ruler, heir);
       f.name = heir.name;
       const how = ruler.status === "dead" ? "세상을 떠나" : "사로잡혀";
       const msg = `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(heir.name, "이", "가")} 세력을 이어받았습니다.`;
@@ -1015,7 +1033,7 @@
   S.upkeep = (c) => Math.ceil(c.troops / 100);
 
   // Traits: who walks away, and how fast loyalty wears down.
-  S.leaveThreshold = (o) => (S.hasTrait(o, "의리") ? 25 : S.hasTrait(o, "변심") ? 50 : S.hasTrait(o, "야심") ? 45 : 40);
+  S.leaveThreshold = (o) => (S.hasTrait(o, "의리") ? 15 : S.hasTrait(o, "변심") ? 50 : S.hasTrait(o, "야심") ? 45 : 40);
   S.loyaltyDrift = (o) => S.traitsOf(o).reduce((m, k) => m * ({ 야심: 2, 무욕: 0.5, 의리: 0.5, 변심: 1.5 }[k] || 1), 1);
 
   S.endMonth = function (state) {
@@ -1070,7 +1088,7 @@
         o.city = S.homeCity(state, o.city);
         S.officersMoved(state);
         S.addLog(state, `${S.josa(o.name, "이", "가")} ${S.josa(S.forceName(state, f), "을", "를")} 떠나 재야로 돌아갔습니다.`, f === state.playerForce ? "warn" : "info");
-      } else if (S.chance(state, (10 + Math.max(0, state.forces[o.force].weariness - 50) / 2) * S.loyaltyDrift(o))) {
+      } else if (S.chance(state, (10 + Math.max(0, state.forces[o.force].weariness - 50) / 2) * S.loyaltyDrift(o) * (1 - (o.bond || 0) / 200))) {
         o.loyalty = Math.max(0, o.loyalty - 1);
       }
     }
@@ -1096,6 +1114,7 @@
     }
     runPacts(state);
     S.runRelations(state);
+    S.runBonds(state);
     S.runForts(state);
     S.runCourt(state);
     if (harvest) S.addLog(state, "가을 수확으로 각 도시에 군량이 들어왔습니다.", "sys");
@@ -1257,6 +1276,7 @@
         o.force = f.id;
         o.hidden = false;
         o.loyalty = 90;
+        o.bond = S.startBond(state, o);
         S.addLog(state, `${S.josa(o.name, "이", "가")} 장성하여 ${S.forceName(state, f.id)}에 합류했습니다.`, f.id === state.playerForce ? "sys" : "info");
       } else {
         o.status = "free";
@@ -1301,6 +1321,7 @@
     if (!state.pacts) state.pacts = {};
     if (!state.rel) S.initRelations(state, null);
     if (!state.envoys) state.envoys = [];
+    S.initBonds(state);
     if (!state.marches) state.marches = [];
     if (!state.forts) S.initForts(state);
     S.addMissingForts(state);

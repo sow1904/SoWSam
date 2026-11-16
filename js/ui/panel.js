@@ -64,7 +64,7 @@
       return `<tr class="${cls}"${attrs}><td class="oname">${crown}${o.name}${UI.personMarks(o)}</td><td>${S.age(state, o)}</td>${abilityCells(o)}` +
         `<td class="han-${o.han}">${S.HAN_NAMES[o.han].slice(2)}</td>` +
         `<td class="traits">${traitTags(o)}</td><td class="traits">${skillTags(o)}</td>` +
-        (opts.loyalty ? `<td>${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +
+        (opts.loyalty ? `<td title="유대 ${o.bond || 0}">${S.isRuler(state, o) ? "-" : o.loyalty}</td>` : "") +
         (opts.extra ? `<td>${opts.extra(o)}</td>` : "") +
         (opts.status ? `<td>${status}</td>` : "") + `</tr>`;
     }).join("");

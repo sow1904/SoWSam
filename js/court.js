@@ -270,6 +270,7 @@
       o.city = toRuler.city;
       S.officersMoved(state);
       o.loyalty = 75;
+      S.joinBond(state, o, S.BOND.join);
       o.done = true;
       gone.push(o.name);
     }

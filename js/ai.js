@@ -41,6 +41,23 @@
     return best;
   }
 
+  // A captive who will never serve his captor is not worth feeding. A hard
+  // ruler puts an able one to death rather than see him serve another; the
+  // rest are let go. Returns true when his fate was settled.
+  S.judgeCaptive = function (state, t) {
+    const fid = t.captor;
+    if (t.status !== "captive" || t.lord || !S.recruitBar(state, fid, t)) return false;
+    const ruler = state.officers[state.forces[fid].ruler];
+    const able = Math.max(t.cmd, t.war, t.wit, t.pol) >= 80;
+    const hard = S.hasTrait(ruler, "야심") && !S.hasTrait(ruler, "의리");
+    if (able && hard && S.chance(state, 60)) S.behead(state, t.city, t.id);
+    else {
+      const r = S.release(state, t.city, t.id);
+      if (r.ok) S.addLog(state, `${S.josa(S.forceName(state, fid), "이", "가")} 뜻을 굽히지 않는 포로 ${S.josa(t.name, "을", "를")} 놓아주었습니다.`, "info");
+    }
+    return true;
+  };
+
   // Try 이간 on the shakiest officer next door, else 유언비어 on the steadiest city.
   function scheme(state, o, c) {
     const targets = S.schemeTargets(state, c.id);
@@ -222,6 +239,7 @@
 
     // Recruit visible free officers and captives first.
     for (const t of S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, fid))) {
+      if (t.status === "captive" && S.judgeCaptive(state, t)) continue;
       const o = take(byDesc("speech"));
       if (!o) return;
       if (S.recruitChance(state, o, t) > 0) S.recruit(state, o.id, c.id, t.id);

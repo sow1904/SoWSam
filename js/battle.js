@@ -342,7 +342,7 @@
       t.delegate = base && base.owner === A.force && S.delegateOf(state, base) === "full" ? { fid: A.force, policy: "full" } : null;
     }
     if (defForce && !fort && state.forces[defForce].capital === t.id && S.citiesOf(state, defForce).length) S.capitalFell(state, defForce, A.force, report);
-    if (defForce) S.checkForce(state, defForce, report);
+    if (defForce) S.checkForce(state, defForce, report, A.force);
   }
 
   // ---------- relief armies (원군) ----------
@@ -681,6 +681,9 @@
       if (home) S.returnManpower(home, (b.killedD || 0) * 0.3);
     }
     const won = report.attackerWon;
+    // Those who win together grow closer to their lord.
+    for (const o of won ? crewOf(state, A.officers, A.force)
+      : b.kind === "siege" && D.force ? S.serving(state, b.place).filter((x) => x.force === D.force) : []) S.bondAdd(state, o, S.BOND.win);
     S.addWeariness(state, A.force, ((b.killedA || 0) / S.forcePop(state, A.force)) * 1500 + (won ? -2 : 3));
     if (D.force) S.addWeariness(state, D.force, (((b.killedD || 0) + (b.killedR || 0)) / S.forcePop(state, D.force)) * 1500 + (won ? 5 : -1));
     const where = S.placeName(state, b.place);
@@ -702,6 +705,7 @@
         for (let i = 0; i < S.CAPTIVE_TRIES && p.status === "captive"; i++) {
           if (!S.persuade(state, pid).ok) break;
         }
+        if (p.status === "captive") S.judgeCaptive(state, p);
       }
     }
     if (onEvent) onEvent({ ok: true, report, msg: b.last });
