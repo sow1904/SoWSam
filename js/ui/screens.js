@@ -292,14 +292,15 @@
 
   // ---------- system ----------
   UI.showSystem = function () {
-    UI.openModal(title("기록과 설정") +
+    UI.openModal(title("시스템") +
       `<div class="sysmenu">` +
-      `<button data-action="save"><b>저장</b><span>지금 상태를 기록합니다. 매달 1일에도 저절로 저장됩니다.</span></button>` +
+      `<button data-action="saveMenu"><b>저장</b><span>슬롯을 골라 지금 상태를 기록합니다. 매달 1일에는 자동 저장 칸에 저절로 저장됩니다.</span></button>` +
+      `<button data-action="loadMenu" data-from="game"><b>불러오기</b><span>저장해 둔 게임을 골라 불러옵니다.</span></button>` +
       `<button data-action="clockSettings"><b>시간 설정</b><span>배속과 자동 일시정지를 정합니다.</span></button>` +
       (state.playerForce ? `<button data-action="auto"><b>세력 위임</b><span>${state.auto
         ? "지금 세력 전체를 맡겨 두었습니다. 누르면 다시 직접 다스립니다."
         : "세력 전체를 컴퓨터에 맡깁니다. 도시와 군대, 외교와 황실, 포로 처우까지 알아서 하고, 시간이 저절로 멈추지 않습니다. 언제든 되돌릴 수 있습니다."}</span></button>` : "") +
-      `<button data-action="title"><b>타이틀로</b><span>저장한 뒤 첫 화면으로 돌아갑니다.</span></button>` +
+      `<button data-action="title"><b>타이틀로</b><span>자동 저장한 뒤 메인 메뉴로 돌아갑니다.</span></button>` +
       `</div>` + closeBar);
   };
 
@@ -315,56 +316,7 @@
     UI.clearSave();
   };
 
-  // ---------- title ----------
-  UI.showTitle = function () {
-    const saved = UI.loadSaved();
-    const sc = S.scenarioOf(UI.scenario) || S.SCENARIOS[0];
-    UI.scenario = sc.id;
-    const preview = S.newGame(sc, null, 1);
-    const picker = S.SCENARIOS.length > 1 ? `<div class="footer center">` + S.SCENARIOS.map((x) =>
-      `<button${x.id === sc.id ? ' class="primary"' : ""} data-action="pickScenario" data-id="${x.id}">${x.title}</button>`).join("") + `</div>` : "";
-    const cards = Object.values(preview.forces).map((f) => ({ f, t: S.totals(preview, f.id) }))
-      .sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops).map(({ f, t }) => {
-        const r = preview.officers[f.ruler];
-        return `<button class="forcecard" style="--force:${f.color}" data-action="start" data-force="${f.id}">` +
-          `<b>${f.name}</b><span class="fc-han">${S.HAN_NAMES[r.han]}</span>` +
-          `<div class="fc-nums"><span>도시 <b>${t.cities}</b></span><span>무장 <b>${t.officers}</b></span><span>병력 <b>${fmt(t.troops)}</b></span></div>` +
-          `<div class="fc-cities">${S.citiesOf(preview, f.id).map((c) => c.name).join(" · ")}</div>` +
-          `<div class="fc-abil">${S.ABILITY_KEYS.map((k) => `${S.ABILITY_SHORT[k]}<b>${r[k]}</b>`).join(" ")}</div>` +
-          (S.traitsOf(r).length ? `<div class="fc-traits">${S.traitsOf(r).map((x) => `<span class="trait">${x}</span>`).join(" ")}</div>` : "") + `</button>`;
-      }).join("");
-    UI.openModal(`<div class="title-hero"><div class="seal">SoW</div><h1>삼국지</h1><p class="scn">${sc.title}</p><p>${sc.desc}</p></div>` + (saved && !saved.over ? "" : picker) +
-      (saved && !saved.over ? `<div class="footer center"><button class="primary big" data-action="continue">이어하기 — ${saved.year}년 ${saved.month}월 · ${saved.playerForce ? saved.forces[saved.playerForce].name + "군" : "관전"}</button></div>` : "") +
-      `<h3>수명</h3><div class="links">` +
-      Object.entries(S.LIFESPAN).map(([k, v]) => `<label><input type="radio" name="lifespan" value="${k}"${k === "real" ? " checked" : ""}> ${v}</label>`).join(" ") +
-      `</div><p class="hint">무장은 16세가 되면 등장합니다. 사실 수명에서는 병으로 죽은 인물은 정사의 사망 연도 2년 전부터 매년 72면체 주사위를, ` +
-      `전사·처형 등으로 죽은 인물은 48세부터 매년 144면체 주사위를 굴립니다. 1~12가 나오면 그 달에 세상을 떠납니다. ` +
-      `가상 수명에서는 모두 99세까지 살고, 그 뒤 12면체 주사위로 세상을 떠나는 달을 정합니다.</p>` +
-      `<h3>등장 인물</h3><div class="links">` +
-      `<label><input type="checkbox" id="optFiction" checked> 연의의 인물 <span class="mark">演</span></label>` +
-      `<label><input type="checkbox" id="optWomen" checked> 여성 <span class="mark f">女</span></label></div>` +
-      `<p class="hint">정사에 기록된 인물은 늘 나옵니다. 삼국지연의에만 나오는 인물(주창, 초선, 형도영 등)과 여성(채염, 손상향, 왕이 등)은 뺄 수 있습니다. ` +
-      `세력에 속하지 않은 인물은 고향 도시의 재야 인재로 나오고, 아직 어린 인물은 16세가 되는 해에 등장합니다.</p>` +
-      `<h3>세력을 고르세요</h3>` +
-      `<div class="links watch"><button data-action="start" data-force="">관전 모드</button><span class="hint">세력을 고르지 않고 모든 세력을 컴퓨터에 맡긴 채 지켜봅니다.</span></div>` +
-      `<div class="forcegrid">${cards}</div>`, true);
-    $("#modal .box").classList.add("titlebox");
-  };
-
-  function begin(home, msg) {
-    UI.selected = home.id;
-    UI.winOpen = false;
-    UI.tab = "cmd";
-    UI.closeModal();
-    UI.resetClock();
-    UI.view.zoom = 1;
-    UI.renderAll();
-    UI.centerOn(home);
-    UI.toast(msg);
-  }
-
   Object.assign(UI.actions, {
-    title: () => { if (state && !state.over) UI.saveGame(true); UI.stopClock(); UI.showTitle(); },
     forces: () => state && UI.showForces(),
     cities: () => state && UI.showCities(),
     officers: () => state && UI.showOfficers(),
@@ -372,7 +324,6 @@
     court: () => state && UI.showCourt(),
     tech: () => state && UI.showTech(),
     system: () => state && UI.showSystem(),
-    save: () => state && UI.saveGame(),
     auto: () => {
       if (!state || !state.playerForce) return;
       if (!state.auto && !confirm("세력 전체를 컴퓨터에 맡길까요? 언제든 되돌릴 수 있습니다.")) return;
@@ -399,20 +350,6 @@
     breakPact: (d) => {
       if (!confirm(`${state.forces[d.force].name}군과의 동맹을 파기할까요? 내 모든 도시의 치안이 5 떨어지고 우호도가 크게 떨어집니다.`)) return;
       if (UI.result(S.breakPact(state, state.playerForce, d.force))) UI.showDiplomacy();
-    },
-    pickScenario: (d) => { UI.scenario = d.id; UI.showTitle(); },
-    start: (d) => {
-      const pick = document.querySelector('input[name="lifespan"]:checked');
-      UI.setState(S.newGame(S.scenarioOf(UI.scenario) || S.SCENARIOS[0], d.force || null, null, {
-        lifespan: pick ? pick.value : "real", fiction: $("#optFiction").checked, women: $("#optWomen").checked,
-      }));
-      if (!d.force) { begin(state.cities[state.emperor] || S.cityList(state)[0], "관전을 시작합니다. 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다."); return; }
-      begin(S.citiesOf(state, d.force)[0], `${state.forces[d.force].name}군으로 천하통일을 시작합니다! 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`);
-    },
-    continue: () => {
-      UI.setState(S.migrate(UI.loadSaved()));
-      const cap = state.playerForce ? S.capitalOf(state, state.playerForce) : S.capitalOf(state, UI.viewForce());
-      begin(state.cities[cap] || UI.myCities()[0] || S.cityList(state)[0], "스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.");
     },
   });
 })(globalThis.SAM = globalThis.SAM || {});

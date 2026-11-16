@@ -57,17 +57,35 @@
   };
 
   // ---------- storage ----------
-  UI.saveGame = function (quiet) {
+  // Slots: "auto" is written every month and on leaving for the main menu;
+  // the numbered ones only when the player says so.
+  UI.SLOTS = ["auto", "1", "2", "3", "4", "5"];
+  const slotKey = (slot) => (!slot || slot === "auto" ? SAVE_KEY : "sowsam.slot." + slot);
+  UI.slotName = (slot) => (!slot || slot === "auto" ? "자동 저장" : `슬롯 ${slot}`);
+  UI.saveGame = function (quiet, slot) {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-      if (!quiet) UI.toast("저장했습니다.");
+      state.savedAt = Date.now();
+      localStorage.setItem(slotKey(slot), JSON.stringify(state));
+      if (!quiet) UI.toast(`${UI.slotName(slot)}에 저장했습니다.`);
+      return true;
     } catch (e) {
       UI.toast("저장하지 못했습니다: " + e.message);
+      return false;
     }
   };
-  UI.loadSaved = function () {
+  // What each slot holds, for the lists: null info when empty or unusable.
+  UI.slotList = () => UI.SLOTS.map((slot) => {
+    const g = UI.loadSaved(slot);
+    if (!g || g.over) return { slot, info: null };
+    const sc = S.scenarioOf && S.scenarioOf(g.scenario);
+    const f = g.playerForce && g.forces[g.playerForce];
+    const cities = f ? Object.values(g.cities).filter((c) => c.owner === f.id).length : 0;
+    return { slot, info: { savedAt: g.savedAt || 0,
+      text: `${g.year}년 ${g.month}월 · ${f ? `${f.name}군 (도시 ${cities})` : "관전"}${sc ? ` · ${sc.title}` : ""}` } };
+  });
+  UI.loadSaved = function (slot) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = localStorage.getItem(slotKey(slot));
       const saved = raw ? JSON.parse(raw) : null;
       // A save from a map that is gone, or from before cities were added or
       // removed, cannot be played on.
@@ -79,8 +97,8 @@
       return null;
     }
   };
-  UI.clearSave = function () {
-    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+  UI.clearSave = function (slot) {
+    try { localStorage.removeItem(slotKey(slot)); } catch (e) { /* ignore */ }
   };
 
   // ---------- windows ----------

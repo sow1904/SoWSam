@@ -430,3 +430,41 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 .rel.r0 { color: #d4553f; } .rel.r1 { color: #c98a5a; } .rel.r3 { color: #8fb86a; } .rel.r4 { color: #6fc27a; }
 .ask { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; margin: 4px 0; border: 1px solid rgba(201, 162, 77, 0.5); background: rgba(201, 162, 77, 0.08); }
 .ask > span { white-space: nowrap; }
+
+/* Main menu, scenario screen, save slots. */
+#modal .box.menubox { max-width: 460px; }
+.mainmenu { display: grid; gap: 10px; max-width: 260px; margin: 26px auto 14px; }
+.mainmenu button { padding: 13px 0; font-size: 18px; letter-spacing: 6px; }
+.hint.center { text-align: center; }
+#modal .box.scnbox { max-width: 1060px; }
+.scn-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 0 8px; }
+.scn-head b { font-family: var(--serif); font-size: 20px; color: var(--gold2); letter-spacing: 3px; margin-right: 10px; }
+.scn-head button { font-family: var(--serif); }
+.scn-desc { color: var(--muted); margin: 0 0 8px; }
+.scn-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.scn-map { background: radial-gradient(ellipse at 50% 40%, #2c2518, #15110b); border: 1px solid var(--line); border-radius: 3px; }
+.minimap { display: block; width: 100%; height: auto; max-height: 58vh; }
+.minimap .roads line { stroke: rgba(214, 190, 140, 0.22); stroke-width: 5; }
+.minimap g[data-action] { cursor: pointer; }
+.minimap circle { stroke: rgba(0, 0, 0, 0.7); stroke-width: 5; }
+.minimap .off { opacity: 0.28; }
+.minimap .on circle { stroke: #fff3c4; stroke-width: 9; }
+.minimap .cap { fill: none; stroke: rgba(255, 243, 196, 0.75); stroke-width: 6; }
+.minimap text { fill: #fff3c4; font-size: 46px; font-family: var(--serif); text-anchor: middle; paint-order: stroke; stroke: #000; stroke-width: 10px; pointer-events: none; }
+.scn-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.scn-list button { padding: 3px 9px 3px 7px; font-size: 13px; }
+.scn-list button.on { border-color: var(--gold2); color: var(--gold2); background: linear-gradient(#3d3020, #2a2016); }
+.scn-list i { font-style: normal; color: var(--muted); font-size: 11px; margin-left: 5px; }
+.scn-force h3 { margin: 0 0 4px; font-size: 20px; }
+.scn-force .fc-han { font-size: 12px; color: var(--muted); font-family: var(--sans); margin-left: 6px; }
+.scn-force .fc-abil { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.scn-force .fc-abil b { color: var(--ink); margin: 0 5px 0 2px; }
+.scn-cities { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 8px 0 0; }
+.scn-cities b { color: var(--gold2); }
+.scn-empty { margin-top: 4px; }
+.scn-opts { display: flex; flex-wrap: wrap; gap: 6px 26px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; }
+.scn-opts b { color: var(--gold2); margin-right: 6px; }
+.scn-opts label { margin-right: 6px; white-space: nowrap; }
+.slots td { vertical-align: middle; }
+.slots td:last-child { text-align: right; white-space: nowrap; }
+@media (max-width: 760px) { .scn-layout { grid-template-columns: 1fr; } }
