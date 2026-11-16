@@ -17,8 +17,13 @@
 // Later types in a line wait for technology (js/tech.js). Special types come
 // from certain lands (S.SPECIAL below). Drafting spends wood, iron and horses
 // (js/resources.js), one per soldier for each item in a type's cost.
+//
+// Siege engines (공성 병기) are a line of their own: the crews of rams,
+// towers, ladders and stone-throwers. They are counted as soldiers like any
+// other part of a mix, fight poorly in the open and slow the march, and earn
+// their keep only before walls (S.GEAR below).
 (function (S) {
-  S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", navy: "수군" };
+  S.UNIT_LINES = { spear: "창", sword: "검", bow: "궁", horse: "기", horsebow: "궁기", siege: "공성", navy: "수군" };
 
   // atk/def scale what a side deals and how much it shrugs off; tier and
   // special decide when it can be raised; cost is what each soldier is
@@ -43,6 +48,11 @@
     elephant: { name: "상병", line: "horse", tier: 3, special: true, atk: 1.3, def: 1.2, cost: { iron: 1 } },
     horsearcher: { name: "궁기병", line: "horsebow", tier: 1, atk: 1, def: 0.9, fast: true, cost: { horse: 1, wood: 1 } },
     raider: { name: "돌기병", line: "horsebow", tier: 2, special: true, atk: 1.15, def: 0.95, fast: true, cost: { horse: 1, wood: 1 } },
+    // siege engines: gear is what the crew works (S.GEAR); note is for the lists
+    ram: { name: "충차", line: "siege", tier: 2, atk: 0.8, def: 0.8, slow: true, gear: "ram", cost: { wood: 3 }, note: "성벽을 매일 부숩니다" },
+    tower: { name: "정란", line: "siege", tier: 3, atk: 0.8, def: 0.8, slow: true, gear: "tower", cost: { wood: 4 }, note: "성 위의 수비군을 쏘아 수비 전력을 낮춥니다" },
+    ladder: { name: "운제", line: "siege", tier: 3, atk: 0.8, def: 0.8, slow: true, gear: "ladder", cost: { wood: 2 }, note: "성벽을 넘어 성벽 효과를 줄입니다" },
+    trebuchet: { name: "벽력거", line: "siege", tier: 4, atk: 0.8, def: 0.8, slow: true, gear: "treb", cost: { wood: 5, iron: 1 }, note: "돌을 날려 성벽을 크게 부수고 수비군을 죽입니다" },
     // ships
     mengchong: { name: "몽충", line: "navy", tier: 1, atk: 1, def: 1 },
     douhan: { name: "투함", line: "navy", tier: 2, atk: 1.15, def: 1.15 },
@@ -72,11 +82,39 @@
   //   field  - on the road (a river battle is fought in ships: see S.fleet)
   //   siegeA - storming walls; siegeD - holding them
   const SETTING = {
-    field: { other: 1 },
+    field: { siege: 0.4, other: 1 },
     water: { other: 1 },
     siegeA: { horse: 0.6, horsebow: 0.65, other: 1 },
-    siegeD: { bow: 1.2, horse: 0.8, horsebow: 0.85, other: 1 },
+    siegeD: { bow: 1.2, horse: 0.8, horsebow: 0.85, siege: 0.7, other: 1 },
   };
+
+  // What siege engines do for besiegers. A kind works in full once its crews
+  // are a tenth of the army (full), and in proportion below that.
+  //   ram: wall lost each day; treb: the same, and more defenders killed;
+  //   tower: the garrison's strength it takes away; ladder: the part of the
+  //   wall's protection it cancels.
+  // why: at 관도 원소 raised towers to shoot into 조조's camp and 조조 broke
+  // them with stone-throwers (벽력거); at 진창 제갈량 brought ladders, rams
+  // and towers against 학소.
+  S.GEAR = { full: 0.1, ram: 18, treb: 25, trebLoss: 0.1, tower: 0.12, ladder: 0.35 };
+  S.gearOf = function (spec) {
+    const mix = S.mixOf(spec), g = { ram: 0, tower: 0, ladder: 0, treb: 0 };
+    for (const k in mix) if (S.UNITS[k].gear) g[S.UNITS[k].gear] += mix[k];
+    for (const k in g) g[k] = Math.min(1, g[k] / S.GEAR.full);
+    return g;
+  };
+  S.gearShare = function (spec) {
+    const mix = S.mixOf(spec);
+    let s = 0;
+    for (const k in mix) if (S.UNITS[k].gear) s += mix[k];
+    return s;
+  };
+  // A wall bonus (1 = no wall) as ladders leave it; what towers leave of the
+  // garrison's strength; wall battered down in a day; defenders' losses.
+  S.gearWall = (wb, g) => 1 + (wb - 1) * (1 - S.GEAR.ladder * g.ladder);
+  S.gearSuppress = (g) => 1 - S.GEAR.tower * g.tower;
+  S.gearBatter = (g) => S.GEAR.ram * g.ram + S.GEAR.treb * g.treb;
+  S.gearKill = (g) => 1 + S.GEAR.trebLoss * g.treb;
 
   S.unitOf = (id) => S.UNITS[id] || S.UNITS[S.DEFAULT_UNIT];
 
@@ -248,7 +286,11 @@
   S.raisableAt = (state, c) => Object.keys(S.UNITS).filter((id) => S.canRaiseAt(state, c, id));
   S.raisable = (state, fid) => Object.keys(S.UNITS).filter((id) => S.canRaise(state, fid, id));
   // An army marches at the pace of its slowest part.
-  S.unitSpeed = (spec) => (Object.keys(S.mixOf(spec)).every((k) => S.unitOf(k).fast) ? "cavalry" : "army");
+  S.unitSpeed = function (spec) {
+    const ids = Object.keys(S.mixOf(spec));
+    if (ids.some((k) => S.unitOf(k).slow)) return "siege";
+    return ids.every((k) => S.unitOf(k).fast) ? "cavalry" : "army";
+  };
   // How many soldiers of a type a city's stores can arm.
   S.armable = function (c, id) {
     let n = Infinity;

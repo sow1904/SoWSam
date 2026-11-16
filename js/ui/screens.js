@@ -205,7 +205,7 @@
       const lv = S.techLevel(state, fid, k), max = S.techMax(k);
       const t = (state.forces[fid].tech || {})[k];
       const blk = S.techBlock(state, fid, k);
-      const next = lv < max ? `${t ? t.pts : 0}/${S.techNeed(lv)} → ${S.techUnlocks(k, lv + 1).join(", ") || "-"}` + (blk ? ` (${blk})` : "") : "완료";
+      const next = lv < max ? `${t ? t.pts : 0}/${S.techNeed(lv, k)} → ${S.techUnlocks(k, lv + 1).join(", ") || "-"}` + (blk ? ` (${blk})` : "") : "완료";
       const t0 = S.TECH[k];
       const lapsed = t0.land && lv > 1 && !S.holdsLand(state, fid, t0.land) ? " (효과 멈춤)" : "";
       return `<tr><td>${t0.name}${lapsed}</td><td>${"●".repeat(lv)}${"○".repeat(max - lv)}</td><td>${next}</td></tr>`;

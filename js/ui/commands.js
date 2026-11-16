@@ -56,7 +56,7 @@
       const cur = UI.pending && UI.pending.cmd === "draft" && units.includes(UI.pending.unit) ? UI.pending.unit : units[0];
       UI.pending = { cmd: "draft", unit: cur };
       const list = S.idle(state, c.id).sort((a, b) => b.cmd - a.cmd);
-      const rows = units.map((k) => `<tr><td>${S.unitName(k)}</td><td>${S.UNIT_LINES[S.unitOf(k).line]}</td><td>${S.costText(k, 1)}</td><td>${fmt(S.armable(c, k))}</td></tr>`).join("");
+      const rows = units.map((k) => `<tr><td>${S.unitName(k)}${S.unitOf(k).note ? ` <span class="hint">${S.unitOf(k).note}</span>` : ""}</td><td>${S.UNIT_LINES[S.unitOf(k).line]}</td><td>${S.costText(k, 1)}</td><td>${fmt(S.armable(c, k))}</td></tr>`).join("");
       UI.openModal(title("징병") + `<p class="hint">병사는 한 병종으로 뽑고, 한 명마다 아래 자원이 듭니다. 뽑는 수는 무장의 용병, 병역 인구, 그리고 이 도시의 자원으로 무장시킬 수 있는 수 가운데 가장 작은 값입니다. ` +
         `자원은 다른 도시에서 수송해 올 수 있습니다. 특수 병종은 그 지역의 도시에서만 뽑습니다(연노병과 보도병은 연구한 뒤 어디서나).</p>` +
         `<table><tr><th>병종</th><th>계열</th><th>1명당</th><th>무장 가능</th></tr>${rows}</table>` +
@@ -251,7 +251,7 @@
       if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { UI.toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
       UI.openModal(title("출진") + `<p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. ` +
-        `군단은 하루 ${S.SPEED.army}km(기병 ${S.SPEED.cavalry}km)를 행군하고, 도착한 날 그 도시의 병력과 싸웁니다. 군량은 병사 10명당 1에 행군 일수만큼 더 듭니다.</p>` +
+        `군단은 하루 ${S.SPEED.army}km(기병만이면 ${S.SPEED.cavalry}km, 공성 병기가 섞이면 ${S.SPEED.siege}km)를 행군하고, 도착한 날 그 도시의 병력과 싸웁니다. 군량은 병사 10명당 1에 행군 일수만큼 더 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
           const t = S.place(state, d);
           return `<option value="${d}">${UI.placeLabel(d)} (${t.owner || t.troops > 0 ? S.forceName(state, t.owner) : "비어 있음"}, ${S.unitName(S.garrisonUnit(t))} ${t.troops})</option>`;

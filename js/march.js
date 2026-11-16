@@ -7,7 +7,7 @@
 (function (S) {
   const clamp = S.clamp;
 
-  S.SPEED = { officer: 45, cargo: 25, army: 20, cavalry: 28 }; // km per day
+  S.SPEED = { officer: 45, cargo: 25, army: 20, cavalry: 28, siege: 14 }; // km per day
   S.ROAD_FACTOR = 1.3; // roads wind; straight-line distance is too short
   // Mountain roads and gorges, by how much longer they take.
   const ROUGH = {

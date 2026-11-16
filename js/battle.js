@@ -250,13 +250,16 @@
     let wb = S.wallBonus(t) * S.gentryDefense(t);
     if (has(defs, "수성")) wb *= 1.15;
     if (has(atk, "공성")) wb = 1 + (wb - 1) * 0.75;
+    // Siege engines: ladders over the wall, towers on the men upon it.
+    const gear = S.gearOf(A.unit);
+    wb = S.gearWall(wb, gear);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     // With a relief army in the field the besiegers must split their men.
     const split = b.relief ? 0.7 : 1;
     const gu = S.garrisonUnit(t);
     const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split;
-    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state);
-    let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd());
+    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state) * S.gearSuppress(gear);
+    let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd() * S.gearKill(gear));
     let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd());
     lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습", "땅굴"]);
     lossA += ruse(state, b, defs, atk, A.troops, ["야습", "역습", "화공"]);
@@ -267,7 +270,7 @@
     A.troops -= lossA;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
-    t.wall = Math.max(0, t.wall - Math.round(lossD * 0.02 * (has(atk, "공성") ? 1.5 : 1)));
+    t.wall = Math.max(0, t.wall - Math.round((lossD * 0.02 + S.gearBatter(gear)) * (has(atk, "공성") ? 1.5 : 1)));
     // Morale follows the day's exchange; a long siege wears the besiegers down,
     // and broken walls dishearten the defenders.
     A.morale += swing(lossA, lossD, 6) - (b.day > 20 ? 1 : 0);
@@ -472,7 +475,7 @@
       const direct = best.spare + t.troops >= b.att.troops * nerve;
       const raidWorth = raidOdds >= 0.45 * nerve && best.spare >= b.att.troops * 0.3;
       if (direct || raidWorth) {
-        const counts = S.pickTroops(best.c, best.spare, (k) => Math.pow(S.unitEdge(k, b.att.unit, "field", 1), 2));
+        const counts = S.pickTroops(best.c, best.spare, (k) => (S.unitOf(k).gear ? 0 : Math.pow(S.unitEdge(k, b.att.unit, "field", 1), 2)));
         S.relieve(state, best.c.id, b.place, team.map((o) => o.id), best.spare, counts);
       }
     }
@@ -588,7 +591,7 @@
     const want = Math.max(0, Math.min(S.marchable(t) - Math.max(1000, Math.round(t.troops * 0.2)), t.troops));
     if (!pool.length || want < 1000) return null;
     // The governor sends out the soldiers who fare best against what is coming.
-    const counts = S.pickTroops(t, want, (k) => (water ? 1 : Math.pow(S.unitEdge(k, m.unit, where, rough), 2)));
+    const counts = S.pickTroops(t, want, (k) => (S.unitOf(k).gear ? 0 : water ? 1 : Math.pow(S.unitEdge(k, m.unit, where, rough), 2)));
     const unit = S.mixOf(counts);
     const troops = S.countsTotal(counts);
     const score = (o) => o.cmd + o.war / 2 + (S.hasSkill(o, water ? "수전" : "야전") ? 20 : 0);

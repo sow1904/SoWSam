@@ -920,8 +920,11 @@
     const att = sideStats(oids.map((id) => state.officers[id]), 30);
     const def = sideStats(S.serving(state, targetCid).filter((o) => o.force === t.owner), t.owner ? 40 : 35);
     const gu = S.garrisonUnit(t);
-    const a = power(troops, att, from.train, 1) * S.unitMul(unit, gu, "siegeA", 1);
-    const d = power(t.troops, def, t.train, wallBonus(t) * gentryDefense(t)) * S.unitMul(gu, unit, "siegeD", 1) * S.houseDefense(t, state);
+    // Siege engines: what they do on the first day, and to the wall in a fortnight.
+    const gear = S.gearOf(unit);
+    const wb = S.gearWall((1 + Math.max(0, t.wall - S.gearBatter(gear) * 15) / 2000) * gentryDefense(t), gear);
+    const a = power(troops, att, from.train, 1) * S.unitMul(unit, gu, "siegeA", 1) * S.gearKill(gear);
+    const d = power(t.troops, def, t.train, wb) * S.unitMul(gu, unit, "siegeD", 1) * S.houseDefense(t, state) * S.gearSuppress(gear);
     return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
   };
 

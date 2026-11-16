@@ -24,6 +24,7 @@
     bow: { name: "궁노", group: "군사", line: "bow" },
     horse: { name: "기마", group: "군사", line: "horse" },
     navy: { name: "조선", group: "군사", line: "navy" },
+    siege: { name: "공성", group: "군사", line: "siege" },
     // unit: the special type it opens; after: [field, level] needed first
     repeater: { name: "연노", group: "특수", unit: "repeater", after: ["bow", 2] },
     bodao: { name: "보도", group: "특수", unit: "bodao", after: ["sword", 2] },
@@ -55,8 +56,8 @@
   S.growthMul = (c, state) => S.techMul(c, "settle", state) * (S.techAdd(c, "binghu", state) > 0 ? S.BINGHU.growth : 1);
   S.techConsent = (c, state) => (S.techAdd(c, "binghu", state) > 0 ? S.BINGHU.consent : 0);
   S.TECH_COST = 150; // gold per month of research
-  // Points to go from level lv to lv + 1.
-  S.techNeed = (lv) => 400 * lv;
+  // Points to go from level lv to lv + 1. Domestic fields take longer.
+  S.techNeed = (lv, field) => (field && S.TECH[field] && S.TECH[field].group === "내정" ? 700 : 400) * lv;
   // The highest level a field can reach: the last unit it unlocks.
   S.techMax = function (field) {
     if (S.TECH[field].max) return S.TECH[field].max;
@@ -120,9 +121,9 @@
     o.done = true;
     const gain = S.researchPoints(o, state);
     t.pts += gain;
-    let msg = `${S.josa(o.name, "이", "가")} ${S.TECH[field].name} 기술을 연구했습니다. (+${gain}, ${t.pts}/${S.techNeed(t.lv)})`;
-    if (t.pts >= S.techNeed(t.lv)) {
-      t.pts -= S.techNeed(t.lv);
+    let msg = `${S.josa(o.name, "이", "가")} ${S.TECH[field].name} 기술을 연구했습니다. (+${gain}, ${t.pts}/${S.techNeed(t.lv, field)})`;
+    if (t.pts >= S.techNeed(t.lv, field)) {
+      t.pts -= S.techNeed(t.lv, field);
       t.lv++;
       const opens = S.techUnlocks(field, t.lv);
       msg = `${S.josa(o.name, "이", "가")} ${S.TECH[field].name} 기술을 ${t.lv}단계로 올렸습니다!` + (S.TECH[field].gain ? ` (${S.TECH[field].gain})` : opens.length ? ` 이제 ${opens.join(", ")}을 쓸 수 있습니다.` : "");
