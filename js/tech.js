@@ -4,7 +4,16 @@
 // the later unit types of a line (창병, 중보병, 노병, 중기병, 투함). Special
 // fields (연노, 보도) open one special unit type each: they need a city in its
 // land and the line's second level first.
-// Domestic fields will join the same table later.
+// Domestic fields (내정) unlock nothing: each level above the first adds
+// `per` to what the field governs, for the whole force. Some need a kind of
+// land (S.LAND in js/resources.js): the force must hold such a city to study
+// the field, and the gain lapses while it holds none.
+// 둔전 is not here: it is a policy of the city posts (js/engine.js).
+// why: 수배 is the water-driven bellows 한기 spread for the ironworks of 위;
+// 염철 the salt and iron monopoly; 안집 the settling of refugees; 호적 the
+// finding of households hidden from the registers; 병호 the hereditary
+// soldier households of 위, which gave men at the people's cost; 학관 the
+// schools 유표 kept in 형주.
 (function (S) {
   const fail = (msg) => ({ ok: false, msg });
 
@@ -18,12 +27,39 @@
     // unit: the special type it opens; after: [field, level] needed first
     repeater: { name: "연노", group: "특수", unit: "repeater", after: ["bow", 2] },
     bodao: { name: "보도", group: "특수", unit: "bodao", after: ["sword", 2] },
+    irrigation: { name: "수리", group: "내정", max: 3, per: 0.1, gain: "수확 +10%" },
+    logging: { name: "벌목", group: "내정", max: 3, per: 0.15, gain: "목재 생산 +15%" },
+    smelting: { name: "수배", group: "내정", max: 3, per: 0.15, gain: "철 생산 +15%" },
+    stud: { name: "마정", group: "내정", max: 3, per: 0.15, gain: "말 생산 +15%", land: "pasture" },
+    salt: { name: "염철", group: "내정", max: 3, per: 0.08, gain: "금 수입 +8%", land: "salt" },
+    settle: { name: "안집", group: "내정", max: 3, per: 0.25, gain: "인구 증가 +25%" },
+    census: { name: "호적", group: "내정", max: 3, per: 0.01, gain: "병역 인구 +1%p" },
+    binghu: { name: "병호", group: "내정", max: 2, per: 0.03, gain: "병역 인구 +3%p, 대신 인구 증가 -30%, 호족 협력 -5", after: ["census", 2] },
+    academy: { name: "학관", group: "내정", max: 3, per: 0.2, gain: "연구 진척 +20%" },
   };
+  S.TECH_GROUPS = ["군사", "특수", "내정"];
+  S.BINGHU = { growth: 0.7, consent: -5 }; // what 병호 costs
+  // Levels gained in a domestic field that count now: none while the force
+  // lacks the land the field needs.
+  S.techBonus = function (state, fid, field) {
+    const t = S.TECH[field];
+    if (!t || !fid || !state || !state.forces[fid]) return 0;
+    if (t.land && !S.holdsLand(state, fid, t.land)) return 0;
+    return S.techLevel(state, fid, field) - 1;
+  };
+  // The same for a city's owner, as an addition and as a multiplier. Rules
+  // that only know a city ask about the game in play (S.GAME).
+  S.techAdd = (c, field, state) => (c && c.owner ? S.techBonus(state || S.GAME, c.owner, field) * S.TECH[field].per : 0);
+  S.techMul = (c, field, state) => 1 + S.techAdd(c, field, state);
+  // Population growth under the owner's fields.
+  S.growthMul = (c, state) => S.techMul(c, "settle", state) * (S.techAdd(c, "binghu", state) > 0 ? S.BINGHU.growth : 1);
+  S.techConsent = (c, state) => (S.techAdd(c, "binghu", state) > 0 ? S.BINGHU.consent : 0);
   S.TECH_COST = 150; // gold per month of research
   // Points to go from level lv to lv + 1.
   S.techNeed = (lv) => 400 * lv;
   // The highest level a field can reach: the last unit it unlocks.
   S.techMax = function (field) {
+    if (S.TECH[field].max) return S.TECH[field].max;
     if (S.TECH[field].unit) return 2;
     const line = S.TECH[field].line;
     return Math.max(1, ...Object.values(S.UNITS).filter((u) => u.line === line && !u.special).map((u) => u.tier));
@@ -47,7 +83,7 @@
     return field ? S.techLevel(state, fid, field) : 1;
   };
   // What the next level of a field brings.
-  S.techUnlocks = (field, lv) => S.TECH[field].unit
+  S.techUnlocks = (field, lv) => S.TECH[field].gain ? [S.TECH[field].gain] : S.TECH[field].unit
     ? (lv === 2 ? [S.UNITS[S.TECH[field].unit].name] : [])
     : Object.values(S.UNITS).filter((u) => u.line === S.TECH[field].line && !u.special && u.tier === lv).map((u) => u.name);
 
@@ -55,8 +91,9 @@
   S.techBlock = function (state, fid, k) {
     const t = S.TECH[k];
     if (S.techLevel(state, fid, k) >= S.techMax(k)) return "완료";
-    if (t.unit) {
-      if (!S.holdsSpecialLand(state, fid, t.unit)) return `${S.SPECIAL[t.unit].label}의 도시 필요`;
+    if (t.unit && !S.holdsSpecialLand(state, fid, t.unit)) return `${S.SPECIAL[t.unit].label}의 도시 필요`;
+    if (t.land && !S.holdsLand(state, fid, t.land)) return `${S.LAND[t.land].name}의 도시 필요`;
+    if (t.after) {
       const [f, lv] = t.after;
       if (S.techLevel(state, fid, f) < lv) return `${S.TECH[f].name} ${lv}단계 필요`;
     }
@@ -64,7 +101,7 @@
   };
 
   // Points an officer adds in a month: 지략 for now (a 학식 stat may take over).
-  S.researchPoints = (o) => Math.round(10 + o.wit / 3);
+  S.researchPoints = (o, state) => Math.round((10 + o.wit / 3) * (1 + (state ? S.techBonus(state, o.force, "academy") * S.TECH.academy.per : 0)));
   S.research = function (state, oid, cid, field) {
     const o = state.officers[oid];
     const c = S.place(state, cid);
@@ -81,14 +118,14 @@
     if (c.gold < S.TECH_COST) return fail(`금이 부족합니다. (필요 ${S.TECH_COST})`);
     c.gold -= S.TECH_COST;
     o.done = true;
-    const gain = S.researchPoints(o);
+    const gain = S.researchPoints(o, state);
     t.pts += gain;
     let msg = `${S.josa(o.name, "이", "가")} ${S.TECH[field].name} 기술을 연구했습니다. (+${gain}, ${t.pts}/${S.techNeed(t.lv)})`;
     if (t.pts >= S.techNeed(t.lv)) {
       t.pts -= S.techNeed(t.lv);
       t.lv++;
       const opens = S.techUnlocks(field, t.lv);
-      msg = `${S.josa(o.name, "이", "가")} ${S.TECH[field].name} 기술을 ${t.lv}단계로 올렸습니다!` + (opens.length ? ` 이제 ${opens.join(", ")}을 쓸 수 있습니다.` : "");
+      msg = `${S.josa(o.name, "이", "가")} ${S.TECH[field].name} 기술을 ${t.lv}단계로 올렸습니다!` + (S.TECH[field].gain ? ` (${S.TECH[field].gain})` : opens.length ? ` 이제 ${opens.join(", ")}을 쓸 수 있습니다.` : "");
       if (c.owner !== state.playerForce) S.addLog(state, `${S.forceName(state, c.owner)}이 ${S.TECH[field].name} 기술을 ${t.lv}단계로 올렸습니다.`, "info");
     }
     return { ok: true, msg };
@@ -118,7 +155,7 @@
     for (const m of S.marchesOf(state, fid)) if (m.unit) count(m.unit, 2);
     // Keep at a field once begun rather than spreading thin.
     const begun = (k) => ((state.forces[fid].tech || {})[k] || { pts: 0 }).pts / 40;
-    const weight = (k) => 1 + (use[S.TECH[k].line] || 0) + begun(k) + (k === "navy" && S.citiesOf(state, fid).some((x) => S.links(state, x.id).some((n) => S.isWater(x.id, n))) ? 3 : 0);
+    const weight = (k) => (S.TECH[k].group === "내정" ? (k === "binghu" ? 0.5 : 1.5) : 1) + (use[S.TECH[k].line] || 0) + begun(k) + (k === "navy" && S.citiesOf(state, fid).some((x) => S.links(state, x.id).some((n) => S.isWater(x.id, n))) ? 3 : 0);
     let roll = S.rand(state) * open.reduce((s, k) => s + weight(k), 0);
     let field = open[open.length - 1];
     for (const k of open) if ((roll -= weight(k)) <= 0) { field = k; break; }

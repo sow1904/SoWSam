@@ -49,7 +49,23 @@
   // Monthly yield before order: by city size, scaled by the province.
   // One unit equips one soldier (a spear, a bow, a horse).
   const BASE = { wood: (c) => 200 + c.size * 100, iron: (c) => 160 + c.size * 80, horse: (c) => 150 + c.size * 75 };
-  S.resYield = (c, k) => Math.round(BASE[k](c) * S.regionMul(c, k) * (0.5 + c.order / 200));
+  const FIELD = { wood: "logging", iron: "smelting", horse: "stud" }; // js/tech.js
+  S.resYield = (c, k) => Math.round(BASE[k](c) * S.regionMul(c, k) * (0.5 + c.order / 200) * (S.techMul ? S.techMul(c, FIELD[k]) : 1));
+
+  // Kinds of land a domestic technology needs (js/tech.js): a force must hold
+  // one such city to study the field and to profit by it.
+  // why: pasture is the horse country above. Salt is where the Han kept salt
+  // offices (염관), as this game reads the list: the salt lake of 하동 안읍,
+  // the shores of 발해, 청주 and 요동, 광릉 where the kings of 오 boiled sea
+  // water, 오군 해염, the brine wells of 촉 and 파, 농서, and 남해 번우.
+  S.LAND = {
+    pasture: { name: "목장", label: "말의 땅(량주, 병주, 유주, 옹주, 요동)", has: (c) => S.horseCountry(c) },
+    salt: { name: "소금", label: "소금이 나는 도시(하동, 발해, 북해, 동래, 광릉, 오군, 성도, 파군, 농서, 요동, 남해)",
+      cities: ["hedong", "bohai", "beihai", "donglai", "guangling", "wujun", "shujun", "bajun", "longxi", "liaodong", "nanhai"] },
+  };
+  S.landHas = (kind, c) => { const l = S.LAND[kind]; return !!l && !!c && (l.cities ? l.cities.includes(c.id) : l.has(c)); };
+  S.holdsLand = (state, fid, kind) => !!fid && S.citiesOf(state, fid).some((c) => S.landHas(kind, c));
+  S.landsHere = (c) => Object.keys(S.LAND).filter((k) => S.landHas(k, c));
   // Storehouses hold about two years of output, at least a modest stock.
   S.resCap = (c, k) => Math.max(10000, Math.round(BASE[k](c) * Math.max(1, S.regionMul(c, k)) * 24));
 

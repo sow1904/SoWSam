@@ -85,10 +85,10 @@
       if (!open.length) { UI.toast("지금 연구할 수 있는 기술이 없습니다."); return; }
       const list = S.idle(state, c.id).sort((a, b) => b.wit - a.wit);
       UI.openModal(title("연구") + `<p class="hint">무장 한 명이 한 달 동안 금 ${S.TECH_COST}을 들여 기술을 연구합니다. 지략이 높을수록 많이 나아갑니다. ` +
-        `기술은 세력 전체의 것이고, 단계가 오르면 그 계열의 상위 병종을 쓸 수 있습니다. 조선 기술이 2단계면 강 위에서 투함으로 싸웁니다. 연노와 보도는 익주의 도시를 가지고, 궁노나 도검이 2단계여야 연구할 수 있습니다.</p>` +
+        `기술은 세력 전체의 것입니다. 군사 기술은 단계가 오르면 그 계열의 상위 병종을 쓸 수 있고, 내정 기술은 단계마다 생산이나 인구가 늘어납니다. 마정은 목장의 도시, 염철은 소금이 나는 도시가 있어야 연구할 수 있고, 그런 도시를 모두 잃으면 효과가 멈춥니다.</p>` +
         UI.techTable(fid) +
-        `<div class="row"><label>연구할 기술</label><select id="rsField">${open.map((k) => `<option value="${k}">${S.TECH[k].name}</option>`).join("")}</select></div>` +
-        UI.officerTable(list, { pick: "doResearch", extraHead: "진척", extra: (o) => `+${S.researchPoints(o)}` }) + footer(), true);
+        `<div class="row"><label>연구할 기술</label><select id="rsField">${S.TECH_GROUPS.map((g) => { const ks = open.filter((k) => S.TECH[k].group === g); return ks.length ? `<optgroup label="${g}">${ks.map((k) => `<option value="${k}">${S.TECH[k].name}</option>`).join("")}</optgroup>` : ""; }).join("")}</select></div>` +
+        UI.officerTable(list, { pick: "doResearch", extraHead: "진척", extra: (o) => `+${S.researchPoints(o, state)}` }) + footer(), true);
     },
     recruit() {
       const c = state.cities[UI.selected];

@@ -247,6 +247,7 @@
       S.regionLabel(c.prov) && `특산: ${S.regionLabel(c.prov)}`,
       S.specialsHere(c).length && `특수 병종: ${S.specialsHere(c).map((k) => S.unitName(k)).join(", ")}`,
       S.specialLand("louchuan", c) && "장강 수군(누선)",
+      S.landHas("salt", c) && "소금이 나는 땅",
       S.houseLabel(c, state) && `가문: ${S.houseLabel(c, state)}${helpTip(S.HOUSES[S.houseAt(c, state).key].help)}`,
     ].filter(Boolean);
     return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>` +

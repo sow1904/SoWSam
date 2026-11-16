@@ -432,7 +432,7 @@
   S.consentTarget = function (state, c) {
     const w = c.owner ? state.forces[c.owner].weariness : 0;
     const tuntian = c.posts.tuntian ? 15 : 0;
-    return clamp(25 + c.order * 0.45 - w * 0.4 - tuntian + S.houseConsent(c), 0, 100);
+    return clamp(25 + c.order * 0.45 - w * 0.4 - tuntian + S.houseConsent(c) + S.techConsent(c, state), 0, 100);
   };
   // Remove soldiers from a city, retainers in proportion.
   function loseTroops(c, n) {
@@ -877,8 +877,10 @@
   // ---------- manpower and war weariness ----------
   // Men of fighting age who can still be called up. Soldiers who die are gone
   // for good; the pool refills slowly from the population.
-  S.manpowerMax = (c) => Math.round(c.pop * 0.12);
-  S.manpowerRegen = (c) => Math.round(c.pop * 0.001 * (0.5 + c.order / 200));
+  // Share of the people who can be called up: 12%, more with 호적 and 병호.
+  S.manpowerShare = (c) => 0.12 + (S.techAdd ? S.techAdd(c, "census") + S.techAdd(c, "binghu") : 0);
+  S.manpowerMax = (c) => Math.round(c.pop * S.manpowerShare(c));
+  S.manpowerRegen = (c) => Math.round(c.pop * 0.001 * (S.manpowerShare(c) / 0.12) * (0.5 + c.order / 200));
   function returnManpower(c, n) {
     c.manpower = Math.min(S.manpowerMax(c), c.manpower + Math.round(n));
   }
@@ -1036,7 +1038,7 @@
 
   // ---------- turn ----------
   // Monthly gold income and troop upkeep (1 gold per 100 soldiers).
-  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold") * S.houseGold(c));
+  S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold") * S.houseGold(c) * (S.techMul ? S.techMul(c, "salt") : 1));
   S.upkeep = (c) => Math.ceil(c.troops / 100);
 
   // Traits: who walks away, and how fast loyalty wears down.
@@ -1059,7 +1061,7 @@
           const lost = loseTroops(c, Math.ceil(c.troops * 0.05));
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (harvest) c.food += Math.round((c.farm * 9 + c.pop / 50) * eff * S.regionMul(c, "food"));
+        if (harvest) c.food += Math.round((c.farm * 9 + c.pop / 50) * eff * S.regionMul(c, "food") * S.techMul(c, "irrigation", state));
         c.food -= S.foodUse(c.troops);
         if (c.food < 0) {
           c.food = 0;
@@ -1067,7 +1069,7 @@
           c.order = Math.max(0, c.order - 10);
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 8000) * S.regionMul(c, "pop")));
+        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 8000) * S.regionMul(c, "pop") * S.growthMul(c, state)));
         wearinessEffects(state, c);
         S.houseMonth(state, c);
         runGentry(state, c);

@@ -201,20 +201,23 @@
 
   // ---------- technology ----------
   UI.techTable = function (fid) {
-    const rows = Object.keys(S.TECH).map((k) => {
+    const row = (k) => {
       const lv = S.techLevel(state, fid, k), max = S.techMax(k);
       const t = (state.forces[fid].tech || {})[k];
       const blk = S.techBlock(state, fid, k);
       const next = lv < max ? `${t ? t.pts : 0}/${S.techNeed(lv)} → ${S.techUnlocks(k, lv + 1).join(", ") || "-"}` + (blk ? ` (${blk})` : "") : "완료";
-      return `<tr><td>${S.TECH[k].name}</td><td>${"●".repeat(lv)}${"○".repeat(max - lv)}</td><td>${next}</td></tr>`;
-    }).join("");
+      const t0 = S.TECH[k];
+      const lapsed = t0.land && lv > 1 && !S.holdsLand(state, fid, t0.land) ? " (효과 멈춤)" : "";
+      return `<tr><td>${t0.name}${lapsed}</td><td>${"●".repeat(lv)}${"○".repeat(max - lv)}</td><td>${next}</td></tr>`;
+    };
+    const rows = S.TECH_GROUPS.map((g) => `<tr><th colspan="3">${g}</th></tr>` + Object.keys(S.TECH).filter((k) => S.TECH[k].group === g).map(row).join("")).join("");
     return `<table><tr><th>기술</th><th>단계</th><th>다음 단계</th></tr>${rows}</table>`;
   };
   UI.showTech = function () {
     const me = UI.viewForce();
     const cap = S.capitalOf(state, me);
     UI.openModal(title(state.playerForce ? "기술" : `${S.forceName(state, me)} 기술`) + UI.techTable(me) +
-      `<p class="hint">연구는 ${S.capitalLabel(state, me)}에서 무장 한 명이 한 달 동안 금 ${S.TECH_COST}을 들여 합니다. 기술은 세력 전체의 것이고, 단계가 오르면 그 계열의 상위 병종을 뽑을 수 있습니다.</p>` +
+      `<p class="hint">연구는 ${S.capitalLabel(state, me)}에서 무장 한 명이 한 달 동안 금 ${S.TECH_COST}을 들여 합니다. 기술은 세력 전체의 것입니다. 군사 기술은 상위 병종을 열고, 내정 기술은 단계마다 적힌 만큼 효과가 쌓입니다.</p>` +
       `<div class="footer">${cap ? `<button data-action="goto" data-city="${cap}">${state.cities[cap].name}에서 연구하기</button>` : ""}<button class="primary" data-action="close">닫기</button></div>`);
   };
 
