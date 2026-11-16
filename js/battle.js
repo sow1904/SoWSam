@@ -256,11 +256,11 @@
     if (has(defs, "수성")) wb *= 1.15;
     if (has(atk, "공성")) wb = 1 + (wb - 1) * 0.75;
     // Siege engines: ladders over the wall, towers on the men upon it.
-    const gear = S.gearOf(A.unit);
-    wb = S.gearWall(wb, gear);
-    // Stakes before the wall (녹각) blunt the assault and keep engines from it
-    // until they are cleared.
+    // Stakes before the wall (녹각) blunt the assault, cost the attackers men
+    // as they clear them, and keep every engine from the wall until then.
     const staked = t.stakes > 0;
+    const gear = staked ? S.gearOf(null) : S.gearOf(A.unit);
+    wb = S.gearWall(wb, gear);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     // With a relief army in the field the besiegers must split their men.
     const split = b.relief ? 0.7 : 1;
@@ -268,7 +268,7 @@
     const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split * (staked ? S.STAKES.blunt : 1);
     const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state) * S.gearSuppress(gear);
     let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd() * S.gearKill(gear));
-    let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd());
+    let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd() * (staked ? S.STAKES.bleed : 1));
     lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습"], S.aidOf(gu).scout);
     lossA += ruse(state, b, defs, atk, A.troops, ["야습", "역습", "화공"], S.aidOf(A.unit).scout);
     lossD += tunnelDay(state, b, t, atk, defs, gu);
@@ -279,7 +279,7 @@
     A.troops -= lossA;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
-    t.wall = Math.max(0, t.wall - Math.round((lossD * 0.02 + (staked ? 0 : S.gearBatter(gear))) * (has(atk, "공성") ? 1.5 : 1)));
+    t.wall = Math.max(0, t.wall - Math.round((lossD * 0.02 + S.gearBatter(gear)) * (has(atk, "공성") ? 1.5 : 1)));
     if (staked) {
       t.stakes = Math.max(0, t.stakes - S.STAKES.wear * (has(atk, "공성") ? 1.5 : 1));
       if (t.stakes <= 0) say(b, `${S.forceName(state, A.force)}이 성 앞의 녹각을 모두 걷어 냈습니다.`);
@@ -306,12 +306,12 @@
   // ---------- tunnels (땅굴) and stakes (녹각) ----------
   // Besiegers may dig under the wall: it takes days, and each day the
   // defenders may hear the digging and collapse it. If it comes through, the
-  // wall falls in over much of its length.
+  // wall comes down and the garrison loses heart.
   // why: 원소 took 공손찬's towers at 역경 by mining under them; at 진창 학소
   // cut across 제갈량's tunnels with trenches inside the wall.
-  S.TUNNEL = { days: 10, tries: 2, wall: 0.25, kill: 0.05, morale: 25, lost: 0.03, lostMorale: 8, aiDay: 5, aiWall: 300 };
+  S.TUNNEL = { days: 10, tries: 2, wall: 0, kill: 0.08, morale: 30, find: 4, lost: 0.06, lostMorale: 12, aiDay: 5, aiWall: 300 };
   S.tunnelFind = function (atk, defs, gu) {
-    return clamp(Math.round((3 + (top(defs, "wit") - top(atk, "plot")) * 0.1 + S.AID.scoutTunnel * S.aidOf(gu).scout) * 10) / 10, 1, 10);
+    return clamp(Math.round((S.TUNNEL.find + (top(defs, "wit") - top(atk, "plot")) * 0.1 + S.AID.scoutTunnel * S.aidOf(gu).scout) * 10) / 10, 1, 10);
   };
   // Why a siege cannot start a tunnel now, or null.
   S.digBlock = function (state, b) {
@@ -358,7 +358,7 @@
     say(b, `땅굴이 성벽 밑에 닿았습니다! 성벽이 무너져 내립니다. (성벽 ${before} → ${t.wall})`);
     return killed;
   }
-  S.STAKES = { wood: 500, blunt: 0.88, wear: 8 };
+  S.STAKES = { wood: 500, blunt: 0.83, bleed: 1.1, wear: 5 };
   // An officer has stakes and caltrops laid before a city's walls.
   S.stake = function (state, oid, cid) {
     const o = state.officers[oid], c = state.cities[cid];

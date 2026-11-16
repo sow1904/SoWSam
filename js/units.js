@@ -108,7 +108,9 @@
   // and towers against 학소.
   S.GEAR = { full: 0.1, ram: 18, treb: 25, trebLoss: 0.1, tower: 0.12, ladder: 0.35 };
   S.gearOf = function (spec) {
-    const mix = S.mixOf(spec), g = { ram: 0, tower: 0, ladder: 0, treb: 0 };
+    const g = { ram: 0, tower: 0, ladder: 0, treb: 0 };
+    if (!spec) return g; // no engines at work
+    const mix = S.mixOf(spec);
     for (const k in mix) if (S.UNITS[k].gear) g[S.UNITS[k].gear] += mix[k];
     for (const k in g) g[k] = Math.min(1, g[k] / S.GEAR.full);
     return g;
