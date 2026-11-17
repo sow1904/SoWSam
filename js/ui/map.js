@@ -90,19 +90,30 @@
     window.addEventListener("resize", () => state && applyView());
   };
 
-  // City icons by size (1-5); the Han capital and an emperor's court show the palace.
-  // Art: CroN (조조전 모드 클럽), see assets/CREDITS.md.
-  // Icons cut from the author's sheet (tools/cut_assets.py): [width, height].
-  const CITY_ICONS = { small: [231, 145], large: [282, 205], palace: [241, 204], ruin: [245, 171] };
+  // City icons by tier (1-5), each with a ruined form; the Han capital and an
+  // emperor's court show the palace. Art: the author's sheet, see assets/CREDITS.md.
+  // Icons cut from the sheet (tools/cut_assets.py): [width, height] in pixels.
+  const CITY_ICONS = {
+    c1: [150, 116], c2: [188, 155], c3: [186, 156], c4: [186, 169], c5: [187, 190], palace: [190, 188],
+    c1_ruin: [163, 113], c2_ruin: [188, 160], c3_ruin: [185, 154], c4_ruin: [184, 137], c5_ruin: [184, 162], palace_ruin: [188, 165],
+  };
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
   S.ruined = (p) => !!p && p.wallMax > 0 && p.wall < Math.max(150, p.wallMax * 0.2);
-  // A ruin while the walls are down; else the palace where an emperor sits,
-  // the great castle for a force's capital and the small one for the rest.
+  // The tier a city is drawn at: its size, or more once its people have grown
+  // to the number a bigger city starts with (40,000 + 40,000 a tier). Growth
+  // reaches tier 4 at most; tier 5 is for the great cities from the start.
+  S.cityTier = (c) => (c.size >= 5 ? 5 : Math.max(c.size, Math.min(4, Math.floor((c.pop - 40000) / 40000))));
+  function palace(c) {
+    if (c.id === state.emperor && !(state.han && state.han.ended)) return true;
+    return !!(c.owner && state.forces[c.owner].emperor && S.isCapital(state, c.id));
+  }
+  // The palace where an emperor sits, else the castle of the city's tier; in
+  // ruins while the walls are down. 낙양, the Han capital burnt in 190, lies as
+  // a ruined palace until its walls are rebuilt.
   function cityIcon(c) {
-    if (S.ruined(c)) return "ruin";
-    if (c.id === state.emperor && !(state.han && state.han.ended)) return "palace";
-    if (c.owner && state.forces[c.owner].emperor && S.isCapital(state, c.id)) return "palace";
-    return S.isCapital(state, c.id) ? "large" : "small";
+    const pal = palace(c);
+    if (S.ruined(c)) return pal || c.id === "henan" ? "palace_ruin" : `c${S.cityTier(c)}_ruin`;
+    return pal ? "palace" : `c${S.cityTier(c)}`;
   }
 
   // The layers of the map, bottom to top. Each is redrawn only when what it
@@ -171,7 +182,9 @@
     setGlyphs($("#cityLayer"), S.cityList(state).map((c) => {
       const r = (6 + c.size * 1.5) * k;
       const icon = cityIcon(c), [iw, ih] = CITY_ICONS[icon];
-      const w = (26 + c.size * 4 + (icon === "small" ? 0 : icon === "ruin" ? 2 : 8)) * k, h = Math.round(w * ih / iw);
+      // The art already grows with the tier; bigger tiers are also drawn a little larger.
+      const tier = icon.startsWith("palace") ? 5 : S.cityTier(c);
+      const w = iw * 0.2 * (0.9 + tier * 0.04) * k, h = w * ih / iw;
       const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.mine(c) ? "mine" : ""].join(" ");
       return `<g class="${cls}" data-city="${c.id}">` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
@@ -186,13 +199,13 @@
 
   // A stronghold on the map: a gatehouse for a pass, a walled square for a
   // fort. Unbuilt sites are drawn faintly.
-  const FORT_ICONS = { pass: [28, 24], fort: [30, 22], site: [26, 16], ruin: [28, 20] }; // display sizes
+  const FORT_ICONS = { pass: [28, 26], fort: [30, 22], site: [26, 15], fort_ruin: [26, 24] }; // display sizes
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.mine(f) ? "mine" : ""].join(" ");
-    const icon = !f.built ? "site" : S.ruined(f) ? "ruin" : f.kind;
+    const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind;
     const [iw, ih] = FORT_ICONS[icon];
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      `<image class="ficon" href="assets/${icon === "ruin" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
+      `<image class="ficon" href="assets/forts/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
