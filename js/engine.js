@@ -161,6 +161,9 @@
         c.food = troops * 2 + 5000;
         c.order = 60;
         c.consent = 55;
+        // A scenario may shift how strong the great families are in a force's
+        // lands, where its way of ruling had already changed them for years.
+        if (f.gentry) c.gentry = c.gentryBase = Math.max(5, Math.min(95, c.gentry + f.gentry));
         // A scenario may start its held cities better developed.
         if (scenario.develop) {
           c.farm = Math.round(c.farmMax * scenario.develop);

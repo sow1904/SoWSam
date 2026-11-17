@@ -72,6 +72,9 @@
     forces: [
       {
         id: "caocao", name: "조조", color: "#2f5fb3", capital: "weijun",
+        // why: thirty years of 둔전 and soldier households (병호) had put the
+        // land and the armies in the state's hands: 중앙집권형.
+        gentry: -25,
         tech: { spear: 2, sword: 2, bow: 2, horse: 2, siege: 2, irrigation: 2, census: 2 },
         cities: {
           // 사례
@@ -124,6 +127,9 @@
       },
       {
         id: "liubei", name: "유비", color: "#3cb371", capital: "shujun",
+        // why: 유비 rules through the 익주 and 형주 great families beside his own
+        // old followers: a 호족연합형 still close to 부곡형.
+        gentry: 5,
         tech: { spear: 2, sword: 2, bow: 2, irrigation: 2 },
         cities: {
           hanzhong: 30000, shujun: 15000, guanghan: 6000, bajun: 7000, badong: 5000,
@@ -154,6 +160,9 @@
       },
       {
         id: "sunquan", name: "손권", color: "#c0392b", capital: "danyang",
+        // why: the 강동 clans (고·육·주·장) and the generals' hereditary troops
+        // (세병) carry the 손씨 state: 호족연합형.
+        gentry: 12,
         tech: { sword: 2, bow: 2, navy: 2, logging: 2 },
         cities: {
           danyang: 25000, wujun: 8000, kuaiji: 8000, yuzhang: 8000, lujiang: 14000,
