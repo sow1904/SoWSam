@@ -31,6 +31,54 @@
     return null;
   }
 
+  // Men a city should keep at home against its neighbours: a third of what the
+  // strongest enemy next door could send, and a little of what the others
+  // could. Only a share, so that borders do not freeze with armies glaring
+  // at each other: the main strength still gathers for campaigns.
+  //   except: a place left out (the one about to be attacked)
+  S.AI_GUARD = { top: 0.35, rest: 0.1, min: 1500 };
+  function guardNeed(state, c, except) {
+    const can = S.links(state, c.id).map((id) => S.place(state, id))
+      .filter((p) => p && p.owner && p.owner !== c.owner && p.id !== except && !S.allied(state, c.owner, p.owner))
+      .map((p) => Math.max(0, p.troops - (p.retainers || 0))).sort((a, b) => b - a);
+    const rest = can.slice(1).reduce((s, n) => s + n, 0);
+    return Math.max(S.AI_GUARD.min, Math.round((can[0] || 0) * S.AI_GUARD.top + rest * S.AI_GUARD.rest));
+  }
+  S.guardNeed = guardNeed;
+  // Own frontier cities reachable through own cities, with how far (in steps).
+  function fronts(state, c) {
+    const out = [];
+    const seen = new Set([c.id]);
+    let queue = [c.id], d = 0;
+    while (queue.length) {
+      const next = [];
+      d++;
+      for (const id of queue) for (const n of S.neighbors(id)) {
+        if (seen.has(n) || state.cities[n].owner !== c.owner) continue;
+        seen.add(n);
+        next.push(n);
+        if (enemyNeighbors(state, state.cities[n]).length) out.push({ c: state.cities[n], d });
+      }
+      queue = next;
+    }
+    return out;
+  }
+  // The frontier city that most needs men, if any is short.
+  function neediestFront(state, c) {
+    let best = null;
+    for (const f of fronts(state, c)) {
+      const short = guardNeed(state, f.c) - f.c.troops;
+      const score = short / (1 + f.d * 0.3);
+      if (short > 0 && (!best || score > best.score)) best = { id: f.c.id, score };
+    }
+    return best && best.id;
+  }
+  // The nearest frontier city with no officer at all, if any.
+  function unmannedFront(state, c) {
+    const f = fronts(state, c).filter((x) => !S.serving(state, x.c.id).some((o) => o.force === c.owner)).sort((a, b) => a.d - b.d)[0];
+    return f && f.c.id;
+  }
+
   // Closest own city that borders an enemy, through own territory.
   function nearestFront(state, c) {
     const dist = S.reachable(state, c.id);
@@ -123,10 +171,10 @@
     if (!targets.length) return;
     const idle = S.idle(state, c.id);
     if (!idle.length) return;
-    const garrison = Math.max(1500, Math.round(c.troops * 0.25));
-    // Gentry retainers stay home, so only state troops can march.
-    const troops = Math.min(c.troops - garrison, S.marchable(c));
-    if (troops < 3000) return;
+    // Gentry retainers stay home, so only state troops can march. Enough
+    // stay behind to face the other neighbours (the target is busy).
+    const garrisonFor = (t) => Math.max(1500, Math.round(c.troops * 0.25), guardNeed(state, c, t && t.id));
+    if (Math.min(c.troops - Math.max(1500, Math.round(c.troops * 0.25)), S.marchable(c)) < 3000) return;
     const team = [...idle].sort((a, b) => b.cmd + b.war - (a.cmd + a.war)).slice(0, S.MAX_SORTIE_OFFICERS);
     // Keep at least one officer home when possible.
     if (team.length === S.idle(state, c.id).length && S.serving(state, c.id).length > 1 && team.length > 1) team.pop();
@@ -134,6 +182,8 @@
     let best = null;
     const ways = S.attackTargets(state, c.id);
     for (const t of targets) {
+      const troops = Math.min(c.troops - garrisonFor(t), S.marchable(c));
+      if (troops < 3000) continue;
       const unit = pickUnit(state, c, t, troops);
       // Over water, what is likely left once ashore, if it gets ashore at all.
       const way = ways.find((w) => w.id === t.id);
@@ -147,7 +197,7 @@
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       const risk = threat ? threat.pct / 50 : 0;
       const score = est.ratio + bonus - risk;
-      if (!best || score > best.score) best = { t, unit, score, est, pull, risk };
+      if (!best || score > best.score) best = { t, unit, score, est, pull, risk, troops };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
@@ -159,7 +209,7 @@
     const amity = best && best.t.owner ? Math.max(-0.15, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
     if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity + best.risk) return;
     if (!S.chance(state, 45)) return;
-    S.attack(state, c.id, best.t.id, ids, troops, best.unit);
+    S.attack(state, c.id, best.t.id, ids, best.troops, best.unit);
   }
 
   // The soldiers for an attack, by type: those good against the walls, and
@@ -299,7 +349,7 @@
     }
     // Move surplus toward the campaign staging city, or from the interior to the front.
     const plan = state._plans && state._plans[fid];
-    const surplus = Math.min(S.marchable(c), frontier ? c.troops - Math.max(3000, c.troops * 0.4) : c.troops - 2000);
+    const surplus = Math.min(S.marchable(c), frontier ? c.troops - Math.max(3000, c.troops * 0.4, guardNeed(state, c)) : c.troops - 2000);
     if (plan && plan.stage !== c.id && idle.length && S.serving(state, c.id).length > 1 && surplus > 2000) {
       const to = stepToward(state, c.id, plan.stage);
       if (to) {
@@ -307,16 +357,19 @@
         S.move(state, c.id, to, [o.id], Math.floor(surplus), Math.max(0, c.gold - 500), Math.max(0, c.food - 4000));
       }
     } else if (!frontier && idle.length && S.serving(state, c.id).length > 1 && (c.troops > 3000 || c.gold > 1000)) {
-      const to = stepToFront(state, c);
+      // To the frontier city that most needs men, else the nearest one.
+      const need = neediestFront(state, c);
+      const to = (need && stepToward(state, c.id, need)) || stepToFront(state, c);
       if (to) {
         const o = take((a, b) => b.war - a.war);
         const keep = 2000;
         S.move(state, c.id, to, [o.id], Math.max(0, Math.min(S.marchable(c), c.troops - keep)), Math.max(0, c.gold - 300), Math.max(0, c.food - 3000));
       }
     }
-    // Spare officers in the interior go where the fighting is.
+    // Spare officers in the interior go where the fighting is, first to a
+    // frontier city with no officer (which could not draft at all).
     if (!frontier && idle.length > 1) {
-      const to = nearestFront(state, c);
+      const to = unmannedFront(state, c) || nearestFront(state, c);
       if (to) {
         const go = [...idle].sort((a, b) => b.cmd + b.war - a.cmd - a.war).slice(0, idle.length - 1);
         if (S.relocate(state, c.id, to, go.map((o) => o.id)).ok) idle = idle.filter((o) => !go.includes(o));
