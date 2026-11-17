@@ -112,7 +112,9 @@
   function garrisonRow(id) {
     const p = S.place(state, id);
     const tip = helpTip(H.garrison);
-    return `<div class="row"><label>수비 병력${tip}</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>`;
+    const pools = Object.entries(p.wounded || {}).filter(([, w]) => w && w.n > 0);
+    return `<div class="row"><label>수비 병력${tip}</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>` +
+      (pools.length ? `<div class="row"><label>부상병${helpTip(H.wounded)}</label><span>${pools.map(([k, w]) => `${S.WOUND_CARE[k]} ${fmt(w.n)}`).join(" · ")}</span></div>` : "");
   }
   // Moving the force capital here.
   function capitalRow(c) {
@@ -226,7 +228,7 @@
         `<p class="idle">대기 무장 <b>${S.idle(state, f.id).length}</b> / ${servants.length}명${helpTip(H.command)}</p>` +
         cmdGroup("군사", [cmdButton(f, "attack"), S.reliefTargets(state, f.id).length ? cmdButton(f, "relieve") : "", cmdButton(f, "move")]) +
         cmdGroup("인사", [cmdButton(f, "relocate")]) +
-        `<h3>방비</h3>` + (f.kind === "pass" ? `<p class="hint">관문은 나가 싸우지 않고 지킵니다.</p>` : policyRow(f.id)) + garrisonRow(f.id)]);
+        `<h3>방비</h3>` + policyRow(f.id) + garrisonRow(f.id)]);
     }
     tabs.push(["men", `무장 ${servants.length}`, () => `<h3>무장 (${servants.length})</h3>` +
       UI.officerTable(servants, { loyalty: true, showDone: own, status: own ? (o) => (o.done ? "완료" : "대기") : null })]);

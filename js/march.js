@@ -218,7 +218,9 @@
   // ---------- on the road ----------
   // kind: "army" marches on an enemy place; "move" carries officers and goods
   // to an own place; "return" brings a beaten army home; "build" is a
-  // stronghold under construction (it stays put).
+  // stronghold under construction (it stays put); "wounded" carries wounded
+  // home on their own. Any march may carry wounded ({n, unit}) and how they
+  // will heal (care, see S.WOUNDED).
   S.launch = function (state, spec) {
     state.marches = state.marches || [];
     state.marchSeq = (state.marchSeq || 0) + 1;
@@ -273,6 +275,7 @@
       c.train = Math.round((c.train * c.troops + m.train * m.troops) / (c.troops + m.troops));
       S.addTroops(c, m.unit || S.garrisonUnit(c), m.troops);
     }
+    if (m.wounded && m.wounded.n > 0) S.addWounded(c, m.care || "mid", m.wounded.n, m.wounded.unit);
     c.gold += m.gold || 0;
     c.food += m.food || 0;
     S.addRes(c, m.res);
@@ -291,17 +294,18 @@
     const here = S.place(state, from);
     const to = own.reduce((a, b) => (Math.hypot(b.x - here.x, b.y - here.y) < Math.hypot(a.x - here.x, a.y - here.y) ? b : a));
     S.launch(state, { kind: "return", force: m.force, path: [from, to.id], km: S.nodeKm(state, from, to.id), speed: m.troops ? S.unitSpeed(m.unit) : "officer",
-      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, res: m.res, origin: from, target: to.id });
+      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, res: m.res, wounded: m.wounded, care: m.care, origin: from, target: to.id });
     if (m.force === state.playerForce) S.addLog(state, `${here.name}에 갈 수 없게 되어 ${S.ro(to.name)} 방향을 돌립니다.`, "warn");
   }
   S.reroute = reroute;
   // A beaten army falls back the way it came.
-  S.sendHome = function (state, m, survivors) {
+  //   wounded: {n, unit} brought along (they heal as "mid" at home)
+  S.sendHome = function (state, m, survivors, wounded) {
     const team = crew(state, m);
     release(state, m);
-    if (!survivors && !team.length) return;
+    if (!survivors && !team.length && !(wounded && wounded.n)) return;
     S.launch(state, { kind: "return", force: m.force, path: m.path.slice().reverse(), speed: S.unitSpeed(m.unit),
-      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, origin: m.target, target: m.origin });
+      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, wounded: wounded && wounded.n ? wounded : null, care: "mid", origin: m.target, target: m.origin });
   };
 
   function arrive(state, m, onEvent) {

@@ -62,6 +62,85 @@
   S.battleOf = (state, id) => (state.battles || []).find((b) => b.id === id);
   S.besieged = (state, id) => (state.battles || []).some((b) => b.kind === "siege" && b.place === id);
 
+  // ---------- the wounded (부상병) ----------
+  // Part of every side's losses are wounded, not dead. They heal back into
+  // soldiers month by month, faster the better they are cared for:
+  //   fast - treated in a city at once (the garrison's own, or those who
+  //          surrendered there)
+  //   mid  - brought home with an army that still holds together
+  //   slow - straggling home on their own
+  // 의술 (medicine) speeds every kind. How a battle ends decides who
+  // surrenders, who flees and who is lost (see finish and capture).
+  //   share: of losses that are wounded; lost: wounded who die when a
+  //   beaten side flees without care; yieldT/yieldW: the share of soldiers /
+  //   wounded who give themselves up when a side breaks; heal: the share of
+  //   a pool healed each month
+  S.WOUNDED = { share: 0.4, lost: 0.3, yieldT: 0.2, yieldW: 0.3, fallT: 0.35, fallW: 0.35, gone: 0.3,
+    heal: { fast: 0.5, mid: 0.3, slow: 0.15 } };
+  S.WOUND_CARE = { fast: "성안 치료", mid: "귀환 부대", slow: "따로 이동" };
+  // Add n wounded of a unit (an id or a mix) to a {n, unit} bundle.
+  function addW(w, n, unit) {
+    n = Math.round(n);
+    if (n <= 0) return w && w.n > 0 ? w : null;
+    return w && w.n > 0 ? { n: w.n + n, unit: S.blend(w.unit, w.n, unit, n) } : { n, unit: S.mixOf(unit) };
+  }
+  S.addW = addW;
+  // A side in battle takes wounded among its losses.
+  const hurt = (side, n, unit) => { side.wounded = addW(side.wounded, n * S.WOUNDED.share, unit); };
+  S.addWounded = function (p, care, n, unit) {
+    p.wounded = p.wounded || {};
+    p.wounded[care] = addW(p.wounded[care], n, unit);
+  };
+  S.woundedIn = (p) => Object.values((p && p.wounded) || {}).reduce((s, w) => s + (w ? w.n : 0), 0);
+  // Take a share of every pool out of a place, as one bundle.
+  function takeWounded(p, share) {
+    let out = null;
+    for (const k of Object.keys(p.wounded || {})) {
+      const w = p.wounded[k];
+      if (!w || !w.n) continue;
+      const n = Math.round(w.n * share);
+      out = addW(out, n, w.unit);
+      w.n -= n;
+      if (w.n <= 0) p.wounded[k] = null;
+    }
+    return out;
+  }
+  const part = (w, share) => (w && w.n ? { n: Math.round(w.n * share), unit: w.unit } : null);
+  const rest = (w, share) => (w && w.n ? { n: w.n - Math.round(w.n * share), unit: w.unit } : null);
+  // 의술: how much faster the owner's wounded heal.
+  S.healMul = (state, fid) => 1 + (fid && S.TECH.medicine ? S.techBonus(state, fid, "medicine") * S.TECH.medicine.per : 0);
+  // Once a month the wounded heal back into the garrison.
+  S.healMonth = function (state) {
+    for (const p of Object.values(state.cities).concat(Object.values(state.forts || {}))) {
+      if (!p.wounded) continue;
+      for (const k of Object.keys(p.wounded)) {
+        const w = p.wounded[k];
+        if (!w || !w.n) { p.wounded[k] = null; continue; }
+        const n = w.n < 30 ? w.n : Math.round(w.n * Math.min(0.95, S.WOUNDED.heal[k] * S.healMul(state, p.owner)));
+        if (p.owner) S.addTroops(p, w.unit, n);
+        w.n -= n;
+        if (w.n <= 0) p.wounded[k] = null;
+      }
+    }
+  };
+  // Wounded sent off on their own (or with the remnant of a broken garrison) to an own place.
+  function sendWounded(state, force, path, w, care) {
+    if (!w || w.n <= 0 || !path) return;
+    const linked = path.length > 2 || S.links(state, path[0]).includes(path[1]);
+    S.launch(state, { kind: "wounded", force, path, km: linked ? S.pathKm(state, path) : S.nodeKm(state, path[0], path[1]), speed: "army",
+      officers: [], troops: 0, wounded: w, care, origin: path[0], target: path[path.length - 1] });
+  }
+  // The nearest own city a beaten garrison can flee to.
+  function refuge(state, fid, from) {
+    const near = S.links(state, from).filter((n) => state.cities[n] && state.cities[n].owner === fid);
+    if (near.length) return near[0];
+    const here = S.place(state, from);
+    const own = S.citiesOf(state, fid).filter((c) => c.id !== from);
+    if (!own.length) return null;
+    return own.reduce((a, b) => (Math.hypot(b.x - here.x, b.y - here.y) < Math.hypot(a.x - here.x, a.y - here.y) ? b : a)).id;
+  }
+
+
   function say(b, line) {
     b.log.push(line);
     b.last = line;
@@ -305,11 +384,14 @@
     D.morale = dSide.morale;
     lossD = Math.min(L.troops, lossD);
     lossA = Math.min(A.troops, lossA);
+    const gu = S.garrisonUnit(t);
     L.troops -= lossD;
     S.loseTroops(t, lossD);
     A.troops -= lossA;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
+    hurt(A, lossA, A.unit);
+    S.addWounded(t, "fast", lossD * S.WOUNDED.share, gu);
     A.morale += swing(lossA, lossD, 8);
     D.morale += swing(lossD, lossA, 8);
     say(b, `상륙 ${L.day}일째: 공격 함대 -${lossA} (${A.troops}), 수비 함대 -${lossD} (${L.troops})`);
@@ -317,6 +399,7 @@
     const beaten = L.troops < L.troops0 * S.LANDING.beaten || D.morale <= S.LANDING.broken;
     if (failed && !beaten) {
       say(b, `상륙 실패! ${S.josa(S.forceName(state, A.force), "이", "가")} 뭍에 오르지 못하고 뱃머리를 돌립니다.`);
+      b.broke = "morale";
       return "retreat";
     }
     if (beaten || (L.day >= S.LANDING.days && aPow >= dPow)) {
@@ -326,6 +409,7 @@
     }
     if (L.day >= S.LANDING.days) {
       say(b, `상륙 실패! 며칠을 싸워도 물길을 열지 못해 ${S.josa(S.forceName(state, A.force), "이", "가")} 물러납니다.`);
+      b.broke = "morale";
       return "retreat";
     }
     return null;
@@ -345,11 +429,13 @@
   // Sickness in a crowded camp, more likely the longer and larger the siege.
   // why: 조조's army at 적벽, and 손권's before 합비, were broken as much by
   // sickness as by the enemy.
-  S.PLAGUE = { chance: 0.4, long: 20, big: 30000, kill: [0.1, 0.2], morale: 20 };
+  S.PLAGUE = { chance: 0.3, long: 20, big: 30000, kill: [0.1, 0.2], morale: 20 };
+  // 의술 keeps sickness down (it will count against plague years too).
+  S.plagueMul = (state, fid) => 1 - (S.TECH.medicine ? S.techBonus(state, fid, "medicine") * S.TECH.medicine.plague : 0);
   function plagueDay(state, b) {
     const A = b.att;
     if (b.plague) return;
-    const pct = S.PLAGUE.chance * (b.day > S.PLAGUE.long ? 2 : 1) * (A.troops > S.PLAGUE.big ? 1.5 : 1);
+    const pct = S.PLAGUE.chance * (b.day > S.PLAGUE.long ? 2 : 1) * (A.troops > S.PLAGUE.big ? 1.5 : 1) * S.plagueMul(state, A.force);
     if (!S.chance(state, pct)) return;
     b.plague = true;
     const [lo, hi] = S.PLAGUE.kill;
@@ -357,6 +443,7 @@
     A.troops -= loss;
     A.morale -= S.PLAGUE.morale;
     b.killedA = (b.killedA || 0) + loss;
+    hurt(A, loss, A.unit);
     say(b, `포위군 진영에 역병이 돌았습니다! ${S.forceName(state, A.force)} ${loss}명이 쓰러지고 사기가 떨어집니다.`);
   }
 
@@ -375,7 +462,7 @@
     }
     const atk = crewOf(state, A.officers, A.force);
     const defs = S.serving(state, b.place).filter((o) => o.force === t.owner);
-    if (t.troops <= 0 && !defs.length) return "capture";
+    if (t.troops <= 0 && !defs.length) { b.fell = "rout"; return "capture"; }
     if (b.landing) {
       const out = landingDay(state, b, t, atk, defs);
       feedBesiegers(state, b);
@@ -408,6 +495,8 @@
     A.troops -= lossA;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
+    hurt(A, lossA, A.unit);
+    S.addWounded(t, "fast", lossD * S.WOUNDED.share, gu);
     sortieDay(state, b, t, atk, defs);
     plagueDay(state, b);
     let turned = false;
@@ -434,8 +523,14 @@
       say(b, `${b.day}일째: 공격군 -${lossA} (${A.troops}), 수비군 -${lossD} (${t.troops}) · 성벽 ${t.wall}${b.reliefLine ? " · " + b.reliefLine : ""}`);
     }
     b.reliefLine = null;
-    if (t.troops <= 0 || t.troops < b.def.troops0 * 0.15 || b.def.morale <= 20) return "capture";
-    if (A.troops < A.troops0 * S.SIEGE_BREAK.troops || A.morale <= S.SIEGE_BREAK.morale || b.day >= S.SIEGE_MAX_DAYS) return "retreat";
+    // How each side breaks decides who surrenders and who flees: the
+    // garrison spent (rout) or its heart broken behind a broken wall (breach);
+    // the besiegers bled white (rout) or lost heart (morale).
+    if (t.troops <= 0 || t.troops < b.def.troops0 * 0.15) { b.fell = "rout"; return "capture"; }
+    if (b.def.morale <= 20) { b.fell = "breach"; return "capture"; }
+    if (A.troops < A.troops0 * S.SIEGE_BREAK.troops) { b.broke = "rout"; return "retreat"; }
+    if (A.morale <= S.SIEGE_BREAK.morale) { b.broke = "morale"; return "retreat"; }
+    if (b.day >= S.SIEGE_MAX_DAYS) return "retreat";
     return null;
   }
 
@@ -479,6 +574,7 @@
       const lost = Math.min(A.troops, Math.round(A.troops * S.TUNNEL.lost));
       A.troops -= lost;
       b.killedA = (b.killedA || 0) + lost;
+      hurt(A, lost, A.unit);
       A.morale -= S.TUNNEL.lostMorale;
       b.tunnel = null;
       const w = defs.length ? S.best(defs, "wit") : null;
@@ -592,6 +688,7 @@
       S.addLog(state, `${S.placeName(state, b.place)}의 ${S.josa(leader.name, "이", "가")} 출격해 ${S.josa(foe, "을", "를")} 크게 무찔렀습니다!`, "war");
       if (A.morale <= S.SORTIE.broken) {
         b.ending = "retreat";
+        b.broke = "morale";
         say(b, `겁에 질린 ${S.josa(foe, "이", "가")} 포위를 풀고 달아납니다.`);
       }
     } else if (u < p) {
@@ -621,6 +718,8 @@
     else S.loseTroops(t, lost);
     b.killedA = (b.killedA || 0) + kill;
     b.killedD = (b.killedD || 0) + lost;
+    hurt(A, kill, A.unit);
+    S.addWounded(t, "fast", lost * S.WOUNDED.share, unit);
   }
 
   S.FIRESHIP = { chance: 12, loss: 0.06, tall: 1.5, morale: 10 };
@@ -675,13 +774,44 @@
       else { p.captor = A.force; p.tries = 0; say(b, `갇혀 있던 포로 ${S.josa(p.name, "을", "를")} 넘겨받았습니다.`); }
     }
     if (defForce) S.relAdd(state, A.force, defForce, S.DIPLO.capture);
+    // The garrison: some give themselves up, some flee to a city of their
+    // own if one is left, some are lost. Spent to the last (rout), the
+    // wounded who can flee go on their own; broken behind a broken wall
+    // (breach), more go over and the rest flee together.
+    const W = S.WOUNDED;
     const remainingD = Math.max(0, t.troops);
+    const dUnit = S.garrisonUnit(t);
+    const dW = takeWounded(t, 1);
+    const flee = defForce ? refuge(state, defForce, b.place) : null;
+    let stay, stayW;
+    if (b.fell === "breach") {
+      stay = Math.round(remainingD * W.fallT);
+      stayW = part(dW, W.fallW);
+      const run = addW(rest(dW, W.fallW), remainingD - stay, dUnit);
+      if (flee && run) {
+        sendWounded(state, defForce, [b.place, flee], run, "mid");
+        say(b, `수비군 ${run.n}명이 부상병과 뒤섞여 ${S.ro(S.placeName(state, flee))} 달아났습니다.`);
+      }
+    } else {
+      stay = Math.floor(remainingD * 0.3);
+      const left = rest(dW, W.lost);
+      if (dW && dW.n) say(b, `미처 옮기지 못한 부상병 ${dW.n - (left ? left.n : 0)}명이 목숨을 잃었습니다.`);
+      if (flee) {
+        sendWounded(state, defForce, [b.place, flee], left, "slow");
+        if (left && left.n) say(b, `부상병 ${left.n}명이 ${S.ro(S.placeName(state, flee))} 피난합니다.`);
+        stayW = null;
+      } else stayW = left;
+    }
+    const gave = [stay > 0 && `수비군 ${stay}명`, stayW && stayW.n > 0 && `부상병 ${stayW.n}명`].filter(Boolean);
+    if (gave.length) say(b, `${gave.join("과 ")}이 투항했습니다.`);
     t.owner = A.force;
     t.posts = S.emptyPosts();
-    const stay = Math.floor(remainingD * 0.3); // some defenders go over
-    t.unit = S.blend(A.unit, A.troops, S.garrisonUnit(t), stay);
+    t.unit = S.blend(A.unit, A.troops, dUnit, stay);
     t.troops = A.troops + stay;
-    t.retainers = fort ? 0 : Math.floor(remainingD * 0.3);
+    t.retainers = fort ? 0 : Math.min(stay, Math.floor(remainingD * 0.3));
+    t.wounded = null;
+    if (A.wounded) S.addWounded(t, "fast", A.wounded.n, A.wounded.unit);
+    if (stayW) S.addWounded(t, "fast", stayW.n, stayW.unit);
     t.consent = Math.min(t.consent, 30);
     t.train = A.train;
     t.gold = Math.floor(t.gold / 2);
@@ -772,6 +902,8 @@
     R.troops -= lossR;
     b.killedA = (b.killedA || 0) + lossA;
     b.killedR = (b.killedR || 0) + lossR;
+    hurt(A, lossA, A.unit);
+    hurt(R, lossR, R.unit);
     A.morale += swing(lossA, lossR, 4);
     R.morale += swing(lossR, lossA, 6);
     b.reliefLine = `원군 -${lossR} (${R.troops}), 포위군 -${lossA}`;
@@ -790,12 +922,13 @@
     if (why === "enter" && home.owner === R.force) {
       // The siege is lifted: the relief army enters the city.
       S.addTroops(home, R.unit, R.troops);
+      if (R.wounded) S.addWounded(home, "fast", R.wounded.n, R.wounded.unit);
       for (const o of crewOf(state, R.officers, R.force)) o.city = b.place;
       S.officersMoved(state);
       return;
     }
     S.launch(state, { kind: "return", force: R.force, path: R.path.slice().reverse(), speed: S.unitSpeed(R.unit),
-      officers: crewOf(state, R.officers, R.force).map((o) => o.id), troops: R.troops, unit: R.unit, train: R.train, origin: b.place, target: R.origin });
+      officers: crewOf(state, R.officers, R.force).map((o) => o.id), troops: R.troops, unit: R.unit, train: R.train, wounded: R.wounded, care: "mid", origin: b.place, target: R.origin });
   }
 
   // Computer forces decide whether to send relief to a besieged place: when
@@ -868,6 +1001,44 @@
   };
 
   // ---------- ending and running ----------
+  // The besiegers go home. Bled white (rout), they leave a part of their
+  // wounded to die and send the rest home on their own; broken in heart
+  // (morale, or thrown back from the shore), some give themselves up and the
+  // rest go home together, wounded and all. Called off in good order, or
+  // after the longest siege, all go home together.
+  function retreatHome(state, b, outcome) {
+    const A = b.att, t = S.place(state, b.place), W = S.WOUNDED;
+    const foe = S.forceName(state, A.force);
+    let troops = A.troops, w = A.wounded && A.wounded.n > 0 ? A.wounded : null;
+    const home = S.place(state, A.origin);
+    if (outcome === "allied") {
+      say(b, `${S.josa(S.placeName(state, b.place), "이", "가")} 동맹인 ${S.forceName(state, t.owner)}의 손에 들어가 포위를 풀고 물러납니다.`);
+    } else if (b.broke === "rout") {
+      const lost = part(w, W.lost);
+      w = rest(w, W.lost);
+      say(b, `공격 실패. ${S.josa(foe, "이", "가")} ${troops}명을 이끌고 물러납니다.` +
+        (w ? ` 부상병 ${lost.n}명은 버려졌고, ${w.n}명은 따로 ${S.ro(S.placeName(state, A.origin))} 향합니다.` : ""));
+      const back = home && home.owner === A.force ? A.path.slice().reverse() : null;
+      const to = back ? null : refuge(state, A.force, b.place);
+      sendWounded(state, A.force, back || (to && [b.place, to]), w, "slow");
+      w = null;
+    } else if (b.broke === "morale") {
+      const giveT = Math.round(troops * W.yieldT), giveW = part(w, W.yieldW);
+      if (t.owner && t.owner !== A.force) {
+        S.addTroops(t, A.unit, giveT);
+        if (giveW) S.addWounded(t, "fast", giveW.n, giveW.unit);
+        troops -= giveT;
+        w = rest(w, W.yieldW);
+        say(b, `${foe} 병사 ${giveT}명${giveW && giveW.n ? `과 부상병 ${giveW.n}명` : ""}이 ${S.forceName(state, t.owner)}에 투항했습니다.`);
+      }
+      say(b, `공격 실패. ${S.josa(foe, "이", "가")} ${troops}명${w ? `과 부상병 ${w.n}명` : ""}을 이끌고 물러납니다.`);
+    } else {
+      say(b, `공격 실패. ${S.josa(foe, "이", "가")} ${troops}명${w ? `과 부상병 ${w.n}명` : ""}을 이끌고 물러납니다.`);
+    }
+    letGo(state, b, A.officers);
+    S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train, unit: A.unit }, troops, w);
+  }
+
   function finish(state, b, outcome, onEvent) {
     state.battles = state.battles.filter((x) => x !== b);
     const A = b.att, D = b.def;
@@ -880,20 +1051,12 @@
         letGo(state, b, A.officers);
         const t = S.place(state, b.place);
         S.addTroops(t, A.unit, A.troops);
+        if (A.wounded) S.addWounded(t, "fast", A.wounded.n, A.wounded.unit);
         for (const o of crewOf(state, A.officers, A.force)) o.city = b.place;
         S.officersMoved(state);
         report.attackerWon = true;
-      } else {
-        say(b, outcome === "allied"
-          ? `${S.josa(S.placeName(state, b.place), "이", "가")} 동맹인 ${S.forceName(state, S.place(state, b.place).owner)}의 손에 들어가 포위를 풀고 물러납니다.`
-          : `공격 실패. ${S.forceName(state, A.force)}이 ${A.troops}명을 이끌고 물러납니다.`);
-        letGo(state, b, A.officers);
-        S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train, unit: A.unit }, A.troops);
-      }
+      } else retreatHome(state, b, outcome);
       if (b.relief) endRelief(state, b, report.attackerWon ? "home" : "enter");
-      const t = S.place(state, b.place);
-      if (origin) S.returnManpower(origin, (b.killedA || 0) * 0.3);
-      S.returnManpower(t, (b.killedD || 0) * 0.3);
     }
     const won = report.attackerWon;
     // Those who win together grow closer to their lord.

@@ -248,8 +248,8 @@
         svg += `<line class="mroute${threat ? " threat" : ""}" x1="${x}" y1="${y}" x2="${dest.x}" y2="${dest.y}"/>`;
       }
       const left = S.daysLeft(state, m);
-      const tip = `${S.forceName(state, m.force)} ${m.kind === "army" ? "군단" : m.kind === "sortie" ? "요격" : m.kind === "return" ? "귀환" : "이동"} → ${dest.name}` +
-        `${m.troops ? ` · ${m.unit ? S.unitName(m.unit) : "병사"} ${m.troops}` : ""} · ${left}일 남음`;
+      const tip = `${S.forceName(state, m.force)} ${m.kind === "army" ? "군단" : m.kind === "sortie" ? "요격" : m.kind === "return" ? "귀환" : m.kind === "wounded" ? "부상병" : "이동"} → ${dest.name}` +
+        `${m.troops ? ` · ${m.unit ? S.unitName(m.unit) : "병사"} ${m.troops}` : ""}${m.wounded && m.wounded.n ? ` · 부상병 ${m.wounded.n}` : ""} · ${left}일 남음`;
       if (m.kind === "army" || m.kind === "sortie" || (m.kind === "return" && m.troops)) {
         // A token in the force's colour: 凸 for an army on foot, an arrowhead
         // pointing down the road for horsemen, a broad block for one hauling

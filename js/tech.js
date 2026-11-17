@@ -13,7 +13,7 @@
 // 염철 the salt and iron monopoly; 안집 the settling of refugees; 호적 the
 // finding of households hidden from the registers; 병호 the hereditary
 // soldier households of 위, which gave men at the people's cost; 학관 the
-// schools 유표 kept in 형주.
+// schools 유표 kept in 형주; 의술 the physicians of the age (화타, 장기).
 (function (S) {
   const fail = (msg) => ({ ok: false, msg });
 
@@ -38,6 +38,8 @@
     census: { name: "호적", group: "내정", max: 3, per: 0.01, gain: "병역 인구 +1%p" },
     binghu: { name: "병호", group: "내정", max: 2, per: 0.03, gain: "병역 인구 +3%p, 대신 인구 증가 -30%, 호족 협력 -5", after: ["census", 2] },
     academy: { name: "학관", group: "내정", max: 3, per: 0.2, gain: "연구 진척 +20%" },
+    // plague: less camp sickness per level
+    medicine: { name: "의술", group: "내정", max: 3, per: 0.3, plague: 0.2, gain: "부상병 회복 +30%, 진중 역병 -20%" },
   };
   S.TECH_GROUPS = ["군사", "특수", "내정"];
   S.BINGHU = { growth: 0.7, consent: -5 }; // what 병호 costs

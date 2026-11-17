@@ -1069,6 +1069,7 @@
 
   S.endMonth = function (state) {
     const harvest = state.month === 9;
+    if (S.healMonth) S.healMonth(state);
     for (const c of Object.values(state.cities)) {
       const eff = 0.5 + c.order / 200;
       if (c.owner) {
