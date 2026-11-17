@@ -89,7 +89,8 @@
 
   const MOUNTED = { horse: true, horsebow: true };
   // How well a line fights in a setting:
-  //   field  - on the road (a river battle is fought in ships: see S.fleet)
+  //   field  - in the open (a sortie, a relief army)
+  //   water  - a landing, fought in ships only (see S.fleet)
   //   siegeA - storming walls; siegeD - holding them
   const SETTING = {
     field: { siege: 0.4, other: 1 },

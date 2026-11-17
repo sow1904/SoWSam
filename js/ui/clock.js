@@ -190,7 +190,7 @@
     const done = battles.map((x) => {
       const r = x.report;
       const won = r.attacker === me ? r.attackerWon : !r.attackerWon;
-      const head = r.kind === "siege" ? `${r.to} 공방전` : `${r.to} 앞 ${r.kind === "water" ? "수전" : "야전"}`;
+      const head = `${r.to} ${r.landing ? "상륙전" : "공방전"}`;
       return `<div class="bcard ${won ? "win" : "lose"}" data-action="battleOpen" data-b="${x.id}">` +
         `<div class="bh"><span>⚔ ${head} (${r.days}일)</span><button data-action="battleClose" data-b="${x.id}" title="닫기">×</button></div>` +
         `<div class="bl"><div>${r.lines[r.lines.length - 1]}</div></div><div class="bs">${won ? "승리" : "패배"}</div></div>`;

@@ -1,5 +1,7 @@
 // Battles that last for days. Every army that reaches an enemy city or
-// stronghold lays siege to it; there are no battles on the road. Each day the
+// stronghold lays siege to it; there are no battles on the road. An army
+// that crosses a great river or the sea may first have to fight its way
+// ashore against the defenders' ships (상륙). Each day the
 // two sides clash once, and a bold officer inside may lead a sortie (출격)
 // against the besiegers' camp, which can go very well or very badly: a siege
 // turns on luck as much as on numbers. Troops, morale and food decide when
@@ -19,8 +21,9 @@
   S.SIEGE_MAX_DAYS = 120;
   S.HOME_GROUND = 1.15; // a relief army fights on ground it knows
 
-  // Links of the network that cross or follow a great river: a battle there is
-  // fought on the water. A road split by a fort is listed by its pieces.
+  // Links of the network that cross or follow a great river, or the sea: an
+  // army that comes this way must land (상륙). A road split by a fort is
+  // listed by its pieces.
   const WATER = {};
   for (const [a, b] of [
     // 장강
@@ -189,6 +192,7 @@
       old.att.troops0 += m.troops;
       old.att.rations += m.troops / 10;
       old.att.officers.push(...ids);
+      if (old.landing) old.landing.a0 += m.troops;
       hold(state, old, ids);
       say(old, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 도착해 포위에 가세했습니다.`);
       return old;
@@ -202,11 +206,106 @@
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
-    say(b, `${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명이 ${t.name}(${S.forceName(state, t.owner)}, 수비 ${S.unitName(S.garrisonUnit(t))} ${t.troops}명)을 에워쌌습니다.`);
+    say(b, `${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명이 ${t.name}(${S.forceName(state, t.owner)}, 수비 ${S.unitName(S.garrisonUnit(t))} ${t.troops}명)${S.landingLink(m.path) ? "에 물길로 다다랐습니다" : "을 에워쌌습니다"}.`);
     if (t.troops <= 0 && !defs.length) { say(b, `${t.name}에는 지키는 병사가 없습니다.`); b.ending = "capture"; }
-    else duel(state, b, atk, defs, (side) => { b[side].morale -= 15; });
+    else if (!(S.landingLink(m.path) && startLanding(state, b, t, atk))) duel(state, b, atk, defs, (side) => { b[side].morale -= 15; });
     return b;
   };
+
+  // ---------- landing (상륙) ----------
+  // An army that comes over a great river or the sea must first get ashore.
+  // If the defenders' ships are the stronger, they put out with all the men
+  // they can spare and fight on the water, where only the ships (몽충, 투함,
+  // 누선, fire ships) and the naval specialists (수전) who lead them count; the
+  // kind of soldier aboard does not matter. Thrown back, the army goes home;
+  // once ashore it lays siege as usual. Weaker on the water, the defenders
+  // stay behind their walls and let it land.
+  // why: 유수구 kept 위 off the Yangzi for decades, while 오 crossing the
+  // other way to 합비 landed freely and broke on its walls. The northern men
+  // at 적벽 were sick and unsteady on the river.
+  //   share: of the garrison that puts out; favour/keen: the edge on the water
+  //   the defenders want before they do (on their own / told to strike out);
+  //   rate: daily losses; days: the longest the fight on the water lasts;
+  //   skill: 수전 on the water; green: men in 몽충, with no naval leader nor
+  //   shipwrights, who are not at home on the water; fail/beaten: the share of the attackers / of
+  //   the defenders' fleet left when that side gives up; broken: morale
+  S.LANDING = { share: 0.8, min: 1000, favour: 1, keen: 0.8, rate: 0.06, days: 8, skill: 1.2, green: 0.75, fail: 0.65, beaten: 0.5, broken: 40 };
+  // Whether a march ends by crossing water.
+  S.landingLink = (path) => !!path && path.length >= 2 && S.isWater(path[path.length - 2], path[path.length - 1]);
+  // A side's strength on the water: its men, its leaders, its ships.
+  function navalPower(troops, list, fallback, train, fleet, foeFleet, morale) {
+    return S.power(troops, S.sideStats(list, fallback), train, 1) * S.unitMul(fleet, foeFleet, "water", 1) * (has(list, "수전") ? S.LANDING.skill : 1) * (fleet === "mengchong" ? S.LANDING.green : 1) * moraleMul(morale);
+  }
+  // Whether the defenders of a place would meet a crossing army on the water.
+  //   ratio: their strength on the water against the attackers'
+  S.landingOdds = function (state, targetId, force, officers, troops, train, morale) {
+    const t = S.place(state, targetId);
+    const defs = S.serving(state, targetId).filter((o) => o.force === t.owner);
+    const aFleet = S.fleet(state, force, officers);
+    const dFleet = t.owner ? S.fleet(state, t.owner, defs) : "mengchong";
+    const dTroops = Math.floor(t.troops * S.LANDING.share);
+    const a = navalPower(troops, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale);
+    const d = navalPower(dTroops, defs, 40, t.train, dFleet, aFleet, 100);
+    const ratio = a > 0 ? d / a : 99;
+    const policy = S.defensePolicy(state, targetId);
+    const need = policy === "intercept" ? S.LANDING.keen : S.LANDING.favour;
+    const commit = !!t.owner && policy !== "hold" && dTroops >= S.LANDING.min && ratio >= need;
+    return { commit, ratio, aFleet, dFleet, dTroops };
+  };
+  function startLanding(state, b, t, atk) {
+    const A = b.att;
+    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale);
+    if (!odds.commit) {
+      if (t.owner) say(b, `${S.josa(S.forceName(state, t.owner), "은", "는")} 물가를 지키지 않고 성에 틀어박혔습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} 무사히 뭍에 올랐습니다.`);
+      return false;
+    }
+    b.landing = { day: 0, a0: A.troops, troops: odds.dTroops, troops0: odds.dTroops, aFleet: odds.aFleet, dFleet: odds.dFleet };
+    say(b, `${S.forceName(state, t.owner)}의 ${S.unitName(odds.dFleet)} 함대 ${odds.dTroops}명이 물 위로 나와 상륙을 막아섭니다! ` +
+      `(${S.forceName(state, A.force)}은 ${S.unitName(odds.aFleet)})`);
+    return true;
+  }
+  // One day on the water. Returns "retreat" when the attackers give up.
+  function landingDay(state, b, t, atk, defs) {
+    const A = b.att, D = b.def, L = b.landing;
+    L.day++;
+    L.troops = Math.min(L.troops, t.troops);
+    const rnd = () => 0.8 + S.rand(state) * 0.4;
+    const aPow = navalPower(A.troops, atk, 30, A.train, L.aFleet, L.dFleet, A.morale);
+    const dPow = navalPower(L.troops, defs, 40, t.train, L.dFleet, L.aFleet, D.morale);
+    let lossD = Math.round(aPow * S.LANDING.rate * rnd());
+    let lossA = Math.round(dPow * S.LANDING.rate * rnd());
+    const dSide = { force: D.force, troops: L.troops, morale: D.morale };
+    lossD += fireShips(state, b, atk, defs, A, dSide, L.dFleet);
+    lossA += fireShips(state, b, defs, atk, dSide, A, L.aFleet);
+    D.morale = dSide.morale;
+    lossD = Math.min(L.troops, lossD);
+    lossA = Math.min(A.troops, lossA);
+    L.troops -= lossD;
+    S.loseTroops(t, lossD);
+    A.troops -= lossA;
+    b.killedA = (b.killedA || 0) + lossA;
+    b.killedD = (b.killedD || 0) + lossD;
+    A.morale += swing(lossA, lossD, 8);
+    D.morale += swing(lossD, lossA, 8);
+    say(b, `상륙 ${L.day}일째: 공격 함대 -${lossA} (${A.troops}), 수비 함대 -${lossD} (${L.troops})`);
+    const failed = A.troops < L.a0 * S.LANDING.fail || A.morale <= S.LANDING.broken;
+    const beaten = L.troops < L.troops0 * S.LANDING.beaten || D.morale <= S.LANDING.broken;
+    if (failed && !beaten) {
+      say(b, `상륙 실패! ${S.josa(S.forceName(state, A.force), "이", "가")} 뭍에 오르지 못하고 뱃머리를 돌립니다.`);
+      return "retreat";
+    }
+    if (beaten || (L.day >= S.LANDING.days && aPow >= dPow)) {
+      say(b, `상륙 성공! ${S.forceName(state, D.force)}의 함대가 성으로 물러났습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} ${S.josa(t.name, "을", "를")} 에워쌉니다.`);
+      b.landing = null;
+      return null;
+    }
+    if (L.day >= S.LANDING.days) {
+      say(b, `상륙 실패! 며칠을 싸워도 물길을 열지 못해 ${S.josa(S.forceName(state, A.force), "이", "가")} 물러납니다.`);
+      return "retreat";
+    }
+    return null;
+  }
+
 
   function siegeDay(state, b) {
     const t = S.place(state, b.place);
@@ -218,11 +317,17 @@
     if (t.owner !== b.def.force) {
       b.def = { force: t.owner, troops0: Math.max(1, t.troops), morale: 100 };
       say(b, `${S.josa(t.name, "은", "는")} 이제 ${S.forceName(state, t.owner)}의 땅입니다. 포위를 이어 갑니다.`);
+      b.landing = null;
       if (b.relief && b.relief.force !== t.owner) endRelief(state, b, "home");
     }
     const atk = crewOf(state, A.officers, A.force);
     const defs = S.serving(state, b.place).filter((o) => o.force === t.owner);
     if (t.troops <= 0 && !defs.length) return "capture";
+    if (b.landing) {
+      const out = landingDay(state, b, t, atk, defs);
+      feedBesiegers(state, b);
+      return out;
+    }
     let wb = S.wallBonus(t) * S.gentryDefense(t);
     if (has(defs, "수성")) wb *= 1.15;
     if (has(atk, "공성")) wb = 1 + (wb - 1) * 0.75;
@@ -707,7 +812,7 @@
   function finish(state, b, outcome, onEvent) {
     state.battles = state.battles.filter((x) => x !== b);
     const A = b.att, D = b.def;
-    const report = { kind: b.kind, lines: b.log, attackerWon: false, from: b.from, to: S.placeName(state, b.place), captured: [], attacker: A.force, defender: D.force, days: b.day };
+    const report = { kind: b.kind, landing: !!b.landing, lines: b.log, attackerWon: false, from: b.from, to: S.placeName(state, b.place), captured: [], attacker: A.force, defender: D.force, days: b.day };
     const origin = S.place(state, A.origin || (b.march && b.march.origin));
     if (b.kind === "siege") {
       if (outcome === "capture") capture(state, b, report);
@@ -740,6 +845,7 @@
     const where = S.placeName(state, b.place);
     const text = report.attackerWon ? `${S.josa(S.forceName(state, A.force), "이", "가")} ${S.forceName(state, D.force)}의 ${S.josa(where, "을", "를")} 함락했습니다. (${b.day}일)`
       : outcome === "allied" ? `${S.forceName(state, A.force)}이 동맹의 땅이 된 ${where}에서 물러났습니다.`
+      : b.landing ? `${S.forceName(state, A.force)}이 ${where} 앞 물 위에서 막혀 뭍에 오르지 못했습니다. (${b.day}일)`
       : `${S.forceName(state, A.force)}의 ${where} 공격이 실패했습니다. (${b.day}일)`;
     S.addLog(state, text, report.attackerWon ? "war" : "warfail");
     // A computer force (or the player's, left wholly to its governors) tries

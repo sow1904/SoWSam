@@ -348,6 +348,16 @@
       `<br><span class="hint">하루에 보급로 절단 ${pc.cut}% · 군량고 소각 ${pc.burn}% · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days, S.pathRough(state, way.path))}</span>`;
   }
 
+  // Over water: whether the defenders would meet us on it, and how the fleets compare.
+  function landingLine(way, t, ids, sent) {
+    if (!way || !S.landingLink(way.path)) return "";
+    const from = S.place(state, UI.selected);
+    const o = S.landingOdds(state, t.id, from.owner, ids.map((id) => state.officers[id]), sent, from.train, 100);
+    const fleets = `아군 ${S.unitName(o.aFleet)} · 적 ${S.unitName(o.dFleet)}, 물 위 전력 ${edgeLabel(1 / Math.max(0.01, o.ratio))}`;
+    return o.commit ? `<span class="bad">상륙전: 적 함대 ${fmt(o.dTroops)}명이 막아섭니다</span> (${fleets})<br>`
+      : `상륙전: 적은 물가를 지키지 않을 것 같습니다 (${fleets})<br>`;
+  }
+
   function updateEstimate() {
     const ids = checked();
     const el = $("#atEst");
@@ -369,6 +379,7 @@
       (threat && threat.pct > 0
         ? `출격 위험: ${threat.leader.name}${S.hasSkill(threat.leader, "야전") ? " (야전)" : ""} 하루 ${threat.pct}% · 성 밖 싸움 상성 ${edgeLabel(field)}<br>`
         : `출격 위험: 없음<br>`) +
+      landingLine(way, t, ids, sent) +
       `<span class="hint">병사 ${fmt(sent)}명 · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days, way ? S.pathRough(state, way.path) : 1)}${way && S.pathRough(state, way.path) > 1.05 ? " (험로)" : ""} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 

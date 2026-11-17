@@ -220,8 +220,8 @@
 
   UI.battleTitle = function (b) {
     const where = S.placeName(state, b.place);
-    if (b.kind === "siege") return `${where} 공방전`;
-    return `${where} 앞 ${b.water ? "수전" : "야전"}`;
+    if (b.kind === "siege") return `${where} ${b.landing ? "상륙전" : "공방전"}`;
+    return `${where} 앞 야전`;
   };
 
   // Armies, convoys and travelling officers on the roads. Our own marches and
