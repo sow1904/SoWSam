@@ -99,10 +99,16 @@
   };
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
   S.ruined = (p) => !!p && p.wallMax > 0 && p.wall < Math.max(150, p.wallMax * 0.2);
-  // The tier a city is drawn at: its size, or more once its people have grown
-  // to the number a bigger city starts with (40,000 + 40,000 a tier). Growth
-  // reaches tier 4 at most; tier 5 is for the great cities from the start.
-  S.cityTier = (c) => (c.size >= 5 ? 5 : Math.max(c.size, Math.min(4, Math.floor((c.pop - 40000) / 40000))));
+  // The tier a city is drawn at: its size, raised by growth. Each 40,000
+  // people over what a city of its size starts with count one tier, and
+  // farmland and trade developed past 40% count up to 1.2 tiers more when
+  // fully developed. Growth reaches tier 4 at most; tier 5 is for the great
+  // cities from the start, and a city never falls below its size.
+  S.cityGrowth = (c) => {
+    const dev = (c.farm + c.trade) / (c.farmMax + c.tradeMax);
+    return (c.pop - (40000 + c.size * 40000)) / 40000 + Math.max(0, dev - 0.4) / 0.6 * 1.2;
+  };
+  S.cityTier = (c) => (c.size >= 5 ? 5 : Math.max(c.size, Math.min(4, c.size + Math.floor(S.cityGrowth(c)))));
   function palace(c) {
     if (c.id === state.emperor && !(state.han && state.han.ended)) return true;
     return !!(c.owner && state.forces[c.owner].emperor && S.isCapital(state, c.id));
