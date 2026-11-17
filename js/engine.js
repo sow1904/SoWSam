@@ -163,7 +163,9 @@
         c.consent = 55;
         // A scenario may shift how strong the great families are in a force's
         // lands, where its way of ruling had already changed them for years.
-        if (f.gentry) c.gentry = c.gentryBase = Math.max(5, Math.min(95, c.gentry + f.gentry));
+        // A number shifts every city; an object sets named cities.
+        const g = typeof f.gentry === "object" ? f.gentry[cid] : f.gentry ? c.gentry + f.gentry : null;
+        if (g != null) c.gentry = c.gentryBase = Math.max(5, Math.min(95, g));
         // A scenario may start its held cities better developed.
         if (scenario.develop) {
           c.farm = Math.round(c.farmMax * scenario.develop);
@@ -435,13 +437,18 @@
       c[k] = clamp(c[k] + S.postDelta(state, c, k), 0, postMax(c, k));
     }
     const ab = S.postAbility(state, c.posts.tuntian, "tuntian");
-    if (ab != null) {
+    if (c.unrest) {
+      // The families are up in arms: the state farms stand idle (js/gentry.js).
+      if (S.unrestMonth) S.unrestMonth(state, c);
+    } else if (ab != null) {
       const e = S.tuntianEffect(ab);
       c.food += Math.round(e.food);
+      const was = c.gentry;
       c.gentry = Math.max(5, c.gentry - e.gentry);
-    } else if (c.gentry < c.gentryBase + 10) {
-      // Without state farms the great families slowly reclaim the land.
-      c.gentry = Math.min(c.gentryBase + 10, c.gentry + 0.1);
+      if (S.gentryCut) S.gentryCut(state, c, was - c.gentry);
+    } else if (c.gentry < c.gentryBase) {
+      // Without state farms the great families slowly win back what was taken.
+      c.gentry = Math.min(c.gentryBase, c.gentry + 0.1);
     }
   }
 

@@ -161,8 +161,8 @@
       {
         id: "sunquan", name: "손권", color: "#c0392b", capital: "danyang",
         // why: the 강동 clans (고·육·주·장) and the generals' hereditary troops
-        // (세병) carry the 손씨 state: 호족연합형.
-        gentry: 12,
+        // (세병) carry the 손씨 state: 호족연합형, strongest in 강동 itself.
+        gentry: { danyang: 85, wujun: 85, kuaiji: 85, yuzhang: 85 },
         tech: { sword: 2, bow: 2, navy: 2, logging: 2 },
         cities: {
           danyang: 25000, wujun: 8000, kuaiji: 8000, yuzhang: 8000, lujiang: 14000,

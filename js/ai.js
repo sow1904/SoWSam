@@ -260,6 +260,9 @@
   // some officers free for commands (more on the frontier unless told).
   function staffPosts(state, c, frontier, keep) {
     const reserve = keep != null ? keep : frontier ? 3 : 1;
+    // 둔전 is dropped as the families' next rising grows dearer (js/gentry.js).
+    if (c.posts.tuntian && !S.wantTuntian(state, c)) S.assignPost(state, c.id, "tuntian", null);
+    const tuntianOk = () => c.gentry >= S.tuntianFloor(state, c) && S.wantTuntian(state, c);
     const serving = S.serving(state, c.id);
     const unposted = () => serving.filter((o) => !S.postOf(state, o));
     // Free up posted officers when the city lacks commanders.
@@ -272,7 +275,7 @@
       let best = null;
       for (const k of S.POST_KEYS) {
         const policy = S.POSTS[k].policy;
-        if (policy && c.gentry < 45) continue;
+        if (policy && !tuntianOk()) continue;
         const cur = S.postAbility(state, c.posts[k], k);
         // An empty development post loses value; an unused policy merely gains nothing.
         const gain = S.POSTS[k].stat(o) - (cur == null ? (policy ? 20 : -40) : cur);
@@ -284,7 +287,7 @@
       const p = c.posts[k];
       const margin = S.balance(c);
       if (!p) {
-        if (S.POSTS[k].policy && (c.gentry < 50 || margin < 60)) continue;
+        if (S.POSTS[k].policy && (c.gentry < S.tuntianFloor(state, c) + 5 || margin < 60 || !S.wantTuntian(state, c))) continue;
         let tier = -1;
         for (let t = S.CLERKS.length - 1; t >= 0; t--) {
           if (S.CLERKS[t].salary <= Math.max(10, margin * 0.4) && c.gold > S.CLERKS[t].salary * 6) { tier = t; break; }

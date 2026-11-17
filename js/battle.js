@@ -806,6 +806,11 @@
     if (gave.length) say(b, `${gave.join("과 ")}이 투항했습니다.`);
     t.owner = A.force;
     t.posts = S.emptyPosts();
+    if (!fort) {
+      t.unrest = null;
+      t.cut = 0;
+      if (defForce && S.conquestGentry) S.conquestGentry(state, A.force);
+    }
     t.unit = S.blend(A.unit, A.troops, dUnit, stay);
     t.troops = A.troops + stay;
     t.retainers = fort ? 0 : Math.min(stay, Math.floor(remainingD * 0.3));

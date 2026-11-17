@@ -309,6 +309,28 @@
     };
   };
 
+  // Risings of the great families in our cities that wait for an answer.
+  UI.showUnrest = function () {
+    const me = state.playerForce;
+    const list = S.cityList(state).filter((c) => c.owner === me && c.unrest && !S.delegateOf(state, c));
+    if (!list.length) {
+      if (UI.modalOpen()) UI.closeModal();
+      UI.renderAll();
+      return;
+    }
+    const row = (c) => {
+      const u = c.unrest;
+      return `<tr><td><b>${c.name}</b></td><td>둔전으로 깎인 호족 세력 ${u.cut.toFixed(1)}</td>` +
+        `<td><button data-action="unrestWoo" data-cid="${c.id}"${c.gold < u.gold ? " disabled" : ""}>회유 · 금 ${fmt(u.gold)}</button> ` +
+        `<span class="hint">(가진 금 ${fmt(Math.round(c.gold))})</span></td>` +
+        `<td><button data-action="unrestCrush" data-cid="${c.id}">진압 · 병사 ${fmt(Math.min(c.troops, u.troops))}</button></td></tr>`;
+    };
+    UI.openModal(title("호족 반발") +
+      `<p class="hint">${UI.HELP.unrest}</p>` +
+      `<table class="tbl"><tbody>${list.map(row).join("")}</tbody></table>` +
+      `<div class="footer"><button class="primary" data-action="close">나중에 정한다</button></div>`, true);
+  };
+
   const edgeLabel = (e) => (e >= 1.15 ? `<span class="good">유리 ×${e.toFixed(2)}</span>` : e <= 0.87 ? `<span class="bad">불리 ×${e.toFixed(2)}</span>` : `비슷함 ×${e.toFixed(2)}`);
 
   function updateMove() {
@@ -447,6 +469,9 @@
       UI.result(r);
     },
     doReward: (d) => { if (UI.result(S.reward(state, UI.selected, d.oid))) commands.reward(); },
+    unrest: () => UI.showUnrest(),
+    unrestWoo: (d) => { UI.result(S.answerUnrest(state, d.cid, "woo")); UI.showUnrest(); },
+    unrestCrush: (d) => { UI.result(S.answerUnrest(state, d.cid, "crush")); UI.showUnrest(); },
     captRecruit: (d) => { UI.result(S.persuade(state, d.oid)); UI.showCaptives(); },
     captHold: (d) => { UI.captives = (UI.captives || []).filter((id) => id !== d.oid); UI.showCaptives(); },
     captRelease: (d) => { UI.result(S.release(state, state.officers[d.oid].city, d.oid)); UI.showCaptives(); },

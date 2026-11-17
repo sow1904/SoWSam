@@ -140,6 +140,14 @@
       return;
     }
     if (caught.length) { pause("무장을 사로잡았습니다"); UI.showCaptives(caught); return; }
+    // A rising of the great families waits for the player's answer.
+    const rising = UI.myCities().filter((c) => c.unrest && !S.delegateOf(state, c) && !(clock.risings || []).includes(c.id + "@" + c.unrest.day));
+    if (rising.length) {
+      clock.risings = UI.myCities().filter((c) => c.unrest).map((c) => c.id + "@" + c.unrest.day);
+      pause(`${rising[0].name}의 호족들이 들고일어났습니다`);
+      UI.showUnrest();
+      return;
+    }
     // An envoy with something to ask: the answer is the player's to give.
     if (asked.length) { pause(`${S.forceName(state, asked[0].from)}의 사자가 도착했습니다`); UI.showDiplomacy(); return; }
     const han = state.han;

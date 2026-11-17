@@ -271,7 +271,9 @@
       `<h3>호족${own ? helpTip(`${H.gentry} 협력 목표치 ${Math.round(S.consentTarget(state, c))}.`) : ""}</h3><div class="stats">` +
       stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
       stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString()) +
-      `</div>`;
+      (own && c.cut > 0.05 ? stat("반발 위험", `월 ${S.unrestChance(c).toFixed(1)}%`) : "") +
+      `</div>` +
+      (own && c.unrest ? `<p class="bad">호족들이 둔전에 반발해 들고일어났습니다. 둔전이 멈추고 매달 치안이 떨어집니다. <button data-action="unrest">처리</button></p>` : "");
   }
   function fortSummary(f) {
     const ends = f.road.map((id) => state.cities[id].name);
