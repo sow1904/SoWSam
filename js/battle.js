@@ -17,8 +17,10 @@
   const fail = (msg) => ({ ok: false, msg });
 
   // Daily losses as a share of the other side's fighting power.
-  S.BATTLE_RATE = { siege: 0.035, field: 0.07 };
+  S.BATTLE_RATE = { siege: 0.025, field: 0.07 };
   S.SIEGE_MAX_DAYS = 120;
+  // The besiegers give up below this share of their men, or this morale.
+  S.SIEGE_BREAK = { troops: 0.5, morale: 30 };
   S.HOME_GROUND = 1.15; // a relief army fights on ground it knows
 
   // Links of the network that cross or follow a great river, or the sea: an
@@ -206,6 +208,7 @@
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
+    b.att.fortune = fortune(state);
     say(b, `${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명이 ${t.name}(${S.forceName(state, t.owner)}, 수비 ${S.unitName(S.garrisonUnit(t))} ${t.troops}명)${S.landingLink(m.path) ? "에 물길로 다다랐습니다" : "을 에워쌌습니다"}.`);
     if (t.troops <= 0 && !defs.length) { say(b, `${t.name}에는 지키는 병사가 없습니다.`); b.ending = "capture"; }
     else if (!(S.landingLink(m.path) && startLanding(state, b, t, atk))) duel(state, b, atk, defs, (side) => { b[side].morale -= 15; });
@@ -251,6 +254,28 @@
     const need = policy === "intercept" ? S.LANDING.keen : S.LANDING.favour;
     const commit = !!t.owner && policy !== "hold" && dTroops >= S.LANDING.min && ratio >= need;
     return { commit, ratio, aFleet, dFleet, dTroops };
+  };
+  // How a landing would likely go, without the luck: for the attack window
+  // and the computer's plans.
+  //   pass: whether the army gets ashore; left: its men then; lostD: the
+  //   defenders lost on the water
+  S.landingForecast = function (state, targetId, force, officers, troops, train) {
+    const o = S.landingOdds(state, targetId, force, officers, troops, train, 100);
+    if (!o.commit) return Object.assign(o, { pass: true, left: troops, lostD: 0 });
+    const t = S.place(state, targetId);
+    const defs = S.serving(state, targetId).filter((x) => x.force === t.owner);
+    let a = troops, d = o.dTroops, am = 100, dm = 100;
+    for (let day = 1; ; day++) {
+      const aPow = navalPower(a, officers, 30, train, o.aFleet, o.dFleet, am);
+      const dPow = navalPower(d, defs, 40, t.train, o.dFleet, o.aFleet, dm);
+      const lossD = Math.min(d, aPow * S.LANDING.rate), lossA = Math.min(a, dPow * S.LANDING.rate);
+      a -= lossA; d -= lossD;
+      am += swing(lossA, lossD, 8); dm += swing(lossD, lossA, 8);
+      const failed = a < troops * S.LANDING.fail || am <= S.LANDING.broken;
+      const beaten = d < o.dTroops * S.LANDING.beaten || dm <= S.LANDING.broken;
+      if (failed && !beaten) return Object.assign(o, { pass: false, left: Math.round(a), lostD: Math.round(o.dTroops - d) });
+      if (beaten || day >= S.LANDING.days) return Object.assign(o, { pass: beaten || aPow >= dPow, left: Math.round(a), lostD: Math.round(o.dTroops - d) });
+    }
   };
   function startLanding(state, b, t, atk) {
     const A = b.att;
@@ -307,6 +332,34 @@
   }
 
 
+  // The besiegers' fortune (기세): weather, the lie of the land, the spirit
+  // of the camp, all that no one can count beforehand. Drawn once a siege,
+  // it sharpens or blunts the besiegers' blows and the defenders' answer
+  // every day, so even a much stronger army may stall before the walls.
+  // Now and then (turn: % a day) the tide turns and it is drawn anew.
+  S.FORTUNE = { spread: 0.5, low: 0.45, high: 2, turn: 4 };
+  function fortune(state) {
+    const g = (S.rand(state) + S.rand(state) + S.rand(state) - 1.5) * 2; // about normal
+    return clamp(Math.exp(g * S.FORTUNE.spread), S.FORTUNE.low, S.FORTUNE.high);
+  }
+  // Sickness in a crowded camp, more likely the longer and larger the siege.
+  // why: 조조's army at 적벽, and 손권's before 합비, were broken as much by
+  // sickness as by the enemy.
+  S.PLAGUE = { chance: 0.4, long: 20, big: 30000, kill: [0.1, 0.2], morale: 20 };
+  function plagueDay(state, b) {
+    const A = b.att;
+    if (b.plague) return;
+    const pct = S.PLAGUE.chance * (b.day > S.PLAGUE.long ? 2 : 1) * (A.troops > S.PLAGUE.big ? 1.5 : 1);
+    if (!S.chance(state, pct)) return;
+    b.plague = true;
+    const [lo, hi] = S.PLAGUE.kill;
+    const loss = Math.round(A.troops * (lo + S.rand(state) * (hi - lo)));
+    A.troops -= loss;
+    A.morale -= S.PLAGUE.morale;
+    b.killedA = (b.killedA || 0) + loss;
+    say(b, `포위군 진영에 역병이 돌았습니다! ${S.forceName(state, A.force)} ${loss}명이 쓰러지고 사기가 떨어집니다.`);
+  }
+
   function siegeDay(state, b) {
     const t = S.place(state, b.place);
     const A = b.att;
@@ -341,8 +394,8 @@
     // With a relief army in the field the besiegers must split their men.
     const split = b.relief ? 0.7 : 1;
     const gu = S.garrisonUnit(t);
-    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split * (staked ? S.STAKES.blunt : 1);
-    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state) * S.gearSuppress(gear);
+    const aPow = S.power(A.troops, S.sideStats(atk, 30), A.train, 1) * S.unitMul(A.unit, gu, "siegeA", 1) * moraleMul(A.morale) * split * (staked ? S.STAKES.blunt : 1) * (A.fortune || 1);
+    const dPow = S.power(t.troops, S.sideStats(defs, t.owner ? 40 : 35), t.train, wb) * S.unitMul(gu, A.unit, "siegeD", 1) * moraleMul(b.def.morale) * S.houseDefense(t, state) * S.gearSuppress(gear) / (A.fortune || 1);
     let lossD = Math.round(aPow * S.BATTLE_RATE.siege * rnd() * S.gearKill(gear));
     let lossA = Math.round(dPow * S.BATTLE_RATE.siege * rnd() * (staked ? S.STAKES.bleed : 1));
     lossD += ruse(state, b, atk, defs, t.troops, ["화공", "위계", "야습"], S.aidOf(gu).scout);
@@ -356,6 +409,12 @@
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
     sortieDay(state, b, t, atk, defs);
+    plagueDay(state, b);
+    let turned = false;
+    if (b.day > 1 && S.chance(state, S.FORTUNE.turn)) { A.fortune = fortune(state); turned = true; }
+    if ((b.day === 1 || turned) && A.fortune < 0.8) say(b, `${turned ? "전황이 바뀌었습니다. " : ""}${S.forceName(state, A.force)}의 진영이 어수선합니다. 공격이 좀처럼 먹혀들지 않습니다.`);
+    else if ((b.day === 1 || turned) && A.fortune > 1.25) say(b, `${turned ? "전황이 바뀌었습니다. " : ""}${S.forceName(state, A.force)}의 기세가 드높습니다.`);
+    else if (turned) say(b, `전황이 바뀌어 양쪽이 팽팽해졌습니다.`);
     t.wall = Math.max(0, t.wall - Math.round((lossD * 0.02 + S.gearBatter(gear)) * (has(atk, "공성") ? 1.5 : 1)));
     if (staked) {
       t.stakes = Math.max(0, t.stakes - S.STAKES.wear * (has(atk, "공성") ? 1.5 : 1));
@@ -376,7 +435,7 @@
     }
     b.reliefLine = null;
     if (t.troops <= 0 || t.troops < b.def.troops0 * 0.15 || b.def.morale <= 20) return "capture";
-    if (A.troops < A.troops0 * 0.3 || A.morale <= 25 || b.day >= S.SIEGE_MAX_DAYS) return "retreat";
+    if (A.troops < A.troops0 * S.SIEGE_BREAK.troops || A.morale <= S.SIEGE_BREAK.morale || b.day >= S.SIEGE_MAX_DAYS) return "retreat";
     return null;
   }
 

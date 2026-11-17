@@ -132,12 +132,22 @@
     if (team.length === S.idle(state, c.id).length && S.serving(state, c.id).length > 1 && team.length > 1) team.pop();
     const ids = team.map((o) => o.id);
     let best = null;
+    const ways = S.attackTargets(state, c.id);
     for (const t of targets) {
       const unit = pickUnit(state, c, t, troops);
-      const est = S.estimate(state, c.id, t.id, ids, troops, unit);
+      // Over water, what is likely left once ashore, if it gets ashore at all.
+      const way = ways.find((w) => w.id === t.id);
+      const land = way && S.landingLink(way.path) ? S.landingForecast(state, t.id, c.owner, team, troops, c.train) : null;
+      if (land && !land.pass) continue;
+      const est = S.estimate(state, c.id, t.id, ids, land ? land.left : troops, unit);
+      if (land && land.lostD) est.ratio *= t.troops / Math.max(1, t.troops - land.lostD);
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull; // vacant cities are easy pickings
-      if (!best || est.ratio + bonus > best.score) best = { t, unit, score: est.ratio + bonus, est, pull };
+      // A fierce officer inside who may sortie makes the place look harder.
+      const threat = t.owner ? S.sortieThreat(state, t.id) : null;
+      const risk = threat ? threat.pct / 50 : 0;
+      const score = est.ratio + bonus - risk;
+      if (!best || score > best.score) best = { t, unit, score, est, pull, risk };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
@@ -147,7 +157,7 @@
     // Those it stands well with are left alone unless the chance is plain,
     // and those it hates are struck a little sooner.
     const amity = best && best.t.owner ? Math.max(-0.15, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
-    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity) return;
+    if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity + best.risk) return;
     if (!S.chance(state, 45)) return;
     S.attack(state, c.id, best.t.id, ids, troops, best.unit);
   }
