@@ -136,6 +136,7 @@
     UI.closeModal();
     UI.resetClock();
     UI.view.zoom = 1;
+    UI.renderAll();
     UI.centerOn(home);
     UI.toast(msg);
   }
