@@ -996,7 +996,6 @@
     if (t.owner === state.playerForce && c.owner !== state.playerForce) {
       S.addLog(state, `${S.forceName(state, c.owner)} ${S.unitName(unit)} ${troops}명이 ${c.name}에서 ${S.ro(t.name)} 진군하고 있습니다. (${days}일 뒤 도착)`, "threat");
     }
-    S.planDefense(state, m);
     return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };
 

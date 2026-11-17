@@ -361,19 +361,14 @@
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
     const way = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
     const days = way ? S.travelDays(way.km, S.unitSpeed(unit)) : 0;
-    // If the garrison marches out, the fight is on the last stretch of road.
+    // Who inside might sortie against us, and how our soldiers fare in the open.
     const t = S.place(state, $("#atTarget").value);
-    const P = way ? way.path[way.path.length - 2] : UI.selected;
-    const where = S.waterLink(state, P, t.id) ? "water" : "field";
-    const rough = S.linkRough(state, P, t.id);
-    const water = where === "water";
-    // On a river both sides fight in ships: 투함 under a naval specialist, else 몽충.
-    const ours = water ? S.fleet(state, state.playerForce, ids.map((id) => state.officers[id])) : unit;
-    const theirs = water ? S.fleet(state, t.owner, S.serving(state, t.id).filter((o) => o.force === t.owner)) : S.garrisonUnit(t);
-    const field = S.unitEdge(ours, theirs, where, rough);
-    const ground = water ? "물 위" : rough > 1 ? "험한 산길" : "길";
+    const threat = S.sortieThreat(state, t.id);
+    const field = S.unitEdge(unit, S.garrisonUnit(t), "field", 1);
     el.innerHTML = `아군 ${fmt(e.att)} : 적군 ${fmt(e.def)} — ${label} <span class="hint">(공성, 병종 반영)</span><br>` +
-      `요격당하면(${ground}): ${S.unitName(ours)} 대 ${S.unitName(theirs)} ${edgeLabel(field)}<br>` +
+      (threat && threat.pct > 0
+        ? `출격 위험: ${threat.leader.name}${S.hasSkill(threat.leader, "야전") ? " (야전)" : ""} 하루 ${threat.pct}% · 성 밖 싸움 상성 ${edgeLabel(field)}<br>`
+        : `출격 위험: 없음<br>`) +
       `<span class="hint">병사 ${fmt(sent)}명 · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days, way ? S.pathRough(state, way.path) : 1)}${way && S.pathRough(state, way.path) > 1.05 ? " (험로)" : ""} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 

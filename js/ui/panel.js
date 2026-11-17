@@ -100,8 +100,8 @@
       opts.map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("") +
       `</select></div>`;
   }
-  // What the commander does when an enemy army comes: march out to meet it on
-  // the road (요격) or hold the walls (농성).
+  // What the commander does under siege: sortie against the camp (출격) as
+  // he sees fit or freely, or hold the walls (농성).
   function policyRow(id) {
     const cur = S.defensePolicy(state, id);
     const tip = helpTip(H.policy);

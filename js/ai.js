@@ -153,14 +153,9 @@
   }
 
   // The soldiers for an attack, by type: those good against the walls, and
-  // not easily beaten if the garrison marches out to meet them on the last
-  // stretch of road. A better fit only weighs more, with some chance in it,
+  // not easily beaten if the garrison sorties against the camp. A better fit only weighs more, with some chance in it,
   // so the enemy cannot count on one answer.
   function pickUnit(state, c, t, troops) {
-    const way = S.attackTargets(state, c.id).find((x) => x.id === t.id);
-    const P = way ? way.path[way.path.length - 2] : c.id;
-    const where = S.waterLink(state, P, t.id) ? "water" : "field";
-    const rough = S.linkRough(state, P, t.id);
     const gu = S.garrisonUnit(t);
     const luck = {};
     for (const k of Object.keys(S.UNITS)) luck[k] = 0.6 + S.rand(state) * 0.8;
@@ -168,7 +163,7 @@
       if (S.unitOf(k).gear) return 3 * luck[k]; // engines go where the walls are
       if (S.unitOf(k).aid) return 2 * luck[k];
       const walls = S.unitMul(k, gu, "siegeA", 1) / S.unitMul(gu, k, "siegeD", 1);
-      const field = where === "water" ? 1 : S.unitEdge(k, gu, where, rough); // on a river both sides fight in ships
+      const field = S.unitEdge(k, gu, "field", 1); // sorties meet the camp in the open
       return Math.pow(walls * field, 2) * luck[k];
     });
   }
