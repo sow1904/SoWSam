@@ -130,6 +130,10 @@
         // why: 유비 rules through the 익주 and 형주 great families beside his own
         // old followers: a 호족연합형 still close to 부곡형.
         gentry: 5,
+        // why: the men of 동주 (those who had come to 익주 with 유언) served
+        // 유장 before 유비 and stood apart from the 익주 natives and from
+        // 유비's own 형주 men.
+        former: { 유장: "유장 이엄 오의 오반 맹달 허정 유파" },
         tech: { spear: 2, sword: 2, bow: 2, irrigation: 2 },
         cities: {
           hanzhong: 30000, shujun: 15000, guanghan: 6000, bajun: 7000, badong: 5000,

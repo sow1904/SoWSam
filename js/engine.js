@@ -209,6 +209,15 @@
     for (const [a, b, months] of scenario.alliances || []) S.makePact(state, a, b, months);
     S.initRelations(state, scenario);
     S.initBonds(state);
+    // A scenario may say whom some officers served before (factions.js).
+    for (const f of scenario.forces) {
+      for (const [lord, names] of Object.entries(f.former || {})) {
+        for (const name of names.split(/\s+/).filter(Boolean)) {
+          const o = Object.values(state.officers).find((x) => x.name === name && x.force === f.id);
+          if (o) o.prev = { fid: null, name: lord };
+        }
+      }
+    }
     if (scenario.bondBonus) for (const o of Object.values(state.officers)) if (o.status === "serving" && !S.isRuler(state, o)) o.bond = Math.min(100, (o.bond || 0) + scenario.bondBonus);
     for (const [cid, over] of Object.entries(scenario.cityState || {})) {
       const c = state.cities[cid];

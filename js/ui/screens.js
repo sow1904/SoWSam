@@ -187,6 +187,8 @@
   }
   UI.showOfficers = lists.officers = function () {
     const me = UI.viewForce();
+    const facs = S.factions(state, me);
+    const facOf = (o) => { const g = S.factionOf(state, o, facs); return g ? g.name : S.isRuler(state, o) ? "군주" : "무파벌"; };
     const cols = [
       ["이름", (o) => o.name, (o) => `${S.isRuler(state, o) ? `<span class="crown" title="군주">主</span>` : ""}<b>${o.name}</b>${UI.personMarks(o)}`],
       ["소재", whereOf], ["나이", (o) => S.age(state, o)],
@@ -194,12 +196,35 @@
       ["충성", (o) => (S.isRuler(state, o) ? 101 : o.loyalty), (o) => (S.isRuler(state, o) ? "-" : o.loyalty)],
       ["유대", (o) => (S.isRuler(state, o) ? 101 : o.bond || 0), (o) => (S.isRuler(state, o) ? "-" : o.bond || 0)],
       ["상태", officerStatus],
+      ["파벌", facOf],
       ["성격", (o) => S.traitsOf(o).join(" "), UI.traitTags],
       ["특기", (o) => S.skillsOf(o).join(" "), UI.skillTags],
     ];
     const list = S.officersOf(state, me);
     UI.openModal(title(`${state.playerForce ? "" : S.forceName(state, me) + " "}무장 일람 (${list.length})`) + listTable("officers", cols, list, (o) => `class="pick" data-action="goto" data-city="${o.city}"`) +
-      `<p class="hint">제목을 누르면 그 열로 정렬합니다. 줄을 누르면 그 무장이 있는 곳으로 갑니다.</p>` + closeBar, true);
+      `<p class="hint">제목을 누르면 그 열로 정렬합니다. 줄을 누르면 그 무장이 있는 곳으로 갑니다.</p>` +
+      `<div class="footer"><button data-action="factions">파벌</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+  };
+
+  // ---------- factions ----------
+  const FACTION_KIND = { kin: "종친", old: "원종", turned: "구신", region: "출신 지역" };
+  UI.showFactions = lists.factions = function () {
+    const me = UI.viewForce();
+    if (!sorts.factions) sorts.factions = { col: 3, desc: true };
+    const cols = [
+      ["파벌", (g) => g.name, (g) => `<b>${g.name}</b>`],
+      ["갈래", (g) => FACTION_KIND[g.kind]],
+      ["수장", (g) => g.leader.name],
+      ["세력", (g) => Math.round(g.share * 100), (g) => `${Math.round(g.share * 100)}%`],
+      ["인원", (g) => g.members.length],
+      ["맡은 도시", (g) => g.cities.length, (g) => g.cities.map((c) => c.name).join(" ") || "-"],
+      ["병력", (g) => g.troops, (g) => fmt(g.troops)],
+      ["평균 유대", (g) => Math.round(g.members.reduce((s, o) => s + (o.bond || 0), 0) / g.members.length)],
+      ["구성원", (g) => g.members.length, (g) => `<span class="hint">${g.members.map((o) => o.name).join(" ")}</span>`],
+    ];
+    UI.openModal(title(`${S.forceName(state, me)} 파벌`) + listTable("factions", cols, S.factions(state, me)) +
+      `<p class="hint">${UI.HELP.factions}</p>` +
+      `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
   };
 
   // ---------- technology ----------
@@ -320,6 +345,7 @@
     forces: () => state && UI.showForces(),
     cities: () => state && UI.showCities(),
     officers: () => state && UI.showOfficers(),
+    factions: () => state && UI.showFactions(),
     diplomacy: () => state && UI.showDiplomacy(),
     court: () => state && UI.showCourt(),
     tech: () => state && UI.showTech(),
