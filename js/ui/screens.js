@@ -161,55 +161,96 @@
     $("#envEst").innerHTML = text;
   }
 
-  // ---------- the player's cities and officers ----------
+  // ---------- city and officer lists ----------
+  // Each list can show one force (the player's by default), every force, or
+  // what belongs to none (vacant cities, free officers).
+  const scopes = {};
+  const scopeOf = (key) => scopes[key] || UI.viewForce() || "all";
+  function scopePicker(key, noneLabel) {
+    const cur = scopeOf(key);
+    const opt = (v, label) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+    const forces = Object.values(state.forces).filter((f) => f.alive)
+      .sort((a, b) => (a.id === state.playerForce ? -1 : b.id === state.playerForce ? 1 : S.citiesOf(state, b.id).length - S.citiesOf(state, a.id).length));
+    return `<p class="scope">보기 <select id="listScope">${opt("all", "전체")}` +
+      forces.map((f) => opt(f.id, `${f.name}군${f.id === state.playerForce ? " (나)" : ""}`)).join("") + opt("none", noneLabel) + `</select></p>`;
+  }
+  function watchScope(key) {
+    UI.modalOnInput = () => {
+      const el = $("#listScope");
+      if (el && el.value !== scopeOf(key)) { scopes[key] = el.value; lists[key](); }
+    };
+  }
+  const ownerCell = (fid) => (fid && state.forces[fid] ? `${swatch(state.forces[fid])}${state.forces[fid].name}군` : `<span class="hint">-</span>`);
+
   UI.showCities = lists.cities = function () {
-    const me = UI.viewForce();
+    const scope = scopeOf("cities");
+    const all = S.cityList(state);
+    const rows = scope === "all" ? all : scope === "none" ? all.filter((c) => !c.owner) : all.filter((c) => c.owner === scope);
+    const mine = (c) => c.owner && c.owner === state.playerForce;
     const cols = [
       ["도시", (c) => c.name, (c) => `${S.isCapital(state, c.id) ? `<span class="capstar">★</span>` : ""}<b>${c.name}</b>`],
+      ...(scope === "all" ? [["세력", (c) => (c.owner ? state.forces[c.owner].name : ""), (c) => ownerCell(c.owner)]] : []),
       ["주", (c) => S.PROVINCES[c.prov]], ["군현", (c) => S.fullName(c)],
       ["병력", (c) => c.troops, (c) => fmt(c.troops)], ["훈련", (c) => c.train],
       ["금", (c) => c.gold, (c) => fmt(c.gold)], ["군량", (c) => c.food, (c) => fmt(c.food)],
-      ["월 수지", (c) => S.balance(c), (c) => UI.signed(S.balance(c))],
+      ["월 수지", (c) => (c.owner ? S.balance(c) : 0), (c) => (c.owner ? UI.signed(S.balance(c)) : "-")],
       ["인구", (c) => c.pop, (c) => fmt(c.pop)], ["치안", (c) => c.order],
       ["농업", (c) => c.farm], ["상업", (c) => c.trade], ["성벽", (c) => c.wall],
-      ["호족 협력", (c) => Math.round(c.consent)],
-      ["무장", (c) => S.serving(state, c.id).length, (c) => `${S.serving(state, c.id).length} <span class="hint">(대기 ${S.idle(state, c.id).length})</span>`],
-      ["통치", (c) => S.delegateOf(state, c) || "", (c) => (S.delegateOf(state, c) ? S.DELEGATE[S.delegateOf(state, c)] : "직접")],
+      ["호족 세력", (c) => Math.round(c.gentry)], ["호족 협력", (c) => Math.round(c.consent)],
+      ["무장", (c) => S.serving(state, c.id).length, (c) => `${S.serving(state, c.id).length}` + (mine(c) ? ` <span class="hint">(대기 ${S.idle(state, c.id).length})</span>` : "")],
+      ["통치", (c) => (mine(c) ? S.delegateOf(state, c) || "" : ""), (c) => (!mine(c) ? "-" : S.delegateOf(state, c) ? S.DELEGATE[S.delegateOf(state, c)] : "직접")],
     ];
-    UI.openModal(title(state.playerForce ? "도시 일람" : `${S.forceName(state, me)} 도시 일람`) + listTable("cities", cols, S.citiesOf(state, me), (c) => `class="pick" data-action="goto" data-city="${c.id}"`) +
-      `<p class="hint">제목을 누르면 그 열로 정렬합니다. 줄을 누르면 그 도시로 갑니다.</p>` + closeBar, true);
+    UI.openModal(title(`도시 일람 (${rows.length})`) + scopePicker("cities", "빈 땅") +
+      listTable("cities", cols, rows, (c) => `class="pick" data-action="goto" data-city="${c.id}"`) +
+      `<p class="hint">제목을 누르면 그 열로 정렬하고, 다시 누르면 순서를 뒤집습니다. 줄을 누르면 그 도시로 갑니다.</p>` + closeBar, true);
+    watchScope("cities");
   };
   const whereOf = (o) => S.placeName(state, o.city);
   function officerStatus(o) {
+    if (o.status === "captive") return `포로 (${S.forceName(state, o.captor)})`;
+    if (o.status === "free") return "재야";
     if (o.transit) return String(o.transit)[0] === "e" ? "사자" : "이동 중";
     const k = S.postOf(state, o);
-    return k ? `${S.POSTS[k].label} 담당` : o.done ? "완료" : "대기";
+    if (k) return `${S.POSTS[k].label} 담당`;
+    return o.force === state.playerForce ? (o.done ? "완료" : "대기") : "-";
   }
   UI.showOfficers = lists.officers = function () {
-    const me = UI.viewForce();
-    const facs = S.factions(state, me);
-    const facOf = (o) => { const g = S.factionOf(state, o, facs); return g ? g.name : S.isRuler(state, o) ? "군주" : "무파벌"; };
+    const scope = scopeOf("officers");
+    const shown = (o) => o.status === "serving" || o.status === "captive" || (o.status === "free" && !o.hidden);
+    const people = Object.values(state.officers).filter(shown);
+    const list = scope === "all" ? people : scope === "none" ? people.filter((o) => o.status === "free") : people.filter((o) => o.status === "serving" && o.force === scope);
+    const facs = {};
+    const facOf = (o) => {
+      if (o.status !== "serving") return "-";
+      if (S.isRuler(state, o)) return "군주";
+      const g = S.factionOf(state, o, facs[o.force] || (facs[o.force] = S.factions(state, o.force)));
+      return g ? g.name : "무파벌";
+    };
+    const serving = (o) => o.status === "serving" && !S.isRuler(state, o);
     const cols = [
       ["이름", (o) => o.name, (o) => `${S.isRuler(state, o) ? `<span class="crown" title="군주">主</span>` : ""}<b>${o.name}</b>${UI.personMarks(o)}`],
+      ...(scope === "all" ? [["세력", (o) => (o.status === "serving" ? state.forces[o.force].name : ""), (o) => (o.status === "serving" ? ownerCell(o.force) : `<span class="hint">-</span>`)]] : []),
       ["소재", whereOf], ["나이", (o) => S.age(state, o)],
       ...S.ABILITY_KEYS.map((k) => [S.ABILITY_NAMES[k], (o) => o[k]]),
-      ["충성", (o) => (S.isRuler(state, o) ? 101 : o.loyalty), (o) => (S.isRuler(state, o) ? "-" : o.loyalty)],
-      ["유대", (o) => (S.isRuler(state, o) ? 101 : o.bond || 0), (o) => (S.isRuler(state, o) ? "-" : o.bond || 0)],
+      ["충성", (o) => (serving(o) ? o.loyalty : -1), (o) => (serving(o) ? o.loyalty : "-")],
+      ["유대", (o) => (serving(o) ? o.bond || 0 : -1), (o) => (serving(o) ? o.bond || 0 : "-")],
       ["상태", officerStatus],
       ["파벌", facOf],
       ["성격", (o) => S.traitsOf(o).join(" "), UI.traitTags],
       ["특기", (o) => S.skillsOf(o).join(" "), UI.skillTags],
     ];
-    const list = S.officersOf(state, me);
-    UI.openModal(title(`${state.playerForce ? "" : S.forceName(state, me) + " "}무장 일람 (${list.length})`) + listTable("officers", cols, list, (o) => `class="pick" data-action="goto" data-city="${o.city}"`) +
-      `<p class="hint">제목을 누르면 그 열로 정렬합니다. 줄을 누르면 그 무장이 있는 곳으로 갑니다.</p>` +
+    UI.openModal(title(`무장 일람 (${list.length})`) + scopePicker("officers", "재야") +
+      listTable("officers", cols, list, (o) => `class="pick" data-action="goto" data-city="${o.city}"`) +
+      `<p class="hint">제목을 누르면 그 열로 정렬하고, 다시 누르면 순서를 뒤집습니다. 줄을 누르면 그 무장이 있는 곳으로 갑니다. 재야는 찾아낸 사람만 보입니다.</p>` +
       `<div class="footer"><button data-action="factions">파벌</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+    watchScope("officers");
   };
 
   // ---------- factions ----------
   const FACTION_KIND = { kin: "종친", old: "원종", turned: "구신", region: "출신 지역" };
   UI.showFactions = lists.factions = function () {
-    const me = UI.viewForce();
+    const sc = scopes.officers;
+    const me = sc && state.forces[sc] ? sc : UI.viewForce();
     if (!sorts.factions) sorts.factions = { col: 3, desc: true };
     const cols = [
       ["파벌", (g) => g.name, (g) => `<b>${g.name}</b>`],
