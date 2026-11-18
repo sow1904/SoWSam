@@ -140,6 +140,15 @@
       return;
     }
     if (caught.length) { pause("무장을 사로잡았습니다"); UI.showCaptives(caught); return; }
+    // A slander waits for the player's answer.
+    const sl = state.forces[state.playerForce] && state.forces[state.playerForce].slander;
+    const slKey = sl ? `${sl.by}>${sl.target}@${sl.until}` : null;
+    if (sl && clock.slander !== slKey && !S.spectating(state)) {
+      clock.slander = slKey;
+      pause("참소가 들어왔습니다");
+      UI.showSlander();
+      return;
+    }
     // A rising of the great families waits for the player's answer.
     const rising = UI.myCities().filter((c) => c.unrest && !S.delegateOf(state, c) && !(clock.risings || []).includes(c.id + "@" + c.unrest.day));
     if (rising.length) {

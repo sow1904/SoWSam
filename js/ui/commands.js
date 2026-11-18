@@ -309,6 +309,29 @@
     };
   };
 
+  // A slander in our court that waits for an answer.
+  UI.showSlander = function () {
+    const me = state.playerForce;
+    const sl = state.forces[me].slander;
+    if (!sl) {
+      if (UI.modalOpen()) UI.closeModal();
+      UI.renderAll();
+      return;
+    }
+    const by = state.officers[sl.by], t = state.officers[sl.target];
+    const fac = (o) => { const g = S.factionOf(state, o); return g ? g.name : "무파벌"; };
+    const row = (o, role) => `<tr><td>${role}</td><td><b>${o.name}</b></td><td>${fac(o)}</td><td>${S.placeName(state, o.city)}</td>` +
+      `<td>${o.loyalty}</td><td>${Math.round(o.bond || 0)}</td><td>${o.pol}</td><td>${o.speech}</td><td>${S.traitsOf(o).join(" ") || "-"}</td></tr>`;
+    UI.openModal(title("참소") +
+      `<p>${S.josa(by.name, "이", "가")} ${S.josa(t.name, "을", "를")} 헐뜯으며 딴마음을 품었다고 아룁니다.</p>` +
+      `<table class="tbl"><tr><th></th><th>이름</th><th>파벌</th><th>소재</th><th>충성</th><th>유대</th><th>정치</th><th>언변</th><th>성격</th></tr>` +
+      row(by, "참소한 사람") + row(t, "참소당한 사람") + `</table>` +
+      `<p class="hint">믿으면 ${t.name}의 충성 -${S.STRIFE.hit.loyalty}, 유대 -${S.STRIFE.hit.bond}, 맡은 도시가 있으면 수도로 불러들입니다. ` +
+      `물리치면 ${by.name}의 충성 -${S.STRIFE.back.loyalty}, 유대 -${S.STRIFE.back.bond}. 컴퓨터 군주라면 믿을 확률 ${S.believeChance(state, me, by, t)}%.</p>` +
+      `<div class="links"><button data-action="slanderYes">믿는다</button> <button data-action="slanderNo">물리친다</button></div>` +
+      `<div class="footer"><button class="primary" data-action="close">나중에 정한다</button></div>`, true);
+  };
+
   // Risings of the great families in our cities that wait for an answer.
   UI.showUnrest = function () {
     const me = state.playerForce;
@@ -470,6 +493,9 @@
     },
     doReward: (d) => { if (UI.result(S.reward(state, UI.selected, d.oid))) commands.reward(); },
     unrest: () => UI.showUnrest(),
+    slander: () => UI.showSlander(),
+    slanderYes: () => { UI.result(S.answerSlander(state, state.playerForce, true)); UI.showSlander(); },
+    slanderNo: () => { UI.result(S.answerSlander(state, state.playerForce, false)); UI.showSlander(); },
     stepDown: () => {
       const me = state.playerForce;
       const ruler = state.officers[state.forces[me].ruler];

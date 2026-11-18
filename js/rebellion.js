@@ -1,6 +1,8 @@
 // Rebellion (반란) and stepping down (하야).
 //
-// 반란: the head of a city away from the capital who is ill content (low
+// 반란: only in a great realm, one that has held 25 cities or more for three
+// years (a small lord keeps his captains close). There the head of a city
+// away from the capital who is ill content (low
 // loyalty, little bond with the lord) may raise his own banner. Those of his
 // faction heading other cities who are no happier go with him. How likely
 // depends on his nature, on how strong his garrison stands against the
@@ -11,7 +13,8 @@
 // the court whose leader has no bond with the lord may force him out and put
 // up its own man. Either way the succession (js/succession.js) follows, with
 // all its strife.
-// why: the user wanted rebellion and 하야 as ways to break up a stalemate.
+// why: the user wanted rebellion and 하야 as ways to break up a stalemate,
+// rebellion only once a force has grown large, and 하야 rare.
 (function (S) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const R = S.REBEL = {
@@ -20,12 +23,13 @@
     nature: { 야심: 2, 변심: 1.5, 의리: 0.15, 무욕: 0.3 },
     regime: { 중앙집권형: 0.6, 부곡형: 1, 호족연합형: 1.4 },
     kin: 0.5, max: 12,
+    big: { cities: 25, months: 36 }, // risings only in a force holding this many cities this long
     join: { bond: 50, loyalty: 70 }, // faction fellows heading cities join below both of these
     follow: 60, // those serving in the cities go along below this bond with the lord
     // A faction forcing the ruler out: % a month = (share - from) x rate x (bond short of the bar) / 20.
     // Not within settle months of a new lord, nor by a leader loyal to loyalty or more.
-    forced: { share: 0.45, from: 0.4, bond: 25, loyalty: 70, rate: 6, max: 6, settle: 36 },
-    old: 62, oldRate: 4, // a computer lord past this age steps down: % a year per year past it
+    forced: { share: 0.5, from: 0.4, bond: 25, loyalty: 70, rate: 2, max: 2, settle: 36 },
+    old: 65, oldRate: 2, // a computer lord past this age steps down: % a year per year past it
   };
   const NATURE = { 야심: 2, 의리: 0.2, 무욕: 0.3 };
   const rulerOf = (state, fid) => (fid && state.forces[fid] ? state.officers[state.forces[fid].ruler] : null);
@@ -33,11 +37,23 @@
   const weary = (state, fid) => 1 + (state.forces[fid].weariness || 0) / 100;
 
   // ---------- rebellion ----------
+  // Months until the force is great enough to see risings (0: it is now),
+  // or null while it holds too few cities.
+  S.rebelWait = function (state, fid) {
+    const f = state.forces[fid];
+    if (!f || f.bigSince == null) return null;
+    return Math.max(0, R.big.months - (S.monthsElapsed(state) - f.bigSince));
+  };
+  function trackSize(state, f) {
+    if (S.citiesOf(state, f.id).length >= R.big.cities) { if (f.bigSince == null) f.bigSince = S.monthsElapsed(state); }
+    else f.bigSince = null;
+  }
   // % a month that o, at the head of c, rises.
   S.rebelChance = function (state, o, c) {
     const fid = o && o.force;
     if (!fid || o.status !== "serving" || S.isRuler(state, o) || c.owner !== fid) return 0;
-    if (S.capitalOf(state, fid) === c.id || S.cityHead(state, c) !== o || S.citiesOf(state, fid).length < 2) return 0;
+    if (S.rebelWait(state, fid) !== 0) return 0;
+    if (S.capitalOf(state, fid) === c.id || S.cityHead(state, c) !== o) return 0;
     const d = Math.max(0, R.loyalty - o.loyalty) + Math.max(0, R.bond - (o.bond || 0)) / 2;
     if (!d) return 0;
     let p = d * R.rate;
@@ -111,6 +127,7 @@
   S.runRebellion = function (state) {
     for (const f of Object.values(state.forces)) {
       if (!f.alive || !rulerOf(state, f.id)) continue;
+      trackSize(state, f);
       const ruler = rulerOf(state, f.id);
       if (ruler.status !== "serving") continue;
       const out = S.forcedOutlook(state, f.id);

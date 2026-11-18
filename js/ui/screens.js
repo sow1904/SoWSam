@@ -274,10 +274,25 @@
     const out = S.forcedOutlook(state, fid);
     const forced = out.g ? `<p class="bad">${S.josa(out.g.name, "이", "가")} 군주를 몰아낼 위험이 있습니다 (월 ${out.p}%, 수장 ${out.g.leader.name}, 유대 ${Math.round(out.g.leader.bond || 0)}).</p>` : "";
     const mine = fid === state.playerForce && S.canStepDown(state, fid);
-    return `<h3>반란과 하야</h3>` +
-      (rows ? `<table class="tbl"><tr><th>태수</th><th>도시</th><th>충성</th><th>유대</th><th>함께 떨어질 도시</th><th>반란 위험</th></tr>${rows}</table>` : `<p>반기를 들 만한 태수는 없습니다.</p>`) +
+    const wait = S.rebelWait(state, fid);
+    const size = wait == null ? `<p>성이 ${S.REBEL.big.cities}개가 안 되는 세력이라 반란은 일어나지 않습니다.</p>`
+      : wait > 0 ? `<p>성을 ${S.REBEL.big.cities}개 이상 가진 지 오래지 않아 ${wait}달 뒤부터 반란이 일어날 수 있습니다.</p>` : "";
+    return `<h3>반란과 하야</h3>` + size +
+      (wait !== 0 ? "" : rows ? `<table class="tbl"><tr><th>태수</th><th>도시</th><th>충성</th><th>유대</th><th>함께 떨어질 도시</th><th>반란 위험</th></tr>${rows}</table>` : `<p>반기를 들 만한 태수는 없습니다.</p>`) +
       forced + `<p class="hint">${UI.HELP.rebellion} ${UI.HELP.stepDown}</p>` +
       (mine ? `<div class="links"><button data-action="stepDown">하야 (후계자에게 물려주기)</button></div>` : "");
+  }
+  // The quarrel most likely, the faction in favour, and a slander waiting.
+  function strifeBlock(fid) {
+    const out = S.strifeOutlook(state, fid);
+    const fav = S.favored(state, fid);
+    const f = state.forces[fid];
+    const sl = fid === state.playerForce && f.slander;
+    return `<h3>알력다툼과 참소</h3>` +
+      (out ? `<p>${S.josa(out.a.name, "과", "와")} ${out.b.name} 사이 긴장 ${out.tension}, 알력다툼 위험 석 달에 ${out.p}%.</p>` : `<p>맞설 만큼 큰 파벌이 둘이 되지 않아 알력다툼은 없습니다.</p>`) +
+      (fav ? `<p>${S.josa(fav.name, "이", "가")} 군주의 총애를 받고 있습니다 (${fav.until - S.monthsElapsed(state)}달 남음).</p>` : "") +
+      (sl ? `<p class="bad">${S.josa(state.officers[sl.by].name, "이", "가")} ${S.josa(state.officers[sl.target].name, "을", "를")} 참소했습니다. <button data-action="slander">처리</button></p>` : "") +
+      `<p class="hint">${UI.HELP.strife}</p>`;
   }
   UI.showFactions = lists.factions = function () {
     const sc = scopes.officers;
@@ -295,7 +310,7 @@
       ["구성원", (g) => g.members.length, (g) => `<span class="hint">${g.members.map((o) => o.name).join(" ")}</span>`],
     ];
     UI.openModal(title(`${S.forceName(state, me)} 파벌`) + listTable("factions", cols, S.factions(state, me)) +
-      `<p class="hint">${UI.HELP.factions}</p>` + heirBlock(me) + unrestBlock(me) +
+      `<p class="hint">${UI.HELP.factions}</p>` + heirBlock(me) + unrestBlock(me) + strifeBlock(me) +
       `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
     UI.modalOnInput = () => {
       const el = $("#heirPick");
