@@ -237,6 +237,7 @@
       ["상태", officerStatus],
       ["파벌", facOf],
       ["성격", (o) => S.traitsOf(o).join(" "), UI.traitTags],
+      ["성향", (o) => S.REACH.indexOf(S.reachOf(o)), (o) => `<span title="${S.REACH_HELP[S.reachOf(o)]}">${S.reachOf(o)}</span>`],
       ["특기", (o) => S.skillsOf(o).join(" "), UI.skillTags],
     ];
     UI.openModal(title(`무장 일람 (${list.length})`) + scopePicker("officers", "재야") +
@@ -294,6 +295,17 @@
       (sl ? `<p class="bad">${S.josa(state.officers[sl.by].name, "이", "가")} ${S.josa(state.officers[sl.target].name, "을", "를")} 참소했습니다. <button data-action="slander">처리</button></p>` : "") +
       `<p class="hint">${UI.HELP.strife}</p>`;
   }
+  // The ruler's reach and what he means to hold.
+  function reachLine(fid) {
+    const ruler = state.officers[state.forces[fid].ruler];
+    const reach = S.reachOf(ruler);
+    const dom = S.domainOf(state, fid);
+    const names = !dom ? "천하" : !dom.key ? "자기 성" :
+      [...dom.want].map((k) => (reach === "주" ? S.PROVINCES[k] : S.REGIONS[k] && S.REGIONS[k].name)).filter(Boolean).join("·");
+    const aim = dom && !dom.key ? "빼앗긴 성 말고는 노리지 않습니다" : `${S.josa(names, "을", "를")} 노립니다`;
+    return `<p>군주 성향 <b>${reach}</b>: ${S.REACH_HELP[reach]} ` +
+      (fid === state.playerForce ? `<span class="hint">(플레이어 세력은 성향과 상관없이 직접 정합니다. 컴퓨터가 맡으면 ${aim}.)</span>` : `지금은 ${aim}.`) + `</p>`;
+  }
   UI.showFactions = lists.factions = function () {
     const sc = scopes.officers;
     const me = sc && state.forces[sc] ? sc : UI.viewForce();
@@ -309,7 +321,7 @@
       ["평균 유대", (g) => Math.round(g.members.reduce((s, o) => s + (o.bond || 0), 0) / g.members.length)],
       ["구성원", (g) => g.members.length, (g) => `<span class="hint">${g.members.map((o) => o.name).join(" ")}</span>`],
     ];
-    UI.openModal(title(`${S.forceName(state, me)} 파벌`) + listTable("factions", cols, S.factions(state, me)) +
+    UI.openModal(title(`${S.forceName(state, me)} 파벌`) + reachLine(me) + listTable("factions", cols, S.factions(state, me)) +
       `<p class="hint">${UI.HELP.factions}</p>` + heirBlock(me) + unrestBlock(me) + strifeBlock(me) +
       `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
     UI.modalOnInput = () => {

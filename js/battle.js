@@ -804,6 +804,8 @@
     }
     const gave = [stay > 0 && `수비군 ${stay}명`, stayW && stayW.n > 0 && `부상병 ${stayW.n}명`].filter(Boolean);
     if (gave.length) say(b, `${gave.join("과 ")}이 투항했습니다.`);
+    // Remembered so the loser wants it back (js/ai.js, S.wantsTarget).
+    t.lost = defForce ? { fid: defForce, at: S.monthsElapsed(state) } : null;
     t.owner = A.force;
     t.posts = S.emptyPosts();
     if (!fort) {

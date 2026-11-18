@@ -175,8 +175,30 @@
     fn();
     box().forEach((el, i) => { if (el && tops[i] != null) el.scrollTop = tops[i]; });
   };
+  // Kinds of news, for the legend under the map that filters the log.
+  UI.LOG_KINDS = [
+    ["war", "전투", ["war", "warfail"]], ["fall", "큰일", ["fall", "threat"]], ["warn", "경고", ["warn"]],
+    ["mine", "명령", ["mine"]], ["sys", "알림", ["sys"]], ["info", "소식", ["info"]], ["strife", "궁정", ["strife"]],
+  ];
+  const LOG_KEY = "sowsam.logFilter";
+  UI.logHidden = (() => { try { return new Set(JSON.parse(localStorage.getItem(LOG_KEY)) || []); } catch (e) { return new Set(); } })();
+  UI.toggleLogKind = function (k) {
+    if (UI.logHidden.has(k)) UI.logHidden.delete(k); else UI.logHidden.add(k);
+    try { localStorage.setItem(LOG_KEY, JSON.stringify([...UI.logHidden])); } catch (e) { /* the filter just is not kept */ }
+    UI.renderLog();
+  };
+  function renderLegend() {
+    const el = $("#logLegend");
+    if (!el || el.dataset.built) return;
+    el.dataset.built = "1";
+    UI.setHTML(el, `<span class="lg-title">전황 보기</span>` + UI.LOG_KINDS.map(([k, label]) =>
+      `<label class="${k}"><input type="checkbox" data-logkind="${k}"${UI.logHidden.has(k) ? "" : " checked"}><i></i>${label}</label>`).join(""));
+    el.addEventListener("change", (e) => { const k = e.target.dataset.logkind; if (k) UI.toggleLogKind(k); });
+  }
   UI.renderLog = function () {
-    const entries = state.log.slice(-80).reverse();
+    renderLegend();
+    const hide = new Set(UI.LOG_KINDS.filter(([k]) => UI.logHidden.has(k)).flatMap(([, , kinds]) => kinds));
+    const entries = state.log.filter((e) => !hide.has(e.kind)).slice(-80).reverse();
     UI.setHTML($("#log"), entries.map((e) =>
       `<div class="${e.kind}"><i>${e.y}.${e.m}${e.d ? "." + e.d : ""}</i>${e.text}</div>`).join(""));
   };

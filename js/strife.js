@@ -68,7 +68,7 @@
     loss(state, lose.leader, "loyalty", T.lose.leader);
     f.favor = { key: win.key, name: win.name, until: S.monthsElapsed(state) + T.favorMonths };
     const msg = `${S.forceName(state, fid)}에서 ${S.josa(win.name, "과", "와")} ${S.josa(lose.name, "이", "가")} 알력을 다투어 ${S.josa(lose.name, "이", "가")} 밀려났습니다.`;
-    S.addLog(state, msg, fid === state.playerForce ? "warn" : "info");
+    S.addLog(state, msg, fid === state.playerForce ? "warn" : "strife");
     return { win, lose };
   }
 
@@ -126,7 +126,7 @@
       S.bondAdd(state, target, T.back.target);
       msg = `${by.name}의 참소를 물리쳤습니다. ${S.josa(by.name, "은", "는")} 체면을 잃었습니다.`;
     }
-    if (pending) S.addLog(state, `${S.forceName(state, fid)}에서 ${S.josa(by.name, "이", "가")} ${S.josa(target.name, "을", "를")} 참소했습니다. ${msg}`, "info");
+    if (pending) S.addLog(state, `${S.forceName(state, fid)}에서 ${S.josa(by.name, "이", "가")} ${S.josa(target.name, "을", "를")} 참소했습니다. ${msg}`, "strife");
     return { ok: true, msg };
   };
 

@@ -10,8 +10,45 @@
   // Along the roads, so enemy strongholds must be taken before what lies behind them.
   function attackable(state, c) {
     const truce = S.inTruce(state);
-    return S.attackTargets(state, c.id).map((x) => S.place(state, x.id)).filter((n) => !truce || !n.owner);
+    const mine = c.owner === state.playerForce;
+    const dom = mine ? null : S.domainOf(state, c.owner);
+    return S.attackTargets(state, c.id).map((x) => S.place(state, x.id))
+      .filter((n) => (!truce || !n.owner) && (mine || S.wantsTarget(state, c.owner, n, dom)));
   }
+
+  // How far a computer lord means to reach (js/data/ambition.js):
+  // {reach, key, want} with want the provinces (주) or regions (지방) he
+  // means to hold, or null for one who would have the whole realm.
+  S.AMBITION = { retake: 36 }; // months a lost city is still wanted back
+  S.domainOf = function (state, fid) {
+    const f = state.forces[fid];
+    const ruler = f && state.officers[f.ruler];
+    const reach = S.reachOf(ruler);
+    if (reach === "천하") return null;
+    if (reach === "성") return { reach, key: null, want: new Set() };
+    const key = reach === "주" ? (c) => c.prov : (c) => S.regionOf(c);
+    const cap = state.cities[S.capitalOf(state, fid)];
+    const want = new Set(cap ? [key(cap)] : []);
+    // Where he already holds half or more, he means to have the rest.
+    const tally = {};
+    for (const c of S.cityList(state)) {
+      const t = (tally[key(c)] = tally[key(c)] || { held: 0, total: 0 });
+      t.total++;
+      if (c.owner === fid) t.held++;
+    }
+    for (const [k, t] of Object.entries(tally)) if (t.held && t.held * 2 >= t.total) want.add(k);
+    return { reach, key, want };
+  };
+  // Does fid want to take t (a city or a stronghold)?
+  S.wantsTarget = function (state, fid, t, dom) {
+    if (t.lost && t.lost.fid === fid && S.monthsElapsed(state) - t.lost.at < S.AMBITION.retake) return true;
+    if (dom === undefined) dom = S.domainOf(state, fid);
+    if (!dom) return true;
+    if (!dom.key) return false;
+    // A stronghold on the road counts for the cities it stands between.
+    if (t.road) return t.road.some((id) => state.cities[id] && dom.want.has(dom.key(state.cities[id])));
+    return dom.want.has(dom.key(t));
+  };
 
   // Next step from an interior city toward the nearest frontier city.
   function stepToFront(state, c) {

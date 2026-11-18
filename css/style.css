@@ -156,6 +156,27 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 #log .sys { color: var(--gold2); }
 #log .mine { color: var(--ink); }
 #log .threat { color: var(--bad); font-weight: 600; }
+#log .strife { color: #9c8f78; }
+
+/* The log filter: a ledge of the panel that sticks out over the map at the
+   bottom left, so the log column and it read as one ㄴ. */
+#logLegend {
+  position: absolute; left: 0; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px;
+  max-width: calc(100% - 16px); padding: 5px 12px 6px 10px; font-size: 12px;
+  background: var(--panel); border-top: 1px solid #a8843c; border-right: 1px solid #a8843c; border-top-right-radius: 4px;
+  box-shadow: 2px -2px 8px rgba(0, 0, 0, 0.45);
+}
+#logLegend .lg-title { color: var(--gold2); letter-spacing: 1px; margin-right: 2px; }
+#logLegend label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+#logLegend input { margin: 0; accent-color: #a8843c; }
+#logLegend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; background: var(--muted); }
+#logLegend .war i { background: #f0b35e; }
+#logLegend .fall i { background: var(--bad); }
+#logLegend .warn i { background: var(--bad); opacity: 0.7; }
+#logLegend .mine i { background: var(--ink); }
+#logLegend .sys i { background: var(--gold2); }
+#logLegend .info i { background: var(--muted); }
+#logLegend .strife i { background: #9c8f78; }
 
 #pauseBadge {
   position: absolute; left: 12px; top: 10px; padding: 3px 12px; border-radius: 2px; font-family: var(--serif); letter-spacing: 3px;
