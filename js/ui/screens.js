@@ -248,6 +248,21 @@
 
   // ---------- factions ----------
   const FACTION_KIND = { kin: "종친", old: "원종", turned: "구신", region: "출신 지역" };
+  // Who would follow the ruler, and how the factions would line up.
+  function heirBlock(fid) {
+    const out = S.successionOutlook(state, fid);
+    if (!out.length) return "";
+    const kin = S.heirCandidates(state, fid).length > 0;
+    const rows = out.map((x) => `<tr><td><b>${x.o.name}</b>${x.named ? ` <em>${kin ? "후계자" : "유력"}</em>` : ""}</td><td>${S.placeName(state, x.o.city)}</td>` +
+      `<td>${Math.round(x.share * 100)}%</td></tr>`).join("");
+    const second = out.find((x) => !x.named) || null;
+    const risk = second ? S.splitChance(state, fid, second.o, second.share) : 0;
+    const mine = fid === state.playerForce && kin;
+    const pick = mine ? `<p>후계자 지명 <select id="heirPick"><option value="">가문의 서열대로</option>` +
+      S.heirCandidates(state, fid).map((o) => `<option value="${o.id}"${state.forces[fid].heir === o.id ? " selected" : ""}>${o.name}</option>`).join("") + `</select></p>` : "";
+    return `<h3>후계 구도</h3>${pick}<table class="tbl"><tr><th>${kin ? "후보" : "후보 (가문 없음)"}</th><th>소재</th><th>파벌 지지</th></tr>${rows}</table>` +
+      `<p class="hint">${UI.HELP.succession}` + (second ? ` 지금 군주가 쓰러지면 ${S.josa(second.o.name, "이", "가")} 갈라져 나갈 가능성은 약 ${risk}%입니다.` : "") + `</p>`;
+  }
   UI.showFactions = lists.factions = function () {
     const sc = scopes.officers;
     const me = sc && state.forces[sc] ? sc : UI.viewForce();
@@ -264,8 +279,12 @@
       ["구성원", (g) => g.members.length, (g) => `<span class="hint">${g.members.map((o) => o.name).join(" ")}</span>`],
     ];
     UI.openModal(title(`${S.forceName(state, me)} 파벌`) + listTable("factions", cols, S.factions(state, me)) +
-      `<p class="hint">${UI.HELP.factions}</p>` +
+      `<p class="hint">${UI.HELP.factions}</p>` + heirBlock(me) +
       `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+    UI.modalOnInput = () => {
+      const el = $("#heirPick");
+      if (el && (el.value || null) !== (state.forces[me].heir || null)) { UI.result(S.setHeir(state, me, el.value || null)); UI.showFactions(); }
+    };
   };
 
   // ---------- technology ----------

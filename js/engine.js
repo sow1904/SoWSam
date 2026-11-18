@@ -25,7 +25,8 @@
   // Numbers are read by their last digit (영 일 이 삼 사 오 육 칠 팔 구).
   const DIGIT_FINAL = [1, 8, 0, 1, 0, 0, 1, 8, 8, 0]; // 0 none, 1 a final, 8 a final ㄹ
   function finalOf(word) {
-    word = String(word);
+    // A name with hanja after it, 양홍(楊洪): read the Hangul before them.
+    word = String(word).replace(/\([^)]*\)$/, "");
     const last = word[word.length - 1];
     if (last >= "0" && last <= "9") return DIGIT_FINAL[+last];
     const code = word.charCodeAt(word.length - 1) - 0xac00;
@@ -1064,15 +1065,12 @@
         cities.forEach((c) => (c.owner = null));
         return checkForce(state, fid, report, foe);
       }
-      const heir = S.pickHeir(ruler, heirs);
-      f.ruler = heir.id;
-      heir.loyalty = 100;
-      S.heirBonds(state, fid, ruler, heir);
-      f.name = heir.name;
-      const how = ruler.status === "dead" ? "세상을 떠나" : "사로잡혀";
-      const msg = `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(heir.name, "이", "가")} 세력을 이어받았습니다.`;
-      if (report) report.lines.push(msg);
-      S.addLog(state, msg, "fall");
+      // Who follows, and whether the force holds together (js/succession.js).
+      const msgs = S.succeed(state, fid, ruler, heirs);
+      for (const msg of msgs) {
+        if (report) report.lines.push(msg);
+        S.addLog(state, msg, "fall");
+      }
     }
     S.capitalOf(state, fid);
   }
