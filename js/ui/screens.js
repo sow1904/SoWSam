@@ -248,7 +248,7 @@
   };
 
   // ---------- factions ----------
-  const FACTION_KIND = { kin: "종친", old: "원종", turned: "구신", region: "출신 지역" };
+  const FACTION_KIND = { kin: "종친", old: "원종", han: "한조", turned: "구신", region: "출신 지역" };
   // Who would follow the ruler, and how the factions would line up.
   function heirBlock(fid) {
     const out = S.successionOutlook(state, fid);
@@ -293,7 +293,15 @@
       (out ? `<p>${S.josa(out.a.name, "과", "와")} ${out.b.name} 사이 긴장 ${out.tension}, 알력다툼 위험 석 달에 ${out.p}%.</p>` : `<p>맞설 만큼 큰 파벌이 둘이 되지 않아 알력다툼은 없습니다.</p>`) +
       (fav ? `<p>${S.josa(fav.name, "이", "가")} 군주의 총애를 받고 있습니다 (${fav.until - S.monthsElapsed(state)}달 남음).</p>` : "") +
       (sl ? `<p class="bad">${S.josa(state.officers[sl.by].name, "이", "가")} ${S.josa(state.officers[sl.target].name, "을", "를")} 참소했습니다. <button data-action="slander">처리</button></p>` : "") +
-      `<p class="hint">${UI.HELP.strife}</p>`;
+      `<p class="hint">${UI.HELP.strife}</p>` + hanBlock(fid);
+  }
+  function hanBlock(fid) {
+    const g = S.hanFaction(state, fid);
+    if (!g) return "";
+    const out = S.plotOutlook(state, fid);
+    return `<h3>한조파</h3><p>헌제를 모신 세력이라 한조를 중시하는 ${S.josa(g.members.map((o) => o.name).join(" "), "이", "가")} 한조파를 이룹니다. ` +
+      (out.g ? `<span class="bad">헌제 우호도가 낮아 군주 암살을 꾀할 위험이 석 달에 ${out.p}%입니다.</span>` : `헌제 우호도가 ${S.HAN_PLOT.favor} 이상이라 암살을 꾀하지 않습니다.`) +
+      `</p><p class="hint">${UI.HELP.hanPlot}</p>`;
   }
   // The ruler's reach and what he means to hold.
   function reachLine(fid) {

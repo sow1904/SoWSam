@@ -110,7 +110,8 @@
   };
 
   // The ruler is gone (dead, taken, or stepped down): someone follows.
-  // opts.by: the faction that forced him out. Returns log lines.
+  // opts.by: the faction that forced him out (opts.verb: how, for the
+  // news; opts.take: its leader takes the seat). Returns log lines.
   S.succeed = function (state, fid, ruler, heirs, opts) {
     opts = opts || {};
     const f = state.forces[fid];
@@ -120,7 +121,10 @@
     const how = ruler.status === "dead" ? "세상을 떠나" : ruler.status === "captive" ? "사로잡혀" : "물러나";
     const top = [...r.backing.entries()].sort((a, b) => b[1] - a[1])[0];
     let seized = false;
-    if (opts.by && r.sides.get(opts.by)) {
+    if (opts.by && opts.take) {
+      // Those who struck him down take the seat themselves.
+      heir = opts.by.leader;
+    } else if (opts.by && r.sides.get(opts.by)) {
       // Those who forced him out choose who follows.
       heir = r.sides.get(opts.by);
     } else if (top && top[0] !== heir && top[1] > (r.backing.get(heir) || 0) * C.usurp) {
@@ -141,7 +145,7 @@
     S.heirBonds(state, fid, ruler, heir);
     f.name = heir.name;
     msgs.push(opts.by
-      ? `${S.josa(opts.by.name, "이", "가")} ${S.josa(ruler.name, "을", "를")} 몰아내고 ${S.josa(heir.name, "을", "를")} 세웠습니다.`
+      ? `${S.josa(opts.by.name, "이", "가")} ${S.josa(ruler.name, "을", "를")} ${opts.verb || "몰아내고"} ${S.josa(heir.name, "을", "를")} 세웠습니다.`
       : seized
       ? `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(r.named.name, "이", "가")} 뒤를 이을 참이었으나, ${S.josa(heir.name, "이", "가")} 정변을 일으켜 세력을 차지했습니다.`
       : `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(heir.name, "이", "가")} 세력을 이어받았습니다.`);

@@ -1125,6 +1125,7 @@
     }
     if (S.runRebellion) S.runRebellion(state);
     if (S.runStrife) S.runStrife(state);
+    if (S.runHanPlot) S.runHanPlot(state);
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;

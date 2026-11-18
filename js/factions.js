@@ -5,6 +5,8 @@
 //   종친 - the ruler's own clan.
 //   원종 - those bound to the ruler by an old, close tie (70 or more):
 //          sworn brothers, trusted lieutenants, old friends.
+//   한조파 - in the force that keeps 헌제, those who hold the Han dear
+//          (한조중시); see js/hanplot.js.
 //   구신 - those who came over together from one other force (by capture,
 //          surrender, or the fall of their lord): three or more of them make
 //          "<that force> 구신".
@@ -66,6 +68,8 @@
   function claim(state, o, ruler, turned) {
     if (sameClan(o, ruler)) return { key: "kin", name: "종친", kind: "kin" };
     if (S.tieOf(o, ruler) >= F.old) return { key: "old", name: "원종", kind: "old" };
+    const han = state.han;
+    if (o.han === "H" && han && !han.ended && han.holder && han.holder === ruler.force) return { key: "han", name: "한조파", kind: "han" };
     if (o.prev && turned[prevKey(o)] >= F.turned) return { key: "t:" + prevKey(o), name: `${o.prev.name} 구신`, kind: "turned" };
     const bloc = S.homeBloc(o);
     return bloc ? { key: "r:" + bloc, name: `${bloc}파`, kind: "region" } : null;
@@ -102,7 +106,7 @@
       const h = S.cityHead(state, c);
       if (h && h.id !== ruler.id) heads.set(h.id, c);
     }
-    const list = [...groups.values()].filter((g) => g.members.length >= 2 || g.kind === "kin" || g.kind === "old");
+    const list = [...groups.values()].filter((g) => g.members.length >= 2 || g.kind === "kin" || g.kind === "old" || g.kind === "han");
     for (const g of list) {
       g.leader = g.members.reduce((a, b) => (standing(b) > standing(a) ? b : a));
       g.cities = g.members.filter((o) => heads.has(o.id)).map((o) => heads.get(o.id));

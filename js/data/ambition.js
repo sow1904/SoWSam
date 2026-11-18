@@ -40,13 +40,13 @@
   // From the histories. Lords first, then subjects who aimed beyond their
   // station (주유's 천하이분지계, 노숙's 탑상책) or were content below it.
   const LINES = `
-  천하: 동탁 원소 원술 조조 조비 조예 손책 유비 사마의 사마사 사마소 사마염 종회
+  천하: 동탁 원소 원술 손견 조조 조비 조예 손책 유비 사마의 사마사 사마소 사마염 종회
         주유 노숙 제갈량 강유 곽가 법정 방통 진궁 위연
-  지방: 손견 손권 공손찬 원담 원상 유언 마초 한수 손등 손화 손패 손휴 유선 육손 여몽
+  지방: 손권 공손찬 여포 마등 도겸 원담 원상 유언 마초 한수 손등 손화 손패 손휴 유선 육손 여몽
         등애 조창 이각 곽사 가비능 장임
-  주:   여포 유표 유기 유종 유장 마등 마휴 마철 공손도 공손강 공손공 공손연 사섭 사휘 엄백호
-        도겸 유우 한복 원희 유요 맹획 사마랑 장수
-  성:   장로 장위 장막 장초 포신 유대 유총 공융 왕랑 화흠 장연 장양 장홍 왕광 동승 왕윤
+  주:   유표 유기 유종 유장 마휴 마철 공손도 공손강 공손공 공손연 사섭 사휘 엄백호
+        유우 유대 장막 한복 원희 유요 맹획 사마랑 장수
+  성:   장로 장위 장초 포신 유총 공융 왕랑 화흠 장연 장양 장홍 왕광 동승 왕윤
         조식 사일 사유 사무 축융
 `;
   const SET = {};
@@ -60,10 +60,12 @@
   S.reachOf = function (o) {
     if (!o) return "주";
     if (SET[o.name]) return SET[o.name];
+    // Lean toward the wider reaches: the age was one of warlords who meant
+    // to grow (the user asked for more 천하 and 지방).
     const able = ((o.cmd || 0) + (o.pol || 0) + (o.strat || 0)) / 3;
-    if (S.hasTrait(o, "야심")) return able >= 75 ? "천하" : "지방";
-    if (S.hasTrait(o, "무욕")) return "성";
-    if (S.hasTrait(o, "의리")) return "주";
-    return ((o.cmd || 0) + (o.pol || 0)) / 2 >= 70 ? "주" : "성";
+    if (S.hasTrait(o, "야심")) return able >= 62 ? "천하" : "지방";
+    if (S.hasTrait(o, "무욕")) return able >= 80 ? "주" : "성";
+    if (S.hasTrait(o, "의리")) return able >= 72 ? "지방" : "주";
+    return able >= 78 ? "천하" : able >= 66 ? "지방" : able >= 55 ? "주" : "성";
   };
 })(globalThis.SAM = globalThis.SAM || {});
