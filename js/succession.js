@@ -11,13 +11,18 @@
 // force's regime (a 중앙집권형 state holds its armies; in a 호족연합형 one
 // the families follow their own men) and on his nature. If he stays, his
 // backers resent it and the winner's backers are rewarded.
-// With no clan left, the leaders of the two strongest factions contend.
+// With fewer than two of the clan, the leader of the strongest faction outside
+// it contends as well (a 권신), and with no clan the two strongest leaders.
+// A ruler may also step down (하야), by choice or forced out by a faction; then
+// the faction that forced him puts up its own man (js/rebellion.js).
+// why: the user wanted about half of all successions to split the force, to
+// break up stalemates.
 (function (S) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const C = S.SUCCESSION = {
     usurp: 1.25, // a rival with this much more backing than the appointed heir takes power
-    split: { from: 0.2, per: 150, max: 70 }, // % to break away: (backing - from) x per, at most max
-    regime: { 중앙집권형: 0.5, 부곡형: 1, 호족연합형: 1.3 },
+    split: { base: 60, per: 70, max: 95 }, // % to break away: base + backing x per, at most max
+    regime: { 중앙집권형: 0.75, 부곡형: 1, 호족연합형: 1.3 },
     nature: { 야심: 1.5, 무욕: 0.3, 의리: 0.5 },
     grudge: 15, favor: 10, // bond lost by the losers' backers, gained by the winner's
     named: 15, own: 40, // weight for the appointed heir, for a faction's own man
@@ -53,16 +58,21 @@
   // Who backs whom. luck: a function giving 0-1 (the dice, or 0.5 for a
   // forecast). Returns {cands, named, backing: Map(cand -> share), sides:
   // Map(faction -> cand), facs}.
-  function contest(state, fid, ruler, luck) {
+  // by: a faction forcing the ruler out, which puts up its own leader.
+  function contest(state, fid, ruler, luck, by) {
     const facs = S.factions(state, fid);
     let cands = S.heirCandidates(state, fid, ruler);
     let named = S.namedHeir(state, fid, cands);
     const kin = cands.length > 0;
-    if (!cands.length) {
-      // No clan: the leaders of the strongest factions, the ablest first.
-      cands = facs.slice(0, 2).map((g) => g.leader);
-      named = cands.length ? S.pickHeir(ruler, cands) : null;
+    // Too few of the clan: the strongest factions outside it put up their
+    // leaders (the ablest of them leads where there is no clan at all).
+    const extra = by && !cands.includes(by.leader) ? [by.leader] : [];
+    for (const g of facs) {
+      if (cands.length + extra.length >= 2) break;
+      if (g.kind !== "kin" && !cands.includes(g.leader) && !extra.includes(g.leader)) extra.push(g.leader);
     }
+    cands = cands.concat(extra);
+    if (!kin) named = cands.length ? S.pickHeir(ruler, cands) : null;
     const backing = new Map(cands.map((o) => [o, 0]));
     const sides = new Map();
     for (const g of facs) {
@@ -93,25 +103,30 @@
   };
   // The chance (%) that the one left out breaks away.
   S.splitChance = function (state, fid, loser, share) {
-    let p = clamp((share - C.split.from) * C.split.per, 0, C.split.max);
+    let p = clamp(C.split.base + share * C.split.per, 0, C.split.max);
     p *= C.regime[S.regime(state, fid).label] || 1;
     for (const t of S.traitsOf(loser)) p *= C.nature[t] || 1;
     return Math.round(p);
   };
 
-  // The ruler is gone (dead or taken): someone follows. Returns log lines.
-  S.succeed = function (state, fid, ruler, heirs) {
+  // The ruler is gone (dead, taken, or stepped down): someone follows.
+  // opts.by: the faction that forced him out. Returns log lines.
+  S.succeed = function (state, fid, ruler, heirs, opts) {
+    opts = opts || {};
     const f = state.forces[fid];
     const msgs = [];
-    const r = contest(state, fid, ruler, () => S.rand(state));
+    const r = contest(state, fid, ruler, () => S.rand(state), opts.by);
     let heir = r.named || S.pickHeir(ruler, heirs);
-    const how = ruler.status === "dead" ? "세상을 떠나" : "사로잡혀";
+    const how = ruler.status === "dead" ? "세상을 떠나" : ruler.status === "captive" ? "사로잡혀" : "물러나";
     const top = [...r.backing.entries()].sort((a, b) => b[1] - a[1])[0];
     let seized = false;
-    if (top && top[0] !== heir && top[1] > (r.backing.get(heir) || 0) * C.usurp) {
+    if (opts.by && r.sides.get(opts.by)) {
+      // Those who forced him out choose who follows.
+      heir = r.sides.get(opts.by);
+    } else if (top && top[0] !== heir && top[1] > (r.backing.get(heir) || 0) * C.usurp) {
       // Within the clan a rival with clearly more backing seizes power; with
       // no clan, the best backed simply takes the lead.
-      seized = r.kin;
+      seized = r.kin || !!r.named;
       heir = top[0];
     }
     // The one left out, and those behind him.
@@ -121,10 +136,13 @@
 
     f.ruler = heir.id;
     f.heir = null;
+    f.since = S.monthsElapsed(state);
     heir.loyalty = 100;
     S.heirBonds(state, fid, ruler, heir);
     f.name = heir.name;
-    msgs.push(seized
+    msgs.push(opts.by
+      ? `${S.josa(opts.by.name, "이", "가")} ${S.josa(ruler.name, "을", "를")} 몰아내고 ${S.josa(heir.name, "을", "를")} 세웠습니다.`
+      : seized
       ? `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(r.named.name, "이", "가")} 뒤를 이을 참이었으나, ${S.josa(heir.name, "이", "가")} 정변을 일으켜 세력을 차지했습니다.`
       : `${S.josa(ruler.name, "이", "가")} ${how} ${S.josa(heir.name, "이", "가")} 세력을 이어받았습니다.`);
     if (!loser) return msgs;
@@ -138,7 +156,7 @@
     // He stays: his backers resent it, the winner's are rewarded.
     for (const g of backers) for (const o of g.members) if (o !== heir) S.bondAdd(state, o, -C.grudge);
     for (const g of winners) for (const o of g.members) S.bondAdd(state, o, C.favor);
-    if (loserShare >= C.split.from) msgs.push(`${S.josa(loser.name, "을", "를")} 밀던 ${backers.map((g) => g.name).join("·")}의 불만이 큽니다.`);
+    if (loserShare >= 0.2) msgs.push(`${S.josa(loser.name, "을", "를")} 밀던 ${backers.map((g) => g.name).join("·")}의 불만이 큽니다.`);
     return msgs;
   };
 
@@ -149,54 +167,67 @@
     return "#" + ch.map((v) => v.toString(16).padStart(2, "0")).join("");
   }
 
-  // The loser leaves with the cities his backers govern. Returns a log line,
-  // or null when he has nowhere to go.
+  // The loser leaves with the cities his backers govern, else the one he
+  // serves in. Returns a log line, or null when he has nowhere to go.
   function breakAway(state, fid, heir, loser, backers, winners) {
-    const f = state.forces[fid];
     const capital = S.capitalOf(state, fid);
-    const heirCity = heir.city;
     const cities = new Set();
     for (const g of backers) for (const c of g.cities) cities.add(c);
     const own = state.cities[loser.city];
-    if (own && own.owner === fid && S.cityHead(state, own) === loser) cities.add(own);
-    for (const c of [...cities]) if (c.id === capital || c.id === heirCity) cities.delete(c);
+    if (own && own.owner === fid && (S.cityHead(state, own) === loser || !cities.size)) cities.add(own);
+    for (const c of [...cities]) if (c.id === capital || c.id === heir.city) cities.delete(c);
+    const theirs = new Set(backers.flatMap((g) => g.members));
+    const loyal = new Set(winners.flatMap((g) => g.members).concat([heir]));
+    if (!cities.size) {
+      // Nothing of his own: he makes for the strongest city whose head did
+      // not stand with the heir.
+      const open = S.citiesOf(state, fid).filter((c) => c.id !== capital && c.id !== heir.city && !loyal.has(S.cityHead(state, c)));
+      if (open.length) cities.add(open.reduce((a, b) => (b.troops > a.troops ? b : a)));
+    }
     if (!cities.size) return null;
+    const list = S.secede(state, fid, loser, [...cities], (o) => !loyal.has(o), (o) => theirs.has(o));
+    return `${S.josa(loser.name, "이", "가")} 이에 불복하여 ${S.josa(list.map((c) => c.name).join("·"), "을", "를")} 이끌고 갈라져 나갔습니다.`;
+  }
 
+  // leader takes cities out of fid as a force of his own, hostile to it.
+  // goes(o): whether one serving in those cities goes with him (the others
+  // get out to the capital); sore(o): whether one elsewhere resents it.
+  // Returns the cities.
+  S.secede = function (state, fid, leader, list, goes, sore) {
+    const f = state.forces[fid];
+    const capital = S.capitalOf(state, fid);
+    const cities = new Set(list);
     let n = 1;
     while (state.forces[`${fid}x${n}`]) n++;
     const nid = `${fid}x${n}`;
-    const list = [...cities];
     const seat = list.reduce((a, b) => (b.pop > a.pop ? b : a));
     state.forces[nid] = {
-      id: nid, name: loser.name, color: shade(f.color, n % 2 ? -0.35 : 0.35), ruler: loser.id, alive: true,
+      id: nid, name: leader.name, color: shade(f.color, n % 2 ? -0.35 : 0.35), ruler: leader.id, alive: true,
       weariness: f.weariness, tech: JSON.parse(JSON.stringify(f.tech || {})), capital: seat.id, from: fid,
+      since: S.monthsElapsed(state),
     };
     for (const c of list) {
       c.owner = nid;
       c.delegate = null;
       c.unrest = null;
     }
-    // Those in the cities he takes go with him unless they backed the heir;
-    // those of his side elsewhere stay, bitter.
-    const theirs = new Set(backers.flatMap((g) => g.members));
-    const loyal = new Set(winners.flatMap((g) => g.members));
     for (const o of S.officersOf(state, fid)) {
-      if (o === heir) continue;
+      if (S.isRuler(state, o)) continue;
       const there = cities.has(state.cities[o.city]);
-      if (o === loser || (there && !loyal.has(o))) {
+      if (o === leader || (there && goes(o))) {
         o.force = nid;
         o.lastForce = nid;
         o.loyalty = Math.max(o.loyalty, 70);
-        o.bond = o === loser ? 100 : Math.max(o.bond || 0, 50);
-        if (o === loser && !there) o.city = seat.id;
+        o.bond = o === leader ? 100 : Math.max(o.bond || 0, 50);
+        if (o === leader && !there) o.city = seat.id;
       } else if (there) {
-        o.city = capital; // the heir's men get out
-      } else if (theirs.has(o)) {
+        o.city = capital; // the loyal get out
+      } else if (sore(o)) {
         S.bondAdd(state, o, -C.grudge);
       }
     }
     S.officersMoved(state);
-    // The two sides are enemies; the breakaway starts with the others as the
+    // The two sides are enemies; the new force starts with the others as the
     // old force stood with them, and with no treaties.
     for (const other of Object.keys(state.forces)) {
       if (other === nid || other === fid) continue;
@@ -205,6 +236,6 @@
     S.relAdd(state, nid, fid, 5 - S.rel(state, nid, fid));
     if (state.aiDays) state.aiDays[nid] = 1 + Math.floor(S.rand(state) * S.DAYS_PER_MONTH);
     S.capitalOf(state, fid);
-    return `${S.josa(loser.name, "이", "가")} 이에 불복하여 ${S.josa(list.map((c) => c.name).join("·"), "을", "를")} 이끌고 갈라져 나갔습니다.`;
-  }
+    return list;
+  };
 })(globalThis.SAM = globalThis.SAM || {});

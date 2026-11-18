@@ -1123,6 +1123,7 @@
       returnManpower(c, S.manpowerRegen(c));
       S.produceRes(c);
     }
+    if (S.runRebellion) S.runRebellion(state);
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;

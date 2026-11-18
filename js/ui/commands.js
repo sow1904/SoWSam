@@ -470,6 +470,16 @@
     },
     doReward: (d) => { if (UI.result(S.reward(state, UI.selected, d.oid))) commands.reward(); },
     unrest: () => UI.showUnrest(),
+    stepDown: () => {
+      const me = state.playerForce;
+      const ruler = state.officers[state.forces[me].ruler];
+      if (!confirm(`${S.josa(ruler.name, "이", "가")} 물러나고 후계자가 뒤를 잇습니다. 후계 내분이 일어날 수 있고, 물러난 군주는 돌아오지 않습니다. 하야할까요?`)) return;
+      const r = S.stepDown(state, me); // logs its own lines
+      UI.toast(r.msg);
+      if (!r.ok) return;
+      UI.renderAll();
+      UI.showFactions();
+    },
     unrestWoo: (d) => { UI.result(S.answerUnrest(state, d.cid, "woo")); UI.showUnrest(); },
     unrestCrush: (d) => { UI.result(S.answerUnrest(state, d.cid, "crush")); UI.showUnrest(); },
     captRecruit: (d) => { UI.result(S.persuade(state, d.oid)); UI.showCaptives(); },

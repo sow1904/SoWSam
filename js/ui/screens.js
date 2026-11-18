@@ -263,6 +263,22 @@
     return `<h3>후계 구도</h3>${pick}<table class="tbl"><tr><th>${kin ? "후보" : "후보 (가문 없음)"}</th><th>소재</th><th>파벌 지지</th></tr>${rows}</table>` +
       `<p class="hint">${UI.HELP.succession}` + (second ? ` 지금 군주가 쓰러지면 ${S.josa(second.o.name, "이", "가")} 갈라져 나갈 가능성은 약 ${risk}%입니다.` : "") + `</p>`;
   }
+  // Governors who might rise, the faction that might force the ruler out,
+  // and (for the player) stepping down.
+  function unrestBlock(fid) {
+    const risky = S.citiesOf(state, fid).map((c) => ({ c, o: S.cityHead(state, c) }))
+      .map((x) => Object.assign(x, { p: x.o ? S.rebelChance(state, x.o, x.c) : 0 })).filter((x) => x.p >= 0.1)
+      .sort((a, b) => b.p - a.p);
+    const rows = risky.map((x) => `<tr><td><b>${x.o.name}</b></td><td>${x.c.name}</td><td>${x.o.loyalty}</td><td>${Math.round(x.o.bond || 0)}</td>` +
+      `<td>${S.rebelCities(state, x.o, x.c).map((c) => c.name).join(" ")}</td><td>월 ${x.p}%</td></tr>`).join("");
+    const out = S.forcedOutlook(state, fid);
+    const forced = out.g ? `<p class="bad">${S.josa(out.g.name, "이", "가")} 군주를 몰아낼 위험이 있습니다 (월 ${out.p}%, 수장 ${out.g.leader.name}, 유대 ${Math.round(out.g.leader.bond || 0)}).</p>` : "";
+    const mine = fid === state.playerForce && S.canStepDown(state, fid);
+    return `<h3>반란과 하야</h3>` +
+      (rows ? `<table class="tbl"><tr><th>태수</th><th>도시</th><th>충성</th><th>유대</th><th>함께 떨어질 도시</th><th>반란 위험</th></tr>${rows}</table>` : `<p>반기를 들 만한 태수는 없습니다.</p>`) +
+      forced + `<p class="hint">${UI.HELP.rebellion} ${UI.HELP.stepDown}</p>` +
+      (mine ? `<div class="links"><button data-action="stepDown">하야 (후계자에게 물려주기)</button></div>` : "");
+  }
   UI.showFactions = lists.factions = function () {
     const sc = scopes.officers;
     const me = sc && state.forces[sc] ? sc : UI.viewForce();
@@ -279,7 +295,7 @@
       ["구성원", (g) => g.members.length, (g) => `<span class="hint">${g.members.map((o) => o.name).join(" ")}</span>`],
     ];
     UI.openModal(title(`${S.forceName(state, me)} 파벌`) + listTable("factions", cols, S.factions(state, me)) +
-      `<p class="hint">${UI.HELP.factions}</p>` + heirBlock(me) +
+      `<p class="hint">${UI.HELP.factions}</p>` + heirBlock(me) + unrestBlock(me) +
       `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
     UI.modalOnInput = () => {
       const el = $("#heirPick");

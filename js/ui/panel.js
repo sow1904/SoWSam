@@ -272,6 +272,7 @@
       stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
       stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString()) +
       (own && c.cut > 0.05 ? stat("반발 위험", `월 ${S.unrestChance(c).toFixed(1)}%`) : "") +
+      (own && S.cityHead(state, c) && S.rebelChance(state, S.cityHead(state, c), c) >= 0.1 ? stat("태수 반란", `월 ${S.rebelChance(state, S.cityHead(state, c), c)}%`) : "") +
       `</div>` +
       (own && c.unrest ? `<p class="bad">호족들이 둔전에 반발해 들고일어났습니다. 둔전이 멈추고 매달 치안이 떨어집니다. <button data-action="unrest">처리</button></p>` : "");
   }
