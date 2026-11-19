@@ -745,8 +745,14 @@
     const fort = S.isFort(state, b.place);
     const defForce = t.owner;
     const atk = crewOf(state, A.officers, A.force);
-    const defs = S.serving(state, b.place).filter((o) => o.force === defForce);
     say(b, `${t.name} 함락! ${S.josa(S.forceName(state, A.force), "이", "가")} ${fort ? S.FORT_KINDS[t.kind] : "성"}을 차지했습니다.`);
+    // In the emperor's city the 한조파 give themselves up (js/hanplot.js).
+    const hanGave = !fort && S.hanSurrender ? S.hanSurrender(state, b.place, defForce, A.force) : [];
+    if (hanGave.length) {
+      report.hanJoined = hanGave.map((o) => o.id);
+      say(b, `한조파 ${S.josa(hanGave.map((o) => o.name).join(", "), "이", "가")} 항복해 합류했습니다.`);
+    }
+    const defs = S.serving(state, b.place).filter((o) => o.force === defForce);
     t.stakes = 0;
     const escapes = defForce ? S.links(state, b.place).filter((n) => S.place(state, n).owner === defForce) : [];
     for (const d of defs) {

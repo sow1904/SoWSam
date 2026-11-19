@@ -1,8 +1,10 @@
 // The Han faction (한조파) and its plots.
 //
 // In the force that keeps 헌제, those who hold the Han dear (한조중시) form
-// the 한조파 (js/factions.js). If another force takes the emperor from it,
-// they go over to the new keeper, unless bound to their lord too deeply.
+// the 한조파 (js/factions.js). If another force takes the emperor's city,
+// those of them inside give themselves up to it at once; those elsewhere go
+// over to the new keeper a year later, unless bound to their lord too deeply
+// (and if he changes hands again first, the year starts over).
 // While the emperor's favour toward his keeper is low, they may try to kill
 // the keeper (동승's plot): it very seldom succeeds, and then the 한조파
 // leader takes the seat, with all the strife of a succession
@@ -65,38 +67,85 @@
     }
   }
 
-  // The emperor changes hands: his loyalists in the old keeper's service
-  // follow him.
+  // Those of fid who hold the Han dear and would follow the emperor: not the
+  // ruler's kin nor his old companions (the factions' 종친 and 원종), and not
+  // bound to him too deeply.
+  S.hanLoyalists = function (state, fid) {
+    const ruler = rulerOf(state, fid);
+    if (!ruler) return [];
+    const kin = (o) => S.CLAN[o.name] && S.CLAN[ruler.name] && S.CLAN[o.name].clan === S.CLAN[ruler.name].clan;
+    return S.officersOf(state, fid).filter((o) => o.han === "H" && o !== ruler && !o.transit && !kin(o) &&
+      S.tieOf(o, ruler) < S.FACTION.old && (o.bond || 0) < P.stay);
+  };
+  function goOver(state, o, to, city) {
+    const k = S.postOf(state, o);
+    if (k && state.cities[o.city] && state.cities[o.city].posts) state.cities[o.city].posts[k] = null;
+    o.force = to;
+    o.city = city;
+    o.loyalty = 75;
+    S.joinBond(state, o, S.BOND.join);
+    o.done = true;
+  }
+
+  // The emperor's city falls: the 한조파 inside give themselves up to the
+  // taker at once (js/battle.js, before the garrison is taken). Returns those
+  // who did.
+  S.hanSurrender = function (state, cid, defForce, to) {
+    const han = state.han;
+    if (!han || han.ended || cid !== state.emperor || !defForce || han.holder !== defForce) return [];
+    const g = hanFaction(state, defForce);
+    if (!g) return [];
+    const there = g.members.filter((o) => o.status === "serving" && o.city === cid && !o.transit);
+    for (const o of there) goOver(state, o, to, cid);
+    if (there.length) S.officersMoved(state);
+    return there;
+  };
+
+  // The emperor changes hands: those of his loyalists left in the old
+  // keepers' other cities follow him a year later (S.HAN_PLOT.follow). If he
+  // changes hands again before then, the year starts over.
+  P.follow = 12;
   const syncCourt = S.syncCourt;
   S.syncCourt = function (state) {
     const han = state.han;
     const old = han && !han.ended ? han.holder : null;
-    const g = old && state.forces[old] && state.forces[old].alive ? hanFaction(state, old) : null;
     syncCourt(state);
-    const now = state.han && state.han.holder;
-    if (!g || !now || now === old) return;
-    const city = state.emperor && state.cities[state.emperor].owner === now ? state.emperor : S.capitalOf(state, now);
-    const gone = [];
-    for (const o of g.members) {
-      if (o.status !== "serving" || o.force !== old || o.transit || (o.bond || 0) >= P.stay) continue;
-      const k = S.postOf(state, o);
-      if (k) state.cities[o.city].posts[k] = null;
-      o.force = now;
-      o.city = city;
-      o.loyalty = 75;
-      S.joinBond(state, o, S.BOND.join);
-      o.done = true;
-      gone.push(o.name);
-    }
-    if (!gone.length) return;
-    S.officersMoved(state);
-    const mine = old === state.playerForce || now === state.playerForce;
-    S.addLog(state, `한조파 ${S.josa(gone.join(", "), "이", "가")} ${S.josa(S.forceName(state, old), "을", "를")} 버리고 헌제를 따라 ${S.forceName(state, now)}에 들어갔습니다.`,
-      mine ? "warn" : "info");
+    const now = state.han && !state.han.ended ? state.han.holder : null;
+    if (now === old) return;
+    const from = new Set(han.shift ? han.shift.from : []);
+    if (old) from.add(old);
+    if (now) from.delete(now);
+    han.shift = from.size ? { from: [...from], since: S.monthsElapsed(state) } : null;
   };
+  // Months until the loyalists of fid go over to the keeper (null: none due).
+  S.hanFollowIn = function (state, fid) {
+    const sh = state.han && state.han.shift;
+    if (!sh || !sh.from.includes(fid)) return null;
+    return Math.max(0, P.follow - (S.monthsElapsed(state) - sh.since));
+  };
+  function follow(state) {
+    const han = state.han;
+    const sh = han && han.shift;
+    if (!sh || han.ended || S.monthsElapsed(state) - sh.since < P.follow) return;
+    const now = han.holder;
+    if (!now || !state.forces[now] || !state.forces[now].alive) return; // wait for a keeper
+    han.shift = null;
+    const city = state.emperor && state.cities[state.emperor].owner === now ? state.emperor : S.capitalOf(state, now);
+    for (const old of sh.from) {
+      if (!state.forces[old] || !state.forces[old].alive || old === now) continue;
+      const gone = S.hanLoyalists(state, old);
+      if (!gone.length) continue;
+      for (const o of gone) goOver(state, o, now, city);
+      S.officersMoved(state);
+      const mine = old === state.playerForce || now === state.playerForce;
+      S.addLog(state, `한조파 ${S.josa(gone.map((o) => o.name).join(", "), "이", "가")} ${S.josa(S.forceName(state, old), "을", "를")} 버리고 헌제를 따라 ${S.forceName(state, now)}에 들어갔습니다.`,
+        mine ? "warn" : "info");
+    }
+  }
 
   // Each season (months 2, 5, 8, 11, apart from the court quarrels).
   S.runHanPlot = function (state) {
+    follow(state);
     if (state.month % 3 !== 2) return;
     const han = state.han;
     if (!han || han.ended || !han.holder) return;

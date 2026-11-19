@@ -106,6 +106,7 @@
     // Those we have just taken alive: their fate is asked at once.
     const caught = reports.filter((r) => r.attacker === me).flatMap((r) => r.captured)
       .filter((id) => state.officers[id].status === "captive" && state.officers[id].captor === me && !UI.handsOff());
+    const hanJoined = UI.handsOff() ? [] : reports.filter((r) => r.attacker === me).flatMap((r) => r.hanJoined || []);
     const fighting = (state.battles || []).some((b) => involves(b, me));
     if (fighting || reports.length || clock.wasFighting) UI.renderBattles();
     clock.wasFighting = fighting;
@@ -136,9 +137,11 @@
       UI.renderAll();
       UI.centerOn(taken[0]);
       pause(`${S.josa(taken[0].name, "을", "를")} 차지했습니다. 담당과 위임 방침을 정하세요`);
-      if (caught.length) UI.showCaptives(caught);
+      if (hanJoined.length) UI.showHanJoined(hanJoined, caught);
+      else if (caught.length) UI.showCaptives(caught);
       return;
     }
+    if (hanJoined.length) { pause("한조파가 항복했습니다"); UI.showHanJoined(hanJoined, caught); return; }
     if (caught.length) { pause("무장을 사로잡았습니다"); UI.showCaptives(caught); return; }
     // A slander waits for the player's answer.
     const sl = state.forces[state.playerForce] && state.forces[state.playerForce].slander;

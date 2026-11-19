@@ -272,6 +272,17 @@
   // with the day's free tries, 포로, 해방 or 참수); with none given, the
   // captives held in the selected place, who can be freed or put to death
   // (recruiting them is then the 등용 command's work).
+  // The 한조파 who gave themselves up when we took the emperor's city; the
+  // captives of the same fight are asked about after.
+  UI.showHanJoined = function (ids, caught) {
+    const list = ids.map((id) => state.officers[id]).filter((o) => o && o.force === state.playerForce);
+    if (!list.length) { if (caught && caught.length) UI.showCaptives(caught); return; }
+    UI.openModal(title("한조파 항복") +
+      `<p>헌제가 머무는 성을 차지하자, 한조를 중시하는 ${list.length}명이 포로가 되지 않고 바로 항복해 우리 세력에 합류했습니다.</p>` +
+      UI.officerTable(list, { loyalty: true }) +
+      `<div class="footer"><button class="primary" data-action="close">확인</button></div>`, true);
+    UI.modalOnClose = () => { if (caught && caught.length) setTimeout(() => UI.showCaptives(caught), 0); };
+  };
   UI.showCaptives = function (ids) {
     const me = state.playerForce;
     if (ids !== undefined) UI.captives = ids; // null: the selected place's

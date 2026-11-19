@@ -297,6 +297,12 @@
   }
   function hanBlock(fid) {
     const g = S.hanFaction(state, fid);
+    const wait = S.hanFollowIn(state, fid);
+    const going = wait != null ? S.hanLoyalists(state, fid) : [];
+    if (going.length) {
+      return `<h3>한조파</h3><p class="bad">헌제가 다른 세력으로 옮겨 갔습니다. ${S.josa(going.map((o) => o.name).join(" "), "이", "가")} ` +
+        `${wait}달 뒤 헌제를 따라 떠납니다 (유대 ${S.HAN_PLOT.stay} 이상이면 남습니다).</p><p class="hint">${UI.HELP.hanPlot}</p>`;
+    }
     if (!g) return "";
     const out = S.plotOutlook(state, fid);
     return `<h3>한조파</h3><p>헌제를 모신 세력이라 한조를 중시하는 ${S.josa(g.members.map((o) => o.name).join(" "), "이", "가")} 한조파를 이룹니다. ` +
