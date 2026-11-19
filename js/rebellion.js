@@ -54,7 +54,8 @@
     if (!fid || o.status !== "serving" || S.isRuler(state, o) || c.owner !== fid) return 0;
     if (S.rebelWait(state, fid) !== 0) return 0;
     if (S.capitalOf(state, fid) === c.id || S.cityHead(state, c) !== o) return 0;
-    const d = Math.max(0, R.loyalty - o.loyalty) + Math.max(0, R.bond - (o.bond || 0)) / 2;
+    // Discontent: low loyalty, little bond, and a poor lot (js/standing.js).
+    const d = Math.max(0, R.loyalty - o.loyalty) + Math.max(0, R.bond - (o.bond || 0)) / 2 + Math.max(0, 40 - (o.content == null ? 50 : o.content)) / 2;
     if (!d) return 0;
     let p = d * R.rate;
     for (const t of S.traitsOf(o)) p *= R.nature[t] || 1;

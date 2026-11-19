@@ -229,6 +229,7 @@
     S.initForts(state);
     S.initCapitals(state);
     if (S.consolidate) S.consolidate(state); // soldiers beyond each city's cap join the main army (js/war.js)
+    if (S.initStanding) S.initStanding(state); // fame, merit, seats at court (js/standing.js)
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
     return state;
   };
@@ -1130,6 +1131,7 @@
     if (S.runRebellion) S.runRebellion(state);
     if (S.runStrife) S.runStrife(state);
     if (S.runHanPlot) S.runHanPlot(state);
+    if (S.runStanding) S.runStanding(state); // merit, contentment, asking for seats (js/standing.js)
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;

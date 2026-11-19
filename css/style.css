@@ -344,6 +344,7 @@ tr.pick:hover td { background: rgba(207, 166, 74, 0.16); }
 .links label { margin-right: 10px; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
+.warnc { color: var(--gold); }
 .road-list div { padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 13px; }
 .road-list .pick { cursor: pointer; }
 .road-list .pick:hover { color: var(--gold2); }

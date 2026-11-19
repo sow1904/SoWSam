@@ -239,6 +239,11 @@
       ...S.ABILITY_KEYS.map((k) => [S.ABILITY_NAMES[k], (o) => o[k]]),
       ["충성", (o) => (serving(o) ? o.loyalty : -1), (o) => (serving(o) ? o.loyalty : "-")],
       ["유대", (o) => (serving(o) ? o.bond || 0 : -1), (o) => (serving(o) ? o.bond || 0 : "-")],
+      ["관직", (o) => (serving(o) ? S.seatValue(state, o) * 10 - (S.officeOf(state, o) ? S.officeOf(state, o).min / 100 : 0) : -1), UI.seatName],
+      ["명성", (o) => o.fame || 0],
+      ["공적", (o) => (serving(o) ? o.merit || 0 : -1), (o) => (serving(o) ? o.merit || 0 : "-")],
+      ["만족", (o) => (serving(o) ? o.content : -1), (o) => (serving(o) ? UI.contentCell(o) : "-")],
+      ["야망", (o) => S.ambitionLabels(state, o).join(" "), (o) => `<span title="${UI.ambitionTitle(o)}">${S.ambitionLabels(state, o).join(" ") || "-"}</span>`],
       ["상태", officerStatus],
       ["파벌", facOf],
       ["성격", (o) => S.traitsOf(o).join(" "), UI.traitTags],
@@ -248,8 +253,67 @@
     UI.openModal(title(`무장 일람 (${list.length})`) + scopePicker("officers", "재야") +
       listTable("officers", cols, list, (o) => `class="pick" data-action="goto" data-city="${o.city}"`) +
       `<p class="hint">제목을 누르면 그 열로 정렬하고, 다시 누르면 순서를 뒤집습니다. 줄을 누르면 그 무장이 있는 곳으로 갑니다. 재야는 찾아낸 사람만 보입니다.</p>` +
-      `<div class="footer"><button data-action="factions">파벌</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+      `<div class="footer"><button data-action="offices">관직</button> <button data-action="factions">파벌</button> <button class="primary" data-action="close">닫기</button></div>`, true);
     watchScope("officers");
+  };
+
+  // ---------- offices (관직) ----------
+  UI.seatName = function (o) {
+    if (o.status !== "serving") return "-";
+    if (S.isRuler(state, o)) return "군주";
+    const off = S.officeOf(state, o);
+    if (off) return `<b>${off.name}</b>`;
+    const c = S.governs(state, o);
+    return c ? `${c.name} 태수` : "-";
+  };
+  UI.contentCell = function (o) {
+    const v = o.content == null ? 50 : o.content;
+    const cls = v >= 70 ? "good" : v < 25 ? "bad" : v < 45 ? "warnc" : "";
+    return `<span class="${cls}" title="${S.contentLabel(v)}">${v}</span>`;
+  };
+  UI.ambitionTitle = function (o) {
+    const a = S.ambitionOf(state, o);
+    return Object.entries(a).map(([k, w]) => `${S.AMBITIONS[k]} ${w.toFixed(1)}`).join(", ");
+  };
+  UI.officeAskRow = function (a) {
+    const o = state.officers[a.oid], off = S.officeDef(a.key);
+    if (!o || !off) return "";
+    const h = S.holder(state, a.fid, a.key);
+    return `<p><b>${o.name}</b>${S.josa(o.name, "이", "가").slice(o.name.length)} <b>${off.name}</b> 자리를 청합니다. <span class="hint">(명성 ${o.fame} · 공적 ${o.merit} · 만족 ${o.content})</span> ` +
+      (h ? `지금 ${off.name} ${S.josa(h.name, "은", "는")} 밀려납니다. ` : "") +
+      `<button data-action="officeYes" data-id="${a.id}">들어준다</button> <button data-action="officeNo" data-id="${a.id}">물리친다</button></p>`;
+  };
+  UI.showOffices = function () {
+    const me = UI.viewForce();
+    if (!me || !state.forces[me]) return;
+    const edit = me === state.playerForce && !state.over && !UI.handsOff();
+    const open = new Set(S.openSeats(state, me));
+    const n = S.citiesOf(state, me).length;
+    const rows = S.OFFICES.map((x) => {
+      if (!open.has(x)) return `<tr class="done"><td><b>${x.name}</b></td><td>${x.role}</td><td colspan="5" class="hint">도시 ${x.min}개부터 (지금 ${n}개)</td></tr>`;
+      const h = S.holder(state, me, x.key);
+      const cands = edit ? S.officeCandidates(state, me, x.key).filter((o) => o !== h).slice(0, 10) : [];
+      const pick = edit ? `<select id="off_${x.key}">${cands.map((o) => `<option value="${o.id}">${o.name} (적성 ${Math.round(S.officeFit(state, me, o, x.key))}${S.officeOf(state, o) ? " · " + S.officeOf(state, o).name : ""})</option>`).join("")}</select> ` +
+        `<button data-action="appoint" data-key="${x.key}">임명</button>` + (h ? ` <button data-action="dismissOffice" data-key="${x.key}">파면</button>` : "") : "";
+      return `<tr><td title="${x.help}"><b>${x.name}</b></td><td>${x.role}</td>` +
+        `<td>${h ? h.name : `<span class="hint">비어 있음</span>`}</td><td>${h ? Math.round(S.officeFit(state, me, h, x.key)) : "-"}</td>` +
+        `<td>${h ? UI.contentCell(h) : "-"}</td><td>${h ? S.ambitionLabels(state, h).join(" ") : "-"}</td><td>${pick}</td></tr>`;
+    }).join("");
+    const asks = edit ? (state.officeAsks || []).filter((a) => a.fid === me) : [];
+    UI.openModal(title(`관직 — ${S.forceName(state, me)}`) +
+      `<div class="otable"><table><tr><th>관직</th><th>맡은 일</th><th>맡은 사람</th><th>적성</th><th>만족</th><th>야망</th><th></th></tr>${rows}</table></div>` +
+      (asks.length ? `<h3>관직 요구</h3>${asks.map(UI.officeAskRow).join("")}` : "") +
+      `<p class="hint">관직 이름에 마우스를 올리면 하는 일이 보입니다. 적성은 그 자리에 맞는 능력, 명성, 공적, 군주의 의견을 합친 값입니다. ` +
+      `공적과 명성이 높은데 자리가 낮은 출세욕 강한 무장은 만족이 떨어지고 더 높은 자리를 요구합니다. 밀려나거나 파면된 사람은 군주에게 불만을 품습니다.</p>` +
+      `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+  };
+  UI.showOfficeAsks = function () {
+    const me = state.playerForce;
+    const list = (state.officeAsks || []).filter((a) => a.fid === me);
+    if (!list.length) { if (UI.modalOpen()) UI.closeModal(); UI.renderAll(); return; }
+    UI.openModal(title("관직 요구") + list.map(UI.officeAskRow).join("") +
+      `<p class="hint">들어주면 그는 크게 만족하고, 밀려난 사람은 불만을 품습니다. 물리치거나 한 달 안에 답하지 않으면 요구한 사람이 불만을 품습니다.</p>` +
+      `<div class="footer"><button data-action="offices">관직 창</button> <button class="primary" data-action="close">나중에 정한다</button></div>`, true);
   };
 
   // ---------- factions ----------
@@ -468,6 +532,19 @@
     cities: () => state && UI.showCities(),
     officers: () => state && UI.showOfficers(),
     factions: () => state && UI.showFactions(),
+    offices: () => state && UI.showOffices(),
+    appoint: (d) => {
+      const el = $("#off_" + d.key);
+      if (!el || !el.value) return;
+      if (UI.result(S.appoint(state, state.playerForce, d.key, el.value))) UI.showOffices();
+    },
+    dismissOffice: (d) => {
+      const h = S.holder(state, state.playerForce, d.key);
+      if (!h || !confirm(`${S.josa(h.name, "을", "를")} ${S.officeDef(d.key).name}에서 파면할까요? 그는 불만을 품습니다.`)) return;
+      if (UI.result(S.dismiss(state, state.playerForce, d.key))) UI.showOffices();
+    },
+    officeYes: (d) => { UI.result(S.answerOfficeAsk(state, +d.id, true)); if ($("#off_chancellor")) UI.showOffices(); else UI.showOfficeAsks(); },
+    officeNo: (d) => { UI.result(S.answerOfficeAsk(state, +d.id, false)); if ($("#off_chancellor")) UI.showOffices(); else UI.showOfficeAsks(); },
     diplomacy: () => state && UI.showDiplomacy(),
     court: () => state && UI.showCourt(),
     tech: () => state && UI.showTech(),

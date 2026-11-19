@@ -157,7 +157,9 @@
     const i = m.path.indexOf(base);
     const km = S.pathKm(state, m.path.slice(0, i + 1));
     const total = Math.max(1, m.arrive - m.start);
-    return m.start + Math.round((km / Math.max(1, m.km)) * total) + 1;
+    const t = S.place(state, m.target);
+    const spy = S.spyEdge && t ? S.spyEdge(state, t.owner) : 0; // a 대홍려 hears sooner
+    return Math.max(m.start + 1, m.start + Math.round((km / Math.max(1, m.km)) * total) + 1 - spy);
   };
   S.seenBy = (state, m, fid) => m.force === fid || m.kind !== "army" || !m.seen || S.today(state) >= m.seen ||
     S.place(state, m.target).owner !== fid;
@@ -198,7 +200,7 @@
     const spare = Math.floor(S.marchable(cap) - Math.max(W.expedition.guardMin, cap.troops * W.expedition.guard));
     const send = Math.min(spare, Math.round(m.troops * W.answer.over));
     if (send < 2000 || send + t.troops * 0.5 < m.troops * nerve) return note("answer: too weak");
-    const idle = S.idle(state, capId).sort((a, x) => x.cmd + x.war - a.cmd - a.war);
+    const idle = S.idle(state, capId).sort((a, x) => S.leadScore(state, x) - S.leadScore(state, a));
     if (idle.length < 1) return note("answer: no officer");
     const team = idle.slice(0, Math.min(S.MAX_SORTIE_OFFICERS, Math.max(1, idle.length - 1)));
     const counts = S.pickTroops(cap, send, (k) => (S.unitOf(k).gear ? 0.2 : Math.pow(S.unitEdge(k, m.unit, "field", 1), 2)));
@@ -347,7 +349,7 @@
     if (S.isBroken(state, fid)) return note("broken");
     if (!war && f.weariness > 60) return note("weary");
     const E = W.expedition;
-    const idle = S.idle(state, capId).sort((a, b) => b.cmd + b.war - (a.cmd + a.war));
+    const idle = S.idle(state, capId).sort((a, b) => S.leadScore(state, b) - S.leadScore(state, a));
     if (!idle.length) return note("no officer at capital");
     const team = idle.slice(0, Math.min(S.MAX_SORTIE_OFFICERS, Math.max(1, idle.length - 1)));
     const ids = team.map((o) => o.id);
@@ -396,7 +398,8 @@
     const amity = best.t.owner && aim === "border" ? Math.max(-0.15, (S.rel(state, fid, best.t.owner) - 50) / 80) : 0;
     // Lighter odds when an ally asked, or when the foe's main army is away.
     const opening = (war && war.joint ? W.ally.odds : 0) + (best.t.owner && S.foeBusy(state, best.t.owner) ? W.ally.busy : 0);
-    if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening) return note("odds too low: " + aim);
+    const advice = S.adviserEdge ? S.adviserEdge(state, fid) : 0; // a 군사 sees which wars can be won
+    if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening - advice) return note("odds too low: " + aim);
     if (!S.chance(state, E.chance)) return note("dice");
     const r = S.attack(state, capId, best.t.id, ids, troops, best.unit);
     note(r.ok ? "LAUNCH " + aim : "launch failed");
@@ -425,13 +428,17 @@
     if (!R || R.troops0 < W.bigArmy) return;
     const lost = Math.round(R.troops * W.pursuit);
     R.troops -= lost;
+    if (S.creditDecisive) S.creditDecisive(state, b.att, R);
     breakForce(state, R.force, b.att.force, lost, R.troops0);
   };
   // A siege failed. If a relief army drove off a main army in the field, the
   // attacker is the one broken.
   S.siegeFailed = function (state, b) {
     const A = b.att;
-    if (A.campaign && b.relief && A.troops0 >= W.bigArmy) breakForce(state, A.force, b.relief.force, 0, A.troops0);
+    if (A.campaign && b.relief && A.troops0 >= W.bigArmy) {
+      if (S.creditDecisive) S.creditDecisive(state, b.relief, A);
+      breakForce(state, A.force, b.relief.force, 0, A.troops0);
+    }
     const f = state.forces[A.force];
     if (f && f.war && f.war.aim === "border") endWar(state, A.force, "failed");
   };
@@ -584,6 +591,7 @@
   const afterCapture = S.afterCapture;
   S.afterCapture = function (state, t, b) {
     const loser = t.lost && t.lost.fid;
+    if (S.creditCapture) S.creditCapture(state, b.att);
     if (loser && state.forces[loser]) {
       const w = warRecord(state, b.att.force, loser);
       w.taken[b.att.force] = (w.taken[b.att.force] || 0) + 1;

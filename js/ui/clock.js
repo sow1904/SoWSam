@@ -152,6 +152,15 @@
       UI.showPeace();
       return;
     }
+    // An officer asks for a seat at court.
+    const asks = (state.officeAsks || []).filter((a) => a.fid === state.playerForce);
+    const newAsk = asks.find((a) => !(clock.askSeen || []).includes(a.id));
+    if (newAsk && !S.spectating(state)) {
+      clock.askSeen = asks.map((a) => a.id);
+      pause("관직 요구가 들어왔습니다");
+      UI.showOfficeAsks();
+      return;
+    }
     // A slander waits for the player's answer.
     const sl = state.forces[state.playerForce] && state.forces[state.playerForce].slander;
     const slKey = sl ? `${sl.by}>${sl.target}@${sl.until}` : null;
