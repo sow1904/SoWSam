@@ -923,7 +923,10 @@
     R.morale += swing(lossR, lossA, 6);
     b.reliefLine = `원군 -${lossR} (${R.troops}), 포위군 -${lossA}`;
     raid(state, b, R, rel, A, atk, true);
-    if (R.troops < R.troops0 * 0.4 || R.morale <= 30) endRelief(state, b, "beaten");
+    if (R.troops < R.troops0 * 0.4 || R.morale <= 30) {
+      if (S.reliefBeaten) S.reliefBeaten(state, b); // a main army beaten in the field (js/war.js)
+      endRelief(state, b, "beaten");
+    }
   }
   function endRelief(state, b, why) {
     const R = b.relief;
@@ -1076,7 +1079,10 @@
         for (const o of crewOf(state, A.officers, A.force)) o.city = b.place;
         S.officersMoved(state);
         report.attackerWon = true;
-      } else retreatHome(state, b, outcome);
+      } else {
+        if (S.siegeFailed) S.siegeFailed(state, b); // before the relief army goes in (js/war.js)
+        retreatHome(state, b, outcome);
+      }
       if (b.relief) endRelief(state, b, report.attackerWon ? "home" : "enter");
     }
     const won = report.attackerWon;
