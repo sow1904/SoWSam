@@ -228,6 +228,7 @@
     S.courtInit(state, scenario.hanFavor);
     S.initForts(state);
     S.initCapitals(state);
+    if (S.consolidate) S.consolidate(state); // soldiers beyond each city's cap join the main army (js/war.js)
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
     return state;
   };
@@ -1006,16 +1007,17 @@
     const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
     const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path));
-    if (c.food < foodNeed) return fail(`군량이 부족합니다. (필요 ${foodNeed})`);
+    // The cities on the way supply what they can, the border first (js/war.js).
+    const fromHere = S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed, true) : foodNeed;
+    if (c.food < fromHere) return fail(`군량이 부족합니다. (필요 ${foodNeed}, 지나는 성에서 ${foodNeed - fromHere}, 출발지에서 ${fromHere})`);
     unit = S.takeTroops(c, counts);
-    c.food -= foodNeed;
+    c.food -= S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed) : foodNeed;
     if (t.owner) S.relAdd(state, c.owner, t.owner, S.DIPLO.attack);
     const m = S.launch(state, { kind: "army", force: c.owner, path: way.path, km: way.km, speed,
       officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
+    // The supply base, and when the target hears of it (js/war.js).
+    if (S.marchBase) { m.base = S.marchBase(state, m.path, m.force); m.seen = S.spotDay(state, m); }
     const names = oids.map((id) => state.officers[id].name).join(", ");
-    if (t.owner === state.playerForce && c.owner !== state.playerForce) {
-      S.addLog(state, `${S.forceName(state, c.owner)} ${S.unitName(unit)} ${troops}명이 ${c.name}에서 ${S.ro(t.name)} 진군하고 있습니다. (${days}일 뒤 도착)`, "threat");
-    }
     return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };
 
@@ -1123,6 +1125,7 @@
       returnManpower(c, S.manpowerRegen(c));
       S.produceRes(c);
     }
+    if (S.runTribute) S.runTribute(state); // surplus to the capital (js/war.js)
     if (S.runRebellion) S.runRebellion(state);
     if (S.runStrife) S.runStrife(state);
     if (S.runHanPlot) S.runHanPlot(state);

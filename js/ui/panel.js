@@ -255,8 +255,10 @@
     return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>` +
       `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
       `<div class="stats">` +
-      stat("병력", c.troops.toLocaleString()) + stat("훈련", c.train) +
+      (S.isCapitalCity(state, c) ? stat("주력군", c.troops.toLocaleString())
+        : stat("수비대", `${c.troops.toLocaleString()}/${S.garrisonCap(state, c).toLocaleString()}`)) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
+      (own && c.sent ? stat("지난달 상납", `금 ${fmt(c.sent.gold)} · 군량 ${fmt(c.sent.food)}`) : "") +
       stat("인구", c.pop.toLocaleString()) + stat("치안", c.order) +
       stat("병역 인구", `${fmt(c.manpower)}/${fmt(S.manpowerMax(c))}`) + stat("월 회복", "+" + S.manpowerRegen(c)) +
       stat("농업", `${c.farm}/${c.farmMax}`) + stat("상업", `${c.trade}/${c.tradeMax}`) +

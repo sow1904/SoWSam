@@ -252,6 +252,7 @@
   // The soldiers for an attack, by type: those good against the walls, and
   // not easily beaten if the garrison sorties against the camp. A better fit only weighs more, with some chance in it,
   // so the enemy cannot count on one answer.
+  S.pickAttackUnit = (state, c, t, troops) => pickUnit(state, c, t, troops);
   function pickUnit(state, c, t, troops) {
     const gu = S.garrisonUnit(t);
     const luck = {};
@@ -387,33 +388,13 @@
     if (idle.length && c.gentry > 40 && c.consent < 45 && c.gold > 300) {
       S.woo(state, take(byDesc("speech")).id, c.id);
     }
-    // Move surplus toward the campaign staging city, or from the interior to the front.
-    const plan = state._plans && state._plans[fid];
-    const surplus = Math.min(S.marchable(c), frontier ? c.troops - Math.max(3000, c.troops * 0.4, guardNeed(state, c)) : c.troops - 2000);
-    if (plan && plan.stage !== c.id && idle.length && S.serving(state, c.id).length > 1 && surplus > 2000) {
-      const to = stepToward(state, c.id, plan.stage);
-      if (to) {
-        const o = take((a, b) => b.war - a.war);
-        S.move(state, c.id, to, [o.id], Math.floor(surplus), Math.max(0, c.gold - 500), Math.max(0, c.food - 4000));
-      }
-    } else if (!frontier && idle.length && S.serving(state, c.id).length > 1 && (c.troops > 3000 || c.gold > 1000)) {
-      // To the frontier city that most needs men, else the nearest one.
-      const need = neediestFront(state, c);
-      const to = (need && stepToward(state, c.id, need)) || stepToFront(state, c);
-      if (to) {
-        const o = take((a, b) => b.war - a.war);
-        const keep = 2000;
-        S.move(state, c.id, to, [o.id], Math.max(0, Math.min(S.marchable(c), c.troops - keep)), Math.max(0, c.gold - 300), Math.max(0, c.food - 3000));
-      }
-    }
-    // Spare officers in the interior go where the fighting is, first to a
-    // frontier city with no officer (which could not draft at all).
-    if (!frontier && idle.length > 1) {
-      const to = unmannedFront(state, c) || nearestFront(state, c);
-      if (to) {
-        const go = [...idle].sort((a, b) => b.cmd + b.war - a.cmd - a.war).slice(0, idle.length - 1);
-        if (S.relocate(state, c.id, to, go.map((o) => o.id)).ok) idle = idle.filter((o) => !go.includes(o));
-      }
+    // Soldiers and stores go to the capital by themselves (js/war.js). Spare
+    // officers go there too, to lead the main army: a city keeps one (two
+    // on the frontier) besides those on its posts.
+    const capId = S.capitalOf(state, fid);
+    if (capId && capId !== c.id && idle.length > (frontier ? 2 : 1) && S.idle(state, capId).length < 8) {
+      const go = [...idle].sort((a, b) => b.cmd + b.war - a.cmd - a.war).slice(0, idle.length - (frontier ? 2 : 1));
+      if (S.relocate(state, c.id, capId, go.map((o) => o.id)).ok) idle = idle.filter((o) => !go.includes(o));
     }
     marketAI(state, c, frontier);
     // A frontier city with timber to spare lays stakes before its walls.
@@ -421,10 +402,13 @@
       const o = [...idle].sort((a, b) => a.cmd - b.cmd)[0];
       if (S.stake(state, o.id, c.id).ok) idle = idle.filter((x) => x !== o);
     }
-    // Frontier cities keep drafting while the treasury can pay the upkeep.
-    const affordable = () => frontier
-      ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36
-      : c.troops < 2500;
+    // Every city drafts while the realm can pay the upkeep: the soldiers
+    // beyond the city's cap march on to the main army (js/war.js).
+    const realm = S.citiesOf(state, fid);
+    const upkeep = realm.reduce((s, x) => s + x.troops / 100, 0);
+    const purse = realm.reduce((s, x) => s + S.income(x) - S.salaries(x), 0);
+    const capGold = capId && state.cities[capId] ? state.cities[capId].gold : 0;
+    const affordable = () => upkeep + 15 < purse + capGold / 36;
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       let r = null;
@@ -484,10 +468,9 @@
     if (policy === "full") {
       // The governor does whatever a computer force would do with this city.
       const fid = c.owner;
-      state._plans = state._plans || {};
-      state._plans[fid] = planCampaign(state, fid);
+      // The capital's governor sends the main army as a computer force would.
       const armies = (state.marches || []).filter((m) => m.kind === "army" && m.origin === c.id).length;
-      tryAttack(state, c, () => {});
+      if (S.isCapitalCity(state, c)) S.warAI(state, fid);
       const sent = (state.marches || []).filter((m) => m.kind === "army" && m.origin === c.id);
       if (c.owner === fid) domestic(state, c, fid);
       return sent.length > armies ? `${S.ro(S.placeName(state, sent[sent.length - 1].target))} 출진` : "";
@@ -540,16 +523,11 @@
       const j = Math.floor(S.rand(state) * (i + 1));
       [cities[i], cities[j]] = [cities[j], cities[i]];
     }
-    for (const c of cities) {
-      if (c.owner !== fid) continue;
-      tryAttack(state, c, log);
-    }
-    // Strongholds with a strong garrison can strike too.
-    for (const f of S.fortsOf(state, fid)) if (f.troops >= 5000) tryAttack(state, f, log);
+    // The main army goes to war from the capital (js/war.js); the cities
+    // keep their garrisons.
+    S.warAI(state, fid);
     manageForts(state, fid);
     S.reliefAI(state, fid);
-    state._plans = state._plans || {};
-    state._plans[fid] = planCampaign(state, fid);
     for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
     S.diploAI(state, fid);
     S.courtAI(state, fid);
@@ -623,6 +601,7 @@
       }
     }
     S.runMarches(state, onEvent);
+    if (S.runSpotting) S.runSpotting(state);
     S.runBattles(state, onEvent);
     if (state.over) return null;
     S.runEnvoys(state, onEvent);

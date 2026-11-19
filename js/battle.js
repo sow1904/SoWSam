@@ -240,7 +240,8 @@
     const A = b.att;
     // A day's food, dearer the rougher the road it comes by.
     const need = S.fieldFood(A.troops, 1, A.path ? S.pathRough(state, A.path) : 1) * (1 - S.AID.ox * S.aidOf(A.unit).ox);
-    const home = S.place(state, A.origin);
+    // Fed from the supply base: the last own city on the road (js/war.js).
+    const home = S.place(state, A.base || A.origin);
     if (A.supply.line && home && home.owner === A.force) {
       const want = Math.min(Math.max(0, A.troops / 10 - A.rations), need * 2, home.food);
       home.food -= Math.ceil(want);
@@ -283,7 +284,7 @@
     const b = newBattle(state, {
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
       att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target),
-        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path },
+        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
@@ -842,6 +843,7 @@
     }
     if (defForce && !fort && state.forces[defForce].capital === t.id && S.citiesOf(state, defForce).length) S.capitalFell(state, defForce, A.force, report);
     if (defForce) S.checkForce(state, defForce, report, A.force);
+    if (S.afterCapture) S.afterCapture(state, t, b); // press on, or go home (js/war.js)
   }
 
   // ---------- relief armies (원군) ----------
@@ -952,11 +954,17 @@
       const t = S.place(state, b.place);
       if (b.kind !== "siege" || t.owner !== fid || b.relief) continue;
       if ((state.marches || []).some((m) => m.kind === "relief" && m.target === b.place)) continue;
+      // The news of the siege must reach the capital first.
+      const capId = S.capitalOf(state, fid);
+      const newsDays = capId ? Math.ceil(S.nodeKm(state, capId, b.place) / (S.WAR ? S.WAR.newsKm : 80)) : 0;
+      if (S.today(state) - b.start < newsDays) continue;
       let best = null;
       for (const c of S.citiesOf(state, fid)) {
         if (c.id === b.place || S.besieged(state, c.id)) continue;
         const idle = S.idle(state, c.id);
-        const spare = Math.min(S.marchable(c) - Math.max(3000, Math.round(c.troops * 0.3)), c.troops);
+        // The main army may send all but a guard; a garrison keeps most of its men.
+        const main = c.id === capId;
+        const spare = Math.min(S.marchable(c) - Math.max(3000, Math.round(c.troops * (main ? 0.25 : 0.6))), c.troops);
         if (!idle.length || spare < 2000) continue;
         const way = S.reliefTargets(state, c.id).find((x) => x.id === b.place);
         if (!way || way.days > 25) continue;

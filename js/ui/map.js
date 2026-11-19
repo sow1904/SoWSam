@@ -239,6 +239,7 @@
     let svg = "";
     for (const m of state.marches || []) {
       if (m.kind === "build") continue;
+      if (me && !S.seenBy(state, m, me)) continue; // not yet heard of (js/war.js)
       const p = S.marchPos(state, m, frac);
       const x = at(p.x), y = at(p.y);
       const dest = S.place(state, m.target);
