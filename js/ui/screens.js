@@ -91,7 +91,8 @@
       if (!play) return "";
       const busy = out.some((e) => e.to === fid);
       return (busy ? `<span class="hint">사자 파견 중</span>` : `<button data-action="envoy" data-force="${fid}">사자 보내기</button>`) +
-        (S.allied(state, me, fid) ? ` <button data-action="breakPact" data-force="${fid}">동맹 파기</button>` : "");
+        (S.allied(state, me, fid) ? ` <button data-action="breakPact" data-force="${fid}">동맹 파기</button>` : "") +
+        (S.warRecordOf(state, me, fid) && !S.truceLeft(state, me, fid) ? ` <button data-action="askPeace" data-force="${fid}">강화 요청</button>` : "");
     };
     const rows = aliveForces().filter((r) => r.f.id !== me).sort((a, b) => b.t.cities - a.t.cities || b.t.troops - a.t.troops)
       .map(({ f, t }) => {
@@ -99,14 +100,18 @@
         const sw = S.swappable(state, me, f.id);
         return `<tr><td>${swatch(f)}${f.name}군${f.emperor ? " (황제)" : ""}</td><td>${state.officers[f.ruler].name}</td>` +
           `<td>${t.cities}</td><td>${fmt(t.troops)}</td><td>${relCell(S.rel(state, me, f.id))}</td>` +
-          `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span> <span class="hint">${S.pactLeft(state, me, f.id)}개월 남음</span>` : cd ? `<span class="hint">파기 후 ${cd}개월</span>` : "-"}</td>` +
+          `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span> <span class="hint">${S.pactLeft(state, me, f.id)}개월 남음</span>`
+            : S.truceLeft(state, me, f.id) ? `휴전 <span class="hint">${S.truceLeft(state, me, f.id)}개월 남음</span>`
+            : S.warRecordOf(state, me, f.id) ? `<span class="bad">교전 중</span>` : cd ? `<span class="hint">파기 후 ${cd}개월</span>` : "-"}</td>` +
           `<td>${S.allies(state, f.id).filter((a) => a !== me).map((a) => state.forces[a].name).join(", ") || "-"}</td>` +
           `<td>${sw.give.length || sw.take.length ? `우리가 ${sw.give.length} · 저쪽이 ${sw.take.length}` : "-"}</td>` +
           `<td>${S.envoyDays(state, me, f.id)}일</td><td>${cell(f.id)}</td></tr>`;
       }).join("");
     const asks = play && !UI.handsOff() ? S.asksFor(state, me) : [];
+    const peace = play && !UI.handsOff() ? (state.peaceOffers || []).filter((o) => o.winner === me || o.loser === me) : [];
     UI.openModal(title(state.playerForce ? "외교" : `${S.forceName(state, me)}의 외교`) +
       (asks.length ? `<h3>답을 기다리는 사자</h3>${asks.map(askRow).join("")}` : "") +
+      (peace.length ? `<h3>강화 제의</h3>${peace.map((o) => UI.peaceRow(o)).join("")}` : "") +
       `<table><tr><th>세력</th><th>군주</th><th>도시</th><th>병력</th><th>우호도</th><th>우리와</th><th>다른 동맹</th><th>포로</th><th>사자 길</th><th></th></tr>${rows}</table>` +
       (out.length ? `<h3>보낸 사자</h3><table><tr><th>사자</th><th>상대</th><th>용건</th><th>상황</th></tr>${out.map(envoyRow).join("")}</table>` : "") +
       `<div class="footer"><button data-action="help" data-topic="diplomacy">외교 도움말</button><button class="primary" data-action="close">닫기</button></div>`, true);

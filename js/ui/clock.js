@@ -143,6 +143,15 @@
     }
     if (hanJoined.length) { pause("한조파가 항복했습니다"); UI.showHanJoined(hanJoined, caught); return; }
     if (caught.length) { pause("무장을 사로잡았습니다"); UI.showCaptives(caught); return; }
+    // An offer of peace waits for the player's answer.
+    const offers = (state.peaceOffers || []).filter((o) => o.winner === state.playerForce || o.loser === state.playerForce);
+    const newOffer = offers.find((o) => !(clock.peaceSeen || []).includes(o.id));
+    if (newOffer && !S.spectating(state)) {
+      clock.peaceSeen = offers.map((o) => o.id);
+      pause("강화 제의가 들어왔습니다");
+      UI.showPeace();
+      return;
+    }
     // A slander waits for the player's answer.
     const sl = state.forces[state.playerForce] && state.forces[state.playerForce].slander;
     const slKey = sl ? `${sl.by}>${sl.target}@${sl.until}` : null;

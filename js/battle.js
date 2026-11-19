@@ -454,7 +454,7 @@
     b.day++;
     if (b.ending) return b.ending;
     if (t.owner === A.force) return "joined";
-    if (t.owner && S.allied(state, A.force, t.owner)) return "allied";
+    if (t.owner && (S.allied(state, A.force, t.owner) || (S.truceLeft && S.truceLeft(state, A.force, t.owner)))) return "allied";
     if (t.owner !== b.def.force) {
       b.def = { force: t.owner, troops0: Math.max(1, t.troops), morale: 100 };
       say(b, `${S.josa(t.name, "은", "는")} 이제 ${S.forceName(state, t.owner)}의 땅입니다. 포위를 이어 갑니다.`);
@@ -1035,7 +1035,9 @@
     const foe = S.forceName(state, A.force);
     let troops = A.troops, w = A.wounded && A.wounded.n > 0 ? A.wounded : null;
     const home = S.place(state, A.origin);
-    if (outcome === "allied") {
+    if (outcome === "allied" && !S.allied(state, A.force, t.owner)) {
+      say(b, `${S.josa(S.forceName(state, t.owner), "과", "와")} 강화하여 포위를 풀고 물러납니다.`);
+    } else if (outcome === "allied") {
       say(b, `${S.josa(S.placeName(state, b.place), "이", "가")} 동맹인 ${S.forceName(state, t.owner)}의 손에 들어가 포위를 풀고 물러납니다.`);
     } else if (b.broke === "rout") {
       const lost = part(w, W.lost);

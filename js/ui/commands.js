@@ -320,6 +320,24 @@
     };
   };
 
+  // An offer of peace: who gives what.
+  UI.peaceRow = function (o) {
+    const me = state.playerForce;
+    const other = o.winner === me ? o.loser : o.winner;
+    const cities = o.cede.map((id) => state.cities[id] && state.cities[id].name).filter(Boolean);
+    const give = !cities.length ? "성을 주고받지 않고" : o.loser === me ? `우리가 ${S.josa(cities.join("·"), "을", "를")} 넘기고` : `${S.josa(S.forceName(state, other), "이", "가")} ${S.josa(cities.join("·"), "을", "를")} 넘기고`;
+    return `<p><b>${S.forceName(state, other)}</b>: ${give} ${S.WAR.peace.years}년 동안 서로 치지 않기로 하자고 합니다. ` +
+      `<button data-action="peaceYes" data-id="${o.id}">받아들인다</button> <button data-action="peaceNo" data-id="${o.id}">물리친다</button></p>`;
+  };
+  UI.showPeace = function () {
+    const me = state.playerForce;
+    const list = (state.peaceOffers || []).filter((o) => o.winner === me || o.loser === me);
+    if (!list.length) { if (UI.modalOpen()) UI.closeModal(); UI.renderAll(); return; }
+    UI.openModal(title("강화 제의") + list.map((o) => UI.peaceRow(o)).join("") +
+      `<p class="hint">${S.WAR.peace.years}년 휴전 동안에는 서로의 성을 칠 수 없고, 이미 나선 군대도 돌아옵니다. 한 달 안에 답하지 않으면 제의는 사라집니다.</p>` +
+      `<div class="footer"><button class="primary" data-action="close">나중에 정한다</button></div>`, true);
+  };
+
   // A slander in our court that waits for an answer.
   UI.showSlander = function () {
     const me = state.playerForce;
@@ -505,6 +523,18 @@
     doReward: (d) => { if (UI.result(S.reward(state, UI.selected, d.oid))) commands.reward(); },
     unrest: () => UI.showUnrest(),
     slander: () => UI.showSlander(),
+    peaceYes: (d) => { UI.result(S.answerPeace(state, +d.id, true)); UI.showPeace(); },
+    peaceNo: (d) => { UI.result(S.answerPeace(state, +d.id, false)); UI.showPeace(); },
+    askPeace: (d) => {
+      const terms = S.peaceAsk(state, state.playerForce, d.force);
+      if (terms.ok === false) { UI.toast(terms.msg); return; }
+      const cities = terms.cede.map((c) => c.name).join("·");
+      const lose = terms.loser === state.playerForce;
+      const q = `${S.forceName(state, d.force)}에 강화를 청할까요? ` + (cities ? (lose ? `우리가 ${S.josa(cities, "을", "를")} 넘겨야 합니다.` : `저쪽이 ${S.josa(cities, "을", "를")} 넘깁니다.`) : "성은 주고받지 않습니다.") + ` ${S.WAR.peace.years}년 휴전.`;
+      if (!confirm(q)) return;
+      UI.result(S.proposePeace(state, state.playerForce, d.force));
+      UI.showDiplomacy();
+    },
     slanderYes: () => { UI.result(S.answerSlander(state, state.playerForce, true)); UI.showSlander(); },
     slanderNo: () => { UI.result(S.answerSlander(state, state.playerForce, false)); UI.showSlander(); },
     stepDown: () => {

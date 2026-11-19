@@ -326,6 +326,10 @@
       if (m.force === state.playerForce) S.addLog(state, `${S.josa(S.forceName(state, t.owner), "과", "와")} 동맹을 맺어 ${t.name} 공격을 거두고 돌아갑니다.`, "mine");
       return S.sendHome(state, m, m.troops);
     }
+    if (t.owner && S.truceLeft && S.truceLeft(state, m.force, t.owner)) {
+      if (m.force === state.playerForce) S.addLog(state, `${S.josa(S.forceName(state, t.owner), "과", "와")} 강화하여 ${t.name} 공격을 거두고 돌아갑니다.`, "mine");
+      return S.sendHome(state, m, m.troops);
+    }
     S.startSiege(state, m);
   }
 
