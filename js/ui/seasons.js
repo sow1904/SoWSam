@@ -9,7 +9,7 @@
   const COLORS = { plague: "#a77bd8", drought: "#e0a040", flood: "#4aa3e8", typhoon: "#5fd0c0", locust: "#9c7a3c", crop: "#d0503c", rich: "#6cc070" };
   const LABEL = { plague: "역병", drought: "가뭄", flood: "홍수", typhoon: "태풍", locust: "황충", crop: "흉작", rich: "풍작" };
   const kindOf = (it) => (it.kind === "crop" ? (it.crop === 2 ? "rich" : "crop") : it.kind);
-  const placeOf = (it) => (it.city ? state.cities[it.city].name : S.PROVINCES[it.prov]);
+  const placeOf = (it) => (it.city ? state.cities[it.city].name : it.region ? S.REGIONS[it.region].name : S.PROVINCES[it.prov]);
   const pc = (v) => `${Math.round(v * 100)}%`;
   const EFFECT = {
     plague: `석 달 동안 인구·병역 인구 -${pc(SE.plague.toll[0])}~${pc(SE.plague.toll[1])}`,
@@ -28,7 +28,8 @@
     const marks = {};
     for (const it of news.items) {
       const k = kindOf(it);
-      const cs = it.cities || (it.city ? [it.city] : Object.values(state.cities).filter((c) => c.prov === it.prov).map((c) => c.id));
+      const swarmed = (c) => k === "rich" && c.woe && c.woe.locust && c.woe.locust.year === news.year; // locusts leave no rich harvest
+      const cs = it.cities || (it.city ? [it.city] : Object.values(state.cities).filter((c) => (it.region ? S.regionOf(c) === it.region : c.prov === it.prov) && !swarmed(c)).map((c) => c.id));
       for (const id of cs) (marks[id] = marks[id] || []).includes(k) || marks[id].push(k);
     }
     const groups = {};
