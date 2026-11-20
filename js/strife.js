@@ -103,6 +103,12 @@
     S.answerSlander(state, fid, S.chance(state, S.believeChance(state, fid, by, target)), { by, target });
   }
 
+  // A slander raised elsewhere (js/council.js: the man proved right in council).
+  S.raiseSlander = function (state, fid, by, target) {
+    if (!by || !target || by === target || by.status !== "serving" || target.status !== "serving" || by.force !== fid || target.force !== fid) return;
+    if (state.forces[fid].slander) return;
+    slander(state, fid, by, target);
+  };
   // believe: true to act on it. pending: {by, target} for a computer lord.
   S.answerSlander = function (state, fid, believe, pending) {
     const f = state.forces[fid];

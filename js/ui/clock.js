@@ -152,6 +152,15 @@
       UI.showPeace();
       return;
     }
+    // A councillor brings a proposal.
+    const props = (state.proposals || []).filter((a) => a.fid === state.playerForce);
+    const newProp = props.find((a) => !(clock.propSeen || []).includes(a.id));
+    if (newProp && !S.spectating(state)) {
+      clock.propSeen = props.map((a) => a.id);
+      pause("진언이 올라왔습니다");
+      UI.showCouncil();
+      return;
+    }
     // A governor raided over the border.
     const raids = (state.raidReports || []).filter((a) => a.fid === state.playerForce);
     const newRaid = raids.find((a) => !(clock.raidSeen || []).includes(a.id));

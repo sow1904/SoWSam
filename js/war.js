@@ -402,9 +402,13 @@
     const advice = S.adviserEdge ? S.adviserEdge(state, fid) : 0; // a 군사 sees which wars can be won
     if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening - advice) return note("odds too low: " + aim);
     if (!S.chance(state, E.chance)) return note("dice");
+    // The council debates it first (js/council.js).
+    const council = S.conveneWar ? S.conveneWar(state, fid, { foe: best.t.owner, target: best.t.id, aim, ratio: best.est.ratio, team: ids }) : null;
+    if (council && !council.adopted) return note("council against");
     const r = S.attack(state, capId, best.t.id, ids, troops, best.unit);
     note(r.ok ? "LAUNCH " + aim : "launch failed");
     if (!r.ok) return;
+    if (council && S.councilLaunched) S.councilLaunched(state, council, r.march);
     r.march.campaign = { foe: best.t.owner || null, taken: 0, since: S.monthsElapsed(state), aim };
     if (war && !f.war && best.t.owner) {
       f.war = war;
@@ -739,6 +743,7 @@
       if (now - state.warLog[k].last > 12) { delete state.warLog[k]; continue; }
       const terms = S.peaceTerms(state, a, b);
       if (!terms || !terms.loserWants || !terms.winnerWants || !S.chance(state, W.peace.chance)) continue;
+      if (S.councilBlocksPeace && S.councilBlocksPeace(state, terms)) continue; // the winner's court would fight on (js/council.js)
       const player = state.playerForce && !S.spectating(state) ? state.playerForce : null;
       if (terms.winner === player || terms.loser === player) {
         if (state.peaceOffers.some((o) => pairKey(o.winner, o.loser) === k)) continue;

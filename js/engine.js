@@ -1133,6 +1133,7 @@
     if (S.runHanPlot) S.runHanPlot(state);
     if (S.runStanding) S.runStanding(state); // merit, contentment, asking for seats (js/standing.js)
     if (S.runConduct) S.runConduct(state); // governors' ways, border raids, officers acting alone (js/conduct.js)
+    if (S.runCouncil) S.runCouncil(state); // proposals to the player, old council records (js/council.js)
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;

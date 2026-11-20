@@ -326,7 +326,9 @@
     const other = o.winner === me ? o.loser : o.winner;
     const cities = o.cede.map((id) => state.cities[id] && state.cities[id].name).filter(Boolean);
     const give = !cities.length ? "성을 주고받지 않고" : o.loser === me ? `우리가 ${S.josa(cities.join("·"), "을", "를")} 넘기고` : `${S.josa(S.forceName(state, other), "이", "가")} ${S.josa(cities.join("·"), "을", "를")} 넘기고`;
+    const lean = S.peaceLeaning ? S.peaceLeaning(state, me, other, o.loser === me) : null;
     return `<p><b>${S.forceName(state, other)}</b>: ${give} ${S.WAR.peace.years}년 동안 서로 치지 않기로 하자고 합니다. ` +
+      (lean ? `<span class="hint">조정 여론: ${S.supportLabel(lean.support)}${lean.pro.length ? ` (찬성 ${lean.pro.slice(0, 3).map((c) => c.o.name).join("·")})` : ""}${lean.con.length ? ` (반대 ${lean.con.slice(0, 3).map((c) => c.o.name).join("·")})` : ""}</span> ` : "") +
       `<button data-action="peaceYes" data-id="${o.id}">받아들인다</button> <button data-action="peaceNo" data-id="${o.id}">물리친다</button></p>`;
   };
   UI.showPeace = function () {

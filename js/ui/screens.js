@@ -309,6 +309,45 @@
         `<span class="hint">출세형 태수는 공을 세우려 이웃 세력의 성을 습격합니다. 금하면 할거형 태수만 습격합니다.</span></p>` : "") +
       `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
   };
+  // ---------- the council (조정 회의) ----------
+  const stanceCell = (v) => v == null ? "-" : `<span class="${v > 0.15 ? "good" : v < -0.15 ? "bad" : ""}">${v > 0.15 ? "찬성" : v < -0.15 ? "반대" : "중립"} ${v > 0 ? "+" : ""}${Math.round(v * 100)}</span>`;
+  UI.proposalRow = function (a) {
+    const o = state.officers[a.oid];
+    if (!o) return "";
+    const what = a.kind === "war"
+      ? `${S.forceName(state, a.foe)}의 <b>${S.place(state, a.target).name}</b> 출정을 진언합니다 (승산 ${a.ratio}).`
+      : `${S.forceName(state, a.foe)}과의 <b>강화</b>를 진언합니다.`;
+    return `<p><b>${S.josa(o.name, "이", "가")}</b> ${what} <span class="hint">조정 여론: ${S.supportLabel(a.support)}</span> ` +
+      `<button data-action="proposalYes" data-id="${a.id}">채택한다</button> <button data-action="proposalNo" data-id="${a.id}">물리친다</button></p>`;
+  };
+  UI.showCouncil = function () {
+    const me = UI.viewForce();
+    if (!me || !state.forces[me]) return;
+    const mine = me === state.playerForce && !state.over && !S.spectating(state);
+    const out = S.warOutlook(state, me);
+    const stances = out ? new Map(out.d.seats.map((c) => [c.o, c.stance])) : new Map();
+    const seats = S.councilors(state, me);
+    const rows = seats.map((c) => `<tr><td><b>${c.o.name}</b></td><td>${UI.seatName(c.o)}${c.memorial ? ' <span class="hint">(진언서)</span>' : ""}</td>` +
+      `<td>${c.voice}</td><td>${S.ambitionLabels(state, c.o).join(" ") || "-"}</td><td>${stanceCell(stances.get(c.o))}</td></tr>`).join("");
+    const props = mine ? (state.proposals || []).filter((a) => a.fid === me) : [];
+    const RES = { won: '<span class="good">성공</span>', lost: '<span class="bad">실패</span>', made: "강화", none: "흐지부지" };
+    const recs = S.councilsOf(state, me).map((r) => {
+      const what = r.kind === "war" ? `${r.target ? S.place(state, r.target).name : "?"} 출정` : `${S.forceName(state, r.foe)}과 강화`;
+      const nm = (ids) => ids.map((id) => state.officers[id] && state.officers[id].name).filter(Boolean).join("·") || "-";
+      return `<tr><td>${r.stamp[0]}.${r.stamp[1]}</td><td>${what}</td><td>${S.supportLabel(r.support)}</td><td>${nm(r.pro)}</td><td>${nm(r.con)}</td>` +
+        `<td>${r.adopted ? (r.by === "player" ? "군주 결정" : "채택") : '<span class="hint">부결</span>'}</td><td>${RES[r.result] || (r.adopted && r.kind === "war" ? "진행 중" : "-")}</td></tr>`;
+    }).join("");
+    UI.openModal(title(`조정 회의 — ${S.forceName(state, me)}`) +
+      (props.length ? `<h3>진언</h3>${props.map(UI.proposalRow).join("")}` : "") +
+      `<h3>조정의 사람들</h3>` +
+      (out ? `<p class="hint">지금 가장 승산이 큰 출정: ${S.forceName(state, out.t.owner)}의 ${out.t.name} (승산 ${out.ratio}) — 조정 여론 <b>${S.supportLabel(out.d.support)}</b></p>` : `<p class="hint">지금은 수도에서 주력군을 낼 만한 곳이 없습니다.</p>`) +
+      `<div class="otable"><table><tr><th>이름</th><th>자리</th><th>목소리</th><th>야망</th><th>출정 성향</th></tr>${rows || '<tr><td colspan="5" class="hint">조정에 아무도 없습니다.</td></tr>'}</table></div>` +
+      `<h3>지난 회의</h3>` +
+      (recs ? `<div class="otable"><table><tr><th>때</th><th>의제</th><th>여론</th><th>찬성</th><th>반대</th><th>결정</th><th>결과</th></tr>${recs}</table></div>` : `<p class="hint">아직 회의 기록이 없습니다.</p>`) +
+      `<p class="hint">관직을 가진 사람과 수도에 있는 무장이 조정에 앉고, 태수는 진언서로 절반만큼 말합니다. 목소리는 관직, 명성, 언변, 파벌이 정합니다. ` +
+      `출정이 성공하면 찬성한 사람이, 실패하면 반대한 사람이 공적과 명성을 얻고, 진 쪽은 체면을 잃습니다. 자세한 것은 도움말 「조정 회의」를 보세요.</p>` +
+      `<div class="footer"><button data-action="offices">관직</button> <button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+  };
   // ---------- border raids (국경 습격) ----------
   UI.raidRow = function (a) {
     const o = state.officers[a.oid], t = state.cities[a.city];
@@ -566,6 +605,9 @@
     officeNo: (d) => { UI.result(S.answerOfficeAsk(state, +d.id, false)); if ($("#off_chancellor")) UI.showOffices(); else UI.showOfficeAsks(); },
     diplomacy: () => state && UI.showDiplomacy(),
     court: () => state && UI.showCourt(),
+    council: () => state && UI.showCouncil(),
+    proposalYes: (d) => { UI.result(S.answerProposal(state, +d.id, true)); UI.showCouncil(); },
+    proposalNo: (d) => { UI.result(S.answerProposal(state, +d.id, false)); UI.showCouncil(); },
     tech: () => state && UI.showTech(),
     system: () => state && UI.showSystem(),
     auto: () => {
