@@ -118,7 +118,7 @@
     const msgs = [];
     const r = contest(state, fid, ruler, () => S.rand(state), opts.by);
     let heir = r.named || S.pickHeir(ruler, heirs);
-    const how = ruler.status === "dead" ? "세상을 떠나" : ruler.status === "captive" ? "사로잡혀" : "물러나";
+    const how = ruler.beheaded ? "참수되어" : ruler.status === "dead" ? "세상을 떠나" : "물러나";
     const top = [...r.backing.entries()].sort((a, b) => b[1] - a[1])[0];
     let seized = false;
     if (opts.by && opts.take) {

@@ -76,7 +76,7 @@
   S.newGame = function (scenario, playerForce, seed, opts) {
     opts = opts || {};
     const state = {
-      version: 1,
+      version: S.SAVE_VERSION,
       lifespan: opts.lifespan || "real",
       fiction: opts.fiction !== false, // figures of the novel take part
       women: opts.women !== false, // women take part
@@ -325,6 +325,19 @@
   };
   S.officersOf = (state, fid) => Object.values(state.officers).filter((o) => o.force === fid && o.status === "serving");
   S.isRuler = (state, o) => o.force && state.forces[o.force] && state.forces[o.force].ruler === o.id;
+  // The ruler of fid cannot lead: "captive" while he is held, "returning"
+  // on his way home once freed (o.homeBy: the day he arrives). Meanwhile the
+  // force decides nothing as a whole (war, envoys, the court, offices) and
+  // each governor keeps his own city.
+  S.rulerAway = function (state, fid) {
+    const f = fid && state.forces[fid];
+    const r = f && f.alive && state.officers[f.ruler];
+    if (!r) return null;
+    if (r.status === "captive") return "captive";
+    if (r.homeBy != null && S.today(state) < r.homeBy) return "returning";
+    return null;
+  };
+  S.RETURN_KM = 30; // a freed ruler's way home, km a day (at least 5 days)
   S.forceName = (state, fid) => (fid && state.forces[fid] ? state.forces[fid].name + "군" : "공백지");
   S.best = (list, key) => list.reduce((a, b) => (b[key] > a[key] ? b : a), list[0]);
 
@@ -719,7 +732,7 @@
     freeCaptive(state, t);
     const where = t.status === "retired" ? "옛 주군을 기리며 세상을 등졌습니다"
       : t.status !== "serving" ? "재야로 돌아갔습니다"
-      : S.isRuler(state, t) ? `${S.ro(S.placeName(state, t.city))} 돌아가 다시 세력을 이끕니다`
+      : S.isRuler(state, t) ? `${S.ro(S.placeName(state, t.city))} 돌아가는 길에 오릅니다. 돌아갈 때까지 그 세력은 세력 전체의 일을 멈춥니다`
       : `${S.forceName(state, t.force)}의 ${S.ro(S.placeName(state, t.city))} 돌아갔습니다`;
     return { ok: true, msg: `포로 ${S.josa(t.name, "을", "를")} 해방했습니다. ${S.josa(t.name, "은", "는")} ${where}.` };
   };
@@ -734,15 +747,19 @@
       return { ok: true, begged: true, msg: `형장에 끌려 나온 ${S.josa(t.name, "이", "가")} 목숨을 구걸합니다. "살려만 주신다면 견마지로를 다하겠습니다!"` };
     }
     t.begged = true; // the chance is spent either way
+    const ledFid = S.isRuler(state, t) ? t.force : null;
     S.relAdd(state, c.owner, t.force, t.lord ? S.DIPLO.beheadLord : S.DIPLO.behead);
     t.status = "dead";
     t.hidden = true;
     t.captor = null;
     t.lord = false;
+    if (ledFid) t.beheaded = true; // for the news of who follows him
     const shaken = S.grieve(state, t, c.owner);
     const msg = `${S.forceName(state, c.owner)}이 포로 ${from}${S.josa(t.name, "을", "를")} 참수했습니다.` +
       (shaken.length ? ` 가까웠던 ${S.josa(shaken.join(", "), "이", "가")} 크게 흔들립니다.` : "");
     if (c.owner !== state.playerForce) S.addLog(state, msg, t.force === state.playerForce ? "warn" : "info");
+    // A ruler put to death: only now does someone follow him.
+    if (ledFid && state.forces[ledFid].alive) checkForce(state, ledFid, null);
     return { ok: true, msg };
   };
 
@@ -756,16 +773,19 @@
     t.lord = false;
     const home = t.force && state.forces[t.force] && state.forces[t.force].alive ? S.citiesOf(state, t.force) : [];
     if (home.length) {
+      const from = t.city;
       t.status = "serving";
       t.city = home.reduce((a, b) => (S.nodeKm(state, t.city, b.id) < S.nodeKm(state, t.city, a.id) ? b : a)).id;
       S.officersMoved(state);
-      // A ruler set free takes his place again.
       const f = state.forces[t.force];
-      if (lord && f.ruler !== t.id) {
-        f.ruler = t.id;
-        f.name = t.name;
-        t.loyalty = 100;
-        S.addLog(state, `풀려난 ${S.josa(t.name, "이", "가")} 돌아와 다시 세력을 이끕니다.`, t.force === state.playerForce ? "sys" : "info");
+      if (lord && f.ruler === t.id) {
+        // A ruler set free makes his way home; until he is back the force
+        // waits on him (S.rulerAway).
+        const days = Math.max(5, Math.ceil((S.nodeKm(state, from, t.city) || 0) / S.RETURN_KM));
+        t.homeBy = S.today(state) + days;
+        S.addLog(state, `풀려난 ${S.josa(t.name, "이", "가")} ${S.ro(S.placeName(state, t.city))} 돌아가는 길에 올랐습니다. (${days}일) 그동안 ${f.name}군은 세력의 일을 멈추고 태수들이 각자 성을 지킵니다.`, t.force === state.playerForce ? "warn" : "info");
+      } else if (lord) {
+        t.loyalty = Math.min(t.loyalty, 60); // another took his seat meanwhile
       }
     } else if (t.mourn) {
       S.retire(state, t);
@@ -1062,7 +1082,7 @@
       S.addLog(state, msg, "fall");
       return;
     }
-    if (ruler.status !== "serving") {
+    if (ruler.status !== "serving" && ruler.status !== "captive") {
       const heirs = S.officersOf(state, fid);
       if (!heirs.length) {
         // No one left to lead; the cities fall vacant.
@@ -1331,7 +1351,7 @@
   function runDeaths(state) {
     for (const o of Object.values(state.officers)) {
       if (o.status === "dead" || !o.death || o.death.year !== state.year || o.death.month !== state.month) continue;
-      const wasRuler = S.isRuler(state, o) && o.status === "serving";
+      const wasRuler = S.isRuler(state, o) && (o.status === "serving" || o.status === "captive");
       const fid = o.force;
       const prev = o.status;
       o.status = "dead";
@@ -1386,6 +1406,10 @@
     }
   }
 
+  // The save format. 1: the old game, one ruler and his orders. 2: the
+  // redesign (standing, councils, playing any officer). Older saves are
+  // brought up to date by S.migrate; a save from a newer game is refused.
+  S.SAVE_VERSION = 2;
   // Bring saves from older versions up to date.
   S.migrate = function (state) {
     S.useMap(state.map);

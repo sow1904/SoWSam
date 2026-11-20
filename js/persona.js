@@ -30,7 +30,7 @@
     propose: { wait: 3, push: 0.15, opinion: 300, speech: 500, bar: -0.1, adopt: { merit: 3, op: 3 }, refuse: { content: -3 } },
     slander: { wait: 6 },
     post: { wait: 3, need: 10, displaced: -10 },
-    flee: { base: 30, fame: 0.5, opinion: 0.5, fail: -10, lord: -20 },
+    flee: { base: 10, fame: 0.4, opinion: 0.5, again: 15, fail: -10, lord: -20 },
     leave: { op: -15 },
     serve: { base: 30, fame: 0.4, ability: 0.5, feel: 0.5, opinion: 0.3, wait: 6 },
     style: { 할거: -2 }, // a month: what the lord comes to think of a governor keeping his own way
@@ -51,14 +51,14 @@
   S.playerRules = function (state) {
     if (!state.playerForce) return false;
     const o = S.playerChar(state);
-    return !o || (o.status === "serving" && o.force === state.playerForce && S.isRuler(state, o));
+    return !o || (o.status === "serving" && o.force === state.playerForce && S.isRuler(state, o) && !S.rulerAway(state, o.force));
   };
-  S.ROLES = { ruler: "군주", court: "조정", governor: "태수", general: "장수", free: "재야", captive: "포로", gone: "없음" };
+  S.ROLES = { ruler: "군주", returning: "귀환 중", court: "조정", governor: "태수", general: "장수", free: "재야", captive: "포로", gone: "없음" };
   S.playerRole = function (state) {
     const o = S.playerChar(state);
     if (!o) return null;
     if (o.status === "serving") {
-      if (S.isRuler(state, o)) return "ruler";
+      if (S.isRuler(state, o)) return S.rulerAway(state, o.force) ? "returning" : "ruler";
       if (S.governs(state, o)) return "governor";
       if (S.officeOf(state, o) || o.city === S.capitalOf(state, o.force)) return "court";
       return "general";
@@ -182,7 +182,7 @@
     if (S.tieOf(from, x) >= H.tie) return "인연";
     return "가까운 사이";
   };
-  S.pickHeir = function (state, oid) {
+  S.takeHeir = function (state, oid) {
     const h = state.heirPick;
     if (!h || !h.list.includes(oid)) return fail("이어받을 수 없는 인물입니다.");
     return S.setPlayer(state, oid);
@@ -197,6 +197,7 @@
     if (state.over) return "게임이 끝났습니다.";
     if (state.heirPick) return "먼저 뒤를 이을 인물을 고르세요.";
     if (o.transit) return "길 위에 있어 지금은 할 수 없습니다.";
+    if (o.homeBy != null && S.today(state) < o.homeBy) return `풀려나 돌아가는 길입니다. (${o.homeBy - S.today(state)}일 남음)`;
     if (used(state, o)) return "이번 달에는 이미 움직였습니다.";
     return "";
   }
@@ -330,7 +331,7 @@
     const r = rulerOf(state, fid);
     if (!r || S.recruitBar(state, fid, o)) return 0;
     const F = P.flee;
-    return clamp(Math.round(F.base + (o.fame || 0) * F.fame + S.opinion(state, r, o) * F.opinion + S.feelFor(o, fid) / 2), 5, 95);
+    return clamp(Math.round(F.base + (o.fame || 0) * F.fame + S.opinion(state, r, o) * F.opinion + S.feelFor(o, fid) / 2 - (o.fled || 0) * F.again), 5, 90);
   }
   function joinForce(state, o, fid, cid, loyalty) {
     leaveSeat(state, o);
@@ -359,6 +360,7 @@
       return { ok: true, msg: `${S.forceName(state, fid)}에 몸을 맡기려 했으나 받아 주지 않았습니다. 소문이 돌아 ${lord.name}의 의견이 떨어졌습니다.` };
     }
     S.opAdd(lord, o, P.flee.lord);
+    o.fled = (o.fled || 0) + 1; // a known turncoat is trusted less next time
     joinForce(state, o, fid, opt.city, 60);
     S.syncPlayer(state);
     const msg = `${S.josa(S.forceName(state, from), "을", "를")} 버리고 ${S.forceName(state, fid)}의 ${S.ro(state.cities[opt.city].name)} 달아났습니다(출분).`;
@@ -566,6 +568,7 @@
   S.migrate = function (state) {
     const s = migrate.apply(this, arguments);
     if (s.player === undefined) s.player = s.playerForce && s.forces[s.playerForce] ? s.forces[s.playerForce].ruler : null;
+    s.version = S.SAVE_VERSION;
     return s;
   };
   // Who may be chosen at the start: the force's people, and the wanderers in its cities.

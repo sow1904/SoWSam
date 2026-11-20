@@ -23,6 +23,7 @@
     if (role === "captive") return `${S.forceName(state, o.captor)}의 포로 · ${where}`;
     const off = S.officeOf(state, o);
     const gov = S.governs(state, o);
+    if (role === "returning") return `${S.forceName(state, o.force)} 군주 · 귀환 중 (${o.homeBy - S.today(state)}일 남음)`;
     return `${S.forceName(state, o.force)} ${role === "ruler" ? "군주" : off ? off.name : gov ? `${gov.name} 태수` : role === "court" ? "조정" : "장수"} · ${where}`;
   };
 
@@ -46,6 +47,9 @@
     if (role === "ruler") {
       html += `<p>군주로서 세력의 모든 명령을 내립니다. 도시 창, 외교, 관직, 조정, 황실 창을 쓰십시오.</p>`;
     }
+    if (role === "returning") {
+      html += `<p>풀려나 ${S.ro(S.placeName(state, o.city))} 돌아가는 길입니다. 돌아갈 때까지 세력 전체의 일(출정, 외교, 관직, 조정, 황실)은 멈추고, 각 태수가 자기 성을 알아서 다스립니다.</p>`;
+    }
     // 교류: anyone at hand.
     const peers = S.minglePeers(state);
     if (peers.length && role !== "captive") {
@@ -53,7 +57,7 @@
         [x.id, `${x.name} (${x.status === "free" ? "재야" : S.forceName(state, x.force)}, 그의 의견 ${S.opinion(state, x, o)})`])) + go("mingle", "교류"),
         "서로의 의견이 오릅니다. 의견은 관직 청원, 부임, 진언, 사관이 받아들여질지에 듭니다.");
     }
-    if (o.status === "serving" && role !== "ruler") {
+    if (o.status === "serving" && role !== "ruler" && role !== "returning") {
       // The court.
       html += `<h3>조정</h3>` +
         row("조정 성향", ["auto", "war", "peace"].map((k) => `<button data-action="paStance" data-v="${k}" class="${ps.stance === k ? "primary" : ""}">${{ auto: "내 뜻대로(자동)", war: "주전", peace: "주화" }[k]}</button>`).join(" "),
@@ -191,7 +195,7 @@
       }
     },
     heirPick: (d) => {
-      if (!UI.result(S.pickHeir(state, d.id))) return;
+      if (!UI.result(S.takeHeir(state, d.id))) return;
       const o = S.playerChar(state);
       UI.closeModal();
       if (o && state.cities[o.city]) { UI.selected = o.city; UI.centerOn(state.cities[o.city]); }

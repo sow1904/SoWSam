@@ -310,7 +310,7 @@
           `<b>포로</b>로 두면 그 도시에 가두어 둡니다. 그 뒤로는 「등용」 명령(무장의 한 달 명령)으로 언제든 다시 설득할 수 있고, 「포로」 명령에서 해방하거나 참수할 수 있습니다. `
         : `가두어 둔 포로입니다. 설득은 「등용」 명령으로 합니다(무장의 한 달 명령). 포로는 매달 조금씩 탈출하기도 합니다. `) +
       `<b>해방</b>하면 원래 세력의 가장 가까운 도시로 돌아가고, 그 세력이 멸망했으면 재야가 됩니다. <b>참수</b>하면 죽습니다.</p>` +
-      (list.some((o) => o.lord) ? `<p class="hint"><b>군주</b>는 남을 섬기지 않고 가두어 둘 수도 없습니다. 해방하거나 참수해야 하며, 정하지 않고 창을 닫으면 해방합니다. 해방된 군주는 세력이 남아 있으면 돌아가 다시 세력을 이끕니다.</p>` : "") +
+      (list.some((o) => o.lord) ? `<p class="hint"><b>군주</b>는 남을 섬기지 않고 가두어 둘 수도 없습니다. 해방하거나 참수해야 하며, 정하지 않고 창을 닫으면 해방합니다. 해방된 군주는 세력이 남아 있으면 돌아가 다시 세력을 이끕니다. 돌아가는 동안 그 세력은 출정, 외교, 관직 같은 세력 전체의 일을 하지 못합니다. 참수하면 그제야 후계자가 세력을 잇습니다.</p>` : "") +
       UI.officerTable(list, { loyalty: true, extraHead: "원 소속 · 처우", extra: (o) =>
         `<span class="capt"><span class="hint">${o.lord ? "군주 · " : ""}${o.force && state.forces[o.force] ? S.forceName(state, o.force) : "재야"} · ${S.placeName(state, o.city)}${o.begged ? " · <b>목숨을 구걸함</b>" : ""}${S.liegeOf(state, o) ? ` · <b>옛 주군 ${S.josa(state.officers[o.liege].name, "을", "를")} 기다림</b>` : S.recruitBar(state, me, o) ? " · <b>옛 주군을 기려 섬기지 않음</b>" : ""}</span>${buttons(o)}</span>` }) +
       `<div class="footer"><button class="primary" data-action="close">${fresh ? "나머지는 포로로 둔다" : "닫기"}</button></div>`, true);

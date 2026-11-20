@@ -401,7 +401,7 @@
       f.sizeLog = f.sizeLog || [];
       f.sizeLog.push(S.citiesOf(state, f.id).length);
       if (f.sizeLog.length > 12) f.sizeLog.shift();
-      if (f.id !== player) {
+      if (f.id !== player && !S.rulerAway(state, f.id)) {
         for (const [off, o] of S.fillSeats(state, f.id)) {
           if (f.id === state.playerForce) S.addLog(state, `${S.josa(o.name, "이", "가")} ${off.name}에 올랐습니다.`, "strife");
         }

@@ -95,7 +95,7 @@
       // A save from a map that is gone, or from before cities were added or
       // removed, cannot be played on.
       const map = saved && S.MAPS[saved.map];
-      if (!map) return null;
+      if (!map || (saved.version || 1) > S.SAVE_VERSION) return null; // gone, or from a newer game
       const now = Object.keys(map.cities), then = Object.keys(saved.cities || {});
       return now.length === then.length && now.every((id) => saved.cities[id]) ? saved : null;
     } catch (e) {

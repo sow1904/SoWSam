@@ -17,6 +17,8 @@
   const pts = (list) => list.map((p) => p.join(",")).join(" ");
   // The SVG's box on screen, untouched by a pending transform.
   const mapRect = () => ($("#map").style.transform && shownRect) || $("#map").getBoundingClientRect();
+  // The still picture below and the live map above share one view.
+  const both = () => [$("#mapBase"), $("#map")].filter(Boolean);
 
   function fitView(r) {
     view.w = Math.max(200, r.width / view.zoom);
@@ -27,23 +29,26 @@
   }
   // Show the new view at once by moving the old picture; settle it soon.
   function previewView() {
-    const svg = $("#map"), r = mapRect();
+    const r = mapRect();
     fitView(r);
     const s = shown.w / view.w;
     const tx = ((shown.x - view.x) / view.w) * r.width, ty = ((shown.y - view.y) / view.h) * r.height;
-    svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    for (const svg of both()) {
+      svg.classList.add("moving");
+      svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    }
     clearTimeout(settleTimer);
     settleTimer = setTimeout(applyView, 150);
   }
   function applyView() {
     clearTimeout(settleTimer);
     const svg = $("#map");
-    svg.style.transform = "";
+    for (const x of both()) { x.style.transform = ""; x.classList.remove("moving"); }
     const r = svg.getBoundingClientRect();
     shownRect = r;
     fitView(r);
     Object.assign(shown, { x: view.x, y: view.y, w: view.w, h: view.h });
-    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+    for (const x of both()) x.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
     svg.classList.toggle("far", view.zoom < 0.75);
   }
   UI.applyView = applyView;
@@ -142,8 +147,9 @@
     const M = S.MAP;
     // The painted terrain map when the map has one, else the drawn outline.
     const T = M.terrain;
-    const map = $("#map");
+    const map = $("#map"), baseSvg = $("#mapBase");
     map.classList.toggle("terrain", !!T);
+    baseSvg.classList.toggle("terrain", !!T);
     // The sea and terrain picture are drawn once; only what changes is redrawn.
     const baseKey = T ? T.image : "outline";
     if (map.dataset.base !== baseKey || !$("#cityLayer")) {
@@ -154,7 +160,8 @@
           `<polygon class="land" points="${pts(M.land)}"/>` +
           M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
           M.rivers.map((r) => `<polyline class="river" points="${pts(r)}"/>`).join("");
-      map.innerHTML = base + LAYERS.map((id) => `<g id="${id}"></g>`).join("");
+      baseSvg.innerHTML = base;
+      map.innerHTML = LAYERS.map((id) => `<g id="${id}"></g>`).join("");
       map.dataset.base = baseKey;
     }
     // Province names at the centre of their cities.

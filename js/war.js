@@ -743,6 +743,7 @@
       if (now - state.warLog[k].last > 12) { delete state.warLog[k]; continue; }
       const terms = S.peaceTerms(state, a, b);
       if (!terms || !terms.loserWants || !terms.winnerWants || !S.chance(state, W.peace.chance)) continue;
+      if (S.rulerAway(state, a) || S.rulerAway(state, b)) continue; // no one to sign
       if (S.councilBlocksPeace && S.councilBlocksPeace(state, terms)) continue; // the winner's court would fight on (js/council.js)
       const player = state.playerForce && !S.spectating(state) ? state.playerForce : null;
       if (terms.winner === player || terms.loser === player) {

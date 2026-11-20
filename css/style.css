@@ -134,7 +134,14 @@ input[type=checkbox], input[type=radio] { accent-color: var(--red2); }
 /* The panel (summary over the log) on the left; the map on the right. */
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minmax(0, 1fr); }
 #mapWrap { position: relative; grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; display: flex; overflow: hidden; background: #1d4f7a; }
-#map { width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; transform-origin: 0 0; will-change: transform; }
+/* Two SVGs on one view: the still picture (sea, terrain) below, and what
+   changes (roads, cities, armies) above, so redrawing an army never makes
+   the browser repaint the big terrain picture. Both are lifted onto the GPU
+   only while the view moves. */
+#mapBase, #map { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+#mapBase { pointer-events: none; }
+#map { touch-action: none; cursor: grab; user-select: none; }
+#mapBase.moving, #map.moving { will-change: transform; }
 #map:active { cursor: grabbing; }
 #panel {
   grid-column: 1; grid-row: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
@@ -250,7 +257,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 .battle.mineb circle { fill: rgba(240, 179, 94, 0.95); stroke: #b31b1b; }
 .battle text { font-size: 13px; text-anchor: middle; fill: #fff; pointer-events: none; }
 .fort circle.ring, .city circle.ring { fill: none; stroke: transparent; stroke-width: 3; }
-.fort.sel circle.ring, .city.sel circle.ring { stroke: #ffd76a; filter: drop-shadow(0 0 3px #ffb300); animation: pulse 1.6s ease-in-out infinite; }
+.fort.sel circle.ring, .city.sel circle.ring { stroke: #ffd76a; stroke-width: 4; animation: pulse 1.6s ease-in-out infinite; }
 .fort.target circle.ring, .city.target circle.ring { stroke: #ff6a55; stroke-dasharray: 4 3; }
 @keyframes pulse { 50% { stroke-opacity: 0.45; } }
 .fort text { font-size: 11px; font-weight: 700; fill: var(--label); text-anchor: middle; paint-order: stroke; stroke: var(--land); stroke-width: 3px; }
@@ -271,7 +278,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 .city.mine text.name { fill: #7a1010; }
 
 /* the painted terrain map */
-#map.terrain .sea { fill: #1d4f7a; }
+#mapBase.terrain .sea { fill: #1d4f7a; }
 #map.terrain .terrain-img { pointer-events: none; }
 #map.terrain .prov { fill: #fffbe8; opacity: 0.16; }
 #map.terrain .road { stroke: rgba(255, 244, 214, 0.8); stroke-width: 2.2; stroke-dasharray: 6 4; opacity: 1; }

@@ -525,11 +525,14 @@
     }
     // The main army goes to war from the capital (js/war.js); the cities
     // keep their garrisons.
-    S.warAI(state, fid);
+    // With the ruler held or on his way home, only the governors act.
+    const away = S.rulerAway(state, fid);
+    if (!away) S.warAI(state, fid);
     manageForts(state, fid);
     S.reliefAI(state, fid);
     const mine = S.playerCity ? S.playerCity(state) : null; // the player's own city is his to run (js/persona.js)
     for (const c of S.citiesOf(state, fid)) if (c.id !== mine) domestic(state, c, fid);
+    if (away) return;
     S.diploAI(state, fid);
     S.courtAI(state, fid);
     S.capitalAI(state, fid);
@@ -606,6 +609,14 @@
     S.runBattles(state, onEvent);
     if (state.over) return null;
     S.runEnvoys(state, onEvent);
+    // Freed rulers reaching home.
+    const today = S.today(state);
+    for (const f of Object.values(state.forces)) {
+      const r = f.alive && state.officers[f.ruler];
+      if (!r || r.homeBy == null || today < r.homeBy) continue;
+      delete r.homeBy;
+      S.addLog(state, `${S.josa(r.name, "이", "가")} ${S.placeName(state, r.city)}에 돌아와 다시 세력을 이끕니다.`, f.id === state.playerForce ? "sys" : "info");
+    }
     for (const [fid, d] of Object.entries(state.aiDays)) {
       if (d !== state.day || !state.forces[fid].alive) continue;
       S.runAI(state, fid, onEvent);
