@@ -10,6 +10,15 @@
   const LABEL = { plague: "역병", drought: "가뭄", flood: "홍수", typhoon: "태풍", locust: "황충", crop: "흉작", rich: "풍작" };
   const kindOf = (it) => (it.kind === "crop" ? (it.crop === 2 ? "rich" : "crop") : it.kind);
   const placeOf = (it) => (it.city ? state.cities[it.city].name : S.PROVINCES[it.prov]);
+  const pc = (v) => `${Math.round(v * 100)}%`;
+  const EFFECT = {
+    plague: `석 달 동안 인구·병역 인구 -${pc(SE.plague.toll[0])}~${pc(SE.plague.toll[1])}`,
+    flood: `석 달 동안 병역 인구 -${pc(SE.flood.manpower)}, 회복 없음`,
+    typhoon: `석 달 동안 목재 생산 ${pc(SE.typhoon.wood)}`,
+    drought: `가을 수확 ${pc(SE.drought.harvest)}`,
+    locust: `석 달 동안 비축 군량 -${pc(SE.locust.store)}, 수확 ${pc(SE.locust.harvest)}`,
+    crop: `수확 ${pc(SE.crop.mul[0])}`, rich: `수확 ${pc(SE.crop.mul[2])}`,
+  };
   let timer = 0;
 
   UI.showSeason = function (news, auto) {
@@ -19,7 +28,7 @@
     const marks = {};
     for (const it of news.items) {
       const k = kindOf(it);
-      const cs = it.city ? [it.city] : Object.values(state.cities).filter((c) => c.prov === it.prov).map((c) => c.id);
+      const cs = it.cities || (it.city ? [it.city] : Object.values(state.cities).filter((c) => c.prov === it.prov).map((c) => c.id));
       for (const id of cs) (marks[id] = marks[id] || []).includes(k) || marks[id].push(k);
     }
     const groups = {};
@@ -27,9 +36,7 @@
     const order = ["plague", "flood", "typhoon", "drought", "locust", "crop", "rich"];
     const lines = order.filter((k) => groups[k]).map((k) => {
       const list = groups[k];
-      const weekly = k === "plague" || k === "flood" || k === "typhoon" || k === "locust";
-      return `<li><span class="sw" style="background:${COLORS[k]}"></span><b>${LABEL[k]}</b> ` +
-        list.map((it) => `${placeOf(it)}${weekly ? ` <span class="hint">(${it.when})</span>` : ""}`).join(", ") + `</li>`;
+      return `<li><span class="sw" style="background:${COLORS[k]}"></span><b>${LABEL[k]}</b> ` + list.map(placeOf).join(", ") + ` <span class="hint">${EFFECT[k]}</span></li>`;
     }).join("");
     const name = SE.names[news.season];
     const quiet = { 0: "봄에는 큰 재해가 없습니다. 씨를 뿌리는 계절입니다.", 1: "올여름은 큰 재해 없이 지나갈 듯합니다.", 2: "올가을은 어디나 평작입니다.", 3: "올겨울은 역병 없이 지나갈 듯합니다." }[news.season];

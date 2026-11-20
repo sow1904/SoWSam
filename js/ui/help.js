@@ -217,14 +217,14 @@
     ["seasons", "계절과 재해", () => {
       const SE = S.SEASON, pc = (v) => `${Math.round(v * 100)}%`;
       const names = (ps) => ps.map((p) => S.PROVINCES[p]).join(", ");
-      return p("1~3월은 봄, 4~6월은 여름, 7~9월은 가을, 10~12월은 겨울입니다. 계절이 시작되는 날(1·4·7·10월 1일) 그 계절에 일어날 일이 한꺼번에 정해지고, 작은 지도로 어디에 일어나는지 보여 줍니다. 상태 줄의 계절 버튼으로 다시 볼 수 있습니다. 주 단위 재해는 한 계절 12주 동안 매주 주사위를 굴려 처음 걸린 주에 일어납니다. 도시 정보에 지금 그 도시에 걸린 재해가 나옵니다.") +
+      return p("1~3월은 봄, 4~6월은 여름, 7~9월은 가을, 10~12월은 겨울입니다. 계절이 시작되는 날(1·4·7·10월 1일) 그 계절에 일어날 일이 지방(주)마다 한꺼번에 정해지고, 작은 지도로 어디에 일어나는지 보여 줍니다. 상태 줄의 계절 버튼으로 다시 볼 수 있습니다. 재해는 그 계절 석 달 동안 이어지고, 피해는 매달 1일에 3분의 1씩 옵니다. 9월 말 수확만 한 번에 셈합니다. 도시 정보에 지금 그 도시에 걸린 재해가 나옵니다.") +
         table(["재해", "계절", "어디", "무엇을"], [
-          ["역병", "겨울", "모든 도시, 주마다 " + pc(SE.plague.week) + " × 도시 크기. " + SE.plague.year + "% 확률로 역병이 크게 도는 해(" + SE.plague.yearMul + "배)", "인구와 병역 인구 " + pc(SE.plague.toll[0]) + "~" + pc(SE.plague.toll[1]) + " 감소. 의술 한 단계마다 확률 -" + pc(SE.plague.medicine.chance) + ", 피해 -" + pc(SE.plague.medicine.toll)],
-          ["가뭄", "여름", "지방(주)마다 여름에 한 번, 북쪽 메마른 땅일수록 잦음(량주 " + pc(SE.drought.prov.liang) + ")", "그해 가을 수확 " + pc(SE.drought.harvest) + ", 풍작이 나지 않음, 그해 홍수 없음"],
-          ["홍수", "여름", names(SE.flood.provs) + "(하남·중원)의 도시, 주마다 " + pc(SE.flood.week), "병역 인구 " + pc(SE.flood.manpower) + " 감소, 여름이 끝날 때까지 회복 없음"],
-          ["태풍", "여름", "지방(주)마다 여름에 한 번, 남쪽과 동쪽 바닷가일수록 잦음(교주 " + pc(SE.typhoon.prov.jiao) + ")", "목재 생산 " + pc(SE.typhoon.wood) + ", " + SE.typhoon.months + "달"],
-          ["작황", "가을", "지방(주)마다 해마다 한 번: 흉작 " + pc(SE.crop.odds[0]) + ", 평작 " + pc(SE.crop.odds[1]) + ", 풍작 " + pc(SE.crop.odds[2]), "그해 수확 " + SE.crop.mul.map(pc).join(" / ")],
-          ["황충", "가을", names(SE.locust.provs) + ". 한 번 일어나면 그 주는 0%에서 다시 시작해 " + SE.locust.years + "년에 걸쳐 한 가을 " + pc(SE.locust.season) + "까지 오름", "비축 군량 -" + pc(SE.locust.store) + ", 그해 수확 " + pc(SE.locust.harvest)],
+          ["역병", "겨울", "지방마다 " + pc(SE.plague.prov) + " 안팎(도시가 클수록 높음). " + SE.plague.year + "% 확률로 역병이 크게 도는 해(" + SE.plague.yearMul + "배)", "석 달 동안 인구와 병역 인구 " + pc(SE.plague.toll[0]) + "~" + pc(SE.plague.toll[1]) + " 감소. 의술 한 단계마다 도시가 " + pc(SE.plague.medicine.spare) + " 확률로 피하고, 피해 -" + pc(SE.plague.medicine.toll)],
+          ["가뭄", "여름", "지방마다, 북쪽 메마른 땅일수록 잦음(량주 " + pc(SE.drought.prov.liang) + ", 남쪽 " + pc(SE.drought.other) + ")", "그해 가을 수확 " + pc(SE.drought.harvest) + ", 풍작이 나지 않음, 그해 홍수 없음"],
+          ["홍수", "여름", names(SE.flood.provs) + "(하남·중원)의 도시마다 " + pc(SE.flood.city), "석 달 동안 병역 인구 " + pc(SE.flood.manpower) + " 감소, 회복 없음"],
+          ["태풍", "여름", "지방마다, 남쪽과 동쪽 바닷가일수록 잦고 내륙에도 옴(교주 " + pc(SE.typhoon.prov.jiao) + " ~ 사례 " + pc(SE.typhoon.prov.sili) + "). 말의 땅과 익주, 남중은 오지 않음", "석 달 동안 목재 생산 " + pc(SE.typhoon.wood)],
+          ["작황", "가을", "지방마다 해마다 한 번: 흉작 " + pc(SE.crop.odds[0]) + ", 평작 " + pc(SE.crop.odds[1]) + ", 풍작 " + pc(SE.crop.odds[2]), "그해 수확 " + SE.crop.mul.map(pc).join(" / ")],
+          ["황충", "가을", names(SE.locust.provs) + ". 한 번 일어나면 그 지방은 0%에서 다시 시작해 " + SE.locust.years + "년에 걸쳐 한 가을 " + pc(SE.locust.season) + "까지 오름", "석 달 동안 비축 군량 -" + pc(SE.locust.store) + ", 그해 수확 " + pc(SE.locust.harvest) + ", 풍작이 나지 않음"],
         ]) +
         p("수확(9월 말)에는 작황, 가뭄, 황충이 곱해집니다. 말의 땅(량주, 옹주, 병주, 유주, 요동)은 목재와 철이 적게 나는 대신 말이 많이 납니다.");
     }],

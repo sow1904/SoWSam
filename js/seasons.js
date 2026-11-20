@@ -2,35 +2,36 @@
 //
 //   봄 1-3월 · 여름 4-6월 · 가을 7-9월 · 겨울 10-12월
 //
-// On the first day of each season everything that season holds is settled
-// at once and shown to the player (js/ui/seasons.js): weekly hazards are
-// thrown for each of the season's twelve weeks, so the news says where and
-// in which week they strike; each strikes when its week comes.
+// On the first day of each season everything the season holds is settled at
+// once, province (주) by province, and shown to the player on the small map
+// (js/ui/seasons.js). A calamity lasts the season's three months and does
+// its harm a third at a time, on the first day of each of them; only the
+// harvest (9월) is reckoned once.
 //
-//   역병 (겨울): city by city, weekly. Kills a large share of the people.
-//     의술 lowers both the chance and the toll. Some winters are plague
-//     years, when it is far likelier everywhere.
-//   가뭄 (여름): province by province. That autumn's harvest fails in part.
-//   홍수 (여름): the cities of 사례 (하남), 연주 and 예주 (중원), weekly.
-//     Men of fighting age are lost and none return until summer ends.
-//   태풍 (여름): province by province, mostly on the southern and eastern
-//     coasts. Timber yields fall for half a year.
+//   역병 (겨울): a province by chance, likelier where the cities are large;
+//     some winters are plague years. People and men of fighting age die.
+//     의술 spares a city now and then and lessens the toll.
+//   가뭄 (여름): a province by chance, likelier in the dry north. That
+//     autumn's harvest fails in part; no rich harvest, no flood.
+//   홍수 (여름): city by city in 사례 (하남), 연주 and 예주 (중원). Men of
+//     fighting age are lost through the summer and none return.
+//   태풍 (여름): a province by chance, most on the southern and eastern
+//     coasts, but inland too (one reached 낙양 in 190); not the horse
+//     country, 익주 or 남중 behind their mountains. Timber yields fall.
 //   작황 (가을): each province throws once a year: 흉작, 평작 or 풍작.
-//   황충 (가을): 옹주, 사례, 형북, 연주, 예주, 청주, 서주, 기주, weekly.
-//     After a swarm a province is clear; the chance then climbs back over
-//     five years. It eats the harvest and much of what is stored.
+//   황충 (가을): 옹주, 사례, 형북, 연주, 예주, 청주, 서주, 기주. After a
+//     swarm a province is clear; the chance then climbs back over five
+//     years. It eats what is stored and most of the harvest.
 // The harvest (9월) is multiplied by the crop, drought and locusts.
-// why: the user's design (season events on each season's first month,
-// shown on the small map of the land).
+// why: the user's design.
 (function (S) {
   const clamp = S.clamp;
   const SE = S.SEASON = {
     names: ["봄", "여름", "가을", "겨울"],
-    weeks: 12, // four to a month
-    plague: { week: 0.004, size: 0.15, year: 10, yearMul: 4, toll: [0.12, 0.2], medicine: { chance: 0.25, toll: 0.2 } },
+    plague: { prov: 0.08, size: 0.1, year: 10, yearMul: 3, toll: [0.1, 0.16], medicine: { spare: 0.25, toll: 0.2 } },
     drought: { prov: { liang: 0.15, bing: 0.12, yong: 0.12, sili: 0.1, ji: 0.1, you: 0.1, yan: 0.08, yu: 0.08, qing: 0.08, xu: 0.06 }, other: 0.04, harvest: 0.6 },
-    flood: { provs: ["sili", "yan", "yu"], week: 0.012, manpower: 0.25 },
-    typhoon: { prov: { jiao: 0.35, yang: 0.3, jingnan: 0.15, xu: 0.15, qing: 0.15, liaodong: 0.1, ji: 0.08, jingbei: 0.05, yu: 0.03, yan: 0.03 }, wood: 0.5, months: 6 },
+    flood: { provs: ["sili", "yan", "yu"], blocs: ["사례", "연주", "여영", "초패"], city: 0.13, manpower: 0.25 }, // 하남 (not 관중) and 중원
+    typhoon: { prov: { jiao: 0.3, yang: 0.3, jingnan: 0.15, xu: 0.15, qing: 0.15, ji: 0.1, jingbei: 0.08, yu: 0.06, yan: 0.06, sili: 0.05 }, wood: 0.5 },
     crop: { odds: [0.25, 0.5, 0.25], mul: [0.65, 1, 1.35], names: ["흉작", "평작", "풍작"] },
     locust: { provs: ["yong", "sili", "jingbei", "yan", "yu", "qing", "xu", "ji"], years: 5, season: 0.3, harvest: 0.4, store: 0.3 },
   };
@@ -40,53 +41,71 @@
   S.seasonName = (state) => SE.names[S.seasonOf(state.month)];
   const provCities = (state, prov) => Object.values(state.cities).filter((c) => c.prov === prov);
   const provName = (p) => S.PROVINCES[p] || p;
-  const weekly = (p, weeks) => 1 - Math.pow(1 - p, weeks); // over the whole season
   const cal = (state) => (state.cal = state.cal || { locust: {}, crop: null, drought: null });
-  // One weekly throw per week; the week it first comes up, or -1.
-  function strikeWeek(state, p) {
-    for (let w = 0; w < SE.weeks; w++) if (S.rand(state) < p) return w;
-    return -1;
-  }
-  const dayOfWeek = (start, w) => start + Math.floor(w / 4) * S.DAYS_PER_MONTH + (w % 4) * 7;
-  const weekLabel = (state, w) => `${state.month + Math.floor(w / 4)}월 ${(w % 4) + 1}주`;
+  const woe = (c) => (c.woe = c.woe || {});
+  const fmtN = (n) => (n >= 10000 ? `${Math.round(n / 1000) / 10}만` : String(n));
+  // The month index at which the present season is over.
+  const seasonEnd = (state) => S.monthsElapsed(state) + 3 - ((state.month - 1) % 3);
 
   // ---------- the season's roll ----------
-  // Settle the season that begins today. Returns the news {key, season, items}.
+  // Settle the season that begins today. Returns the news {key, year, season, items}.
   S.rollSeason = function (state) {
     const C = cal(state);
     const season = S.seasonOf(state.month);
-    const start = S.today(state);
+    const until = seasonEnd(state);
     const items = [];
-    const add = (kind, w, place, extra) => items.push(Object.assign({ kind, week: w, at: dayOfWeek(start, w), when: weekLabel(state, w), done: false }, place, extra || {}));
+    const mine = (cs) => cs.some((c) => !!state.playerForce && c.owner === state.playerForce);
+    let plagueYear = false;
     if (season === 3) {
-      // 역병: a plague year now and then.
+      // 역병, province by province.
       const P = SE.plague;
-      const bad = S.chance(state, P.year);
-      for (const c of Object.values(state.cities)) {
-        const med = c.owner ? S.techBonus(state, c.owner, "medicine") : 0;
-        const p = P.week * (0.6 + c.size * P.size) * (bad ? P.yearMul : 1) * (1 - P.medicine.chance * med);
-        const w = strikeWeek(state, p);
-        if (w >= 0) add("plague", w, { city: c.id });
+      plagueYear = S.chance(state, P.year);
+      for (const p of Object.keys(S.PROVINCES)) {
+        const cs = provCities(state, p);
+        if (!cs.length) continue;
+        const size = cs.reduce((s, c) => s + c.size, 0) / cs.length;
+        if (S.rand(state) >= P.prov * (0.7 + size * P.size) * (plagueYear ? P.yearMul : 1)) continue;
+        const hit = [];
+        for (const c of cs) {
+          const med = c.owner ? S.techBonus(state, c.owner, "medicine") : 0;
+          if (med && S.rand(state) < P.medicine.spare * med) continue; // physicians kept it out
+          const toll = (P.toll[0] + S.rand(state) * (P.toll[1] - P.toll[0])) * (1 - P.medicine.toll * med);
+          woe(c).plague = { until, toll };
+          hit.push(c.id);
+        }
+        if (hit.length) items.push({ kind: "plague", prov: p, cities: hit });
       }
-      if (bad) items.plagueYear = true;
+      const names = items.map((it) => provName(it.prov));
+      if (names.length) S.addLog(state, `${plagueYear ? "역병이 크게 도는 해입니다. " : ""}${names.join(", ")}에 역병이 돕니다. 겨울 내내 백성이 죽어 갑니다.`,
+        mine(items.flatMap((it) => it.cities.map((id) => state.cities[id]))) ? "warn" : "sys");
     } else if (season === 1) {
       // 가뭄 for the year's harvest, then 홍수 and 태풍.
       C.drought = { year: state.year, provs: [] };
       for (const p of Object.keys(S.PROVINCES)) {
-        if (!S.chance(state, Math.round(100 * (SE.drought.prov[p] != null ? SE.drought.prov[p] : SE.drought.other)))) continue;
+        if (S.rand(state) >= (SE.drought.prov[p] != null ? SE.drought.prov[p] : SE.drought.other)) continue;
         C.drought.provs.push(p);
-        add("drought", 0, { prov: p }, { quiet: true });
+        items.push({ kind: "drought", prov: p });
       }
-      if (C.drought.provs.length) S.addLog(state, `${C.drought.provs.map(provName).join(", ")}에 가뭄이 들었습니다. 올가을 수확이 줄어듭니다.`, "sys");
-      for (const p of SE.flood.provs) for (const c of provCities(state, p)) {
+      const flooded = [];
+      for (const p of SE.flood.provs) {
         if (C.drought.provs.includes(p)) continue; // a dry year floods no river
-        const w = strikeWeek(state, SE.flood.week);
-        if (w >= 0) add("flood", w, { city: c.id });
+        for (const c of provCities(state, p)) {
+          if (!SE.flood.blocs.includes(S.blocOf(c.id)) || S.rand(state) >= SE.flood.city) continue;
+          woe(c).flood = { until };
+          flooded.push(c);
+          items.push({ kind: "flood", city: c.id });
+        }
       }
+      const stormed = [];
       for (const [p, pr] of Object.entries(SE.typhoon.prov)) {
         if (S.rand(state) >= pr) continue;
-        add("typhoon", 4 + Math.floor(S.rand(state) * 8), { prov: p }); // late summer
+        for (const c of provCities(state, p)) woe(c).typhoon = { until };
+        stormed.push(p);
+        items.push({ kind: "typhoon", prov: p });
       }
+      const parts = [C.drought.provs.length && `가뭄: ${C.drought.provs.map(provName).join(", ")}`, flooded.length && `홍수: ${flooded.map((c) => c.name).join(", ")}`,
+        stormed.length && `태풍: ${stormed.map(provName).join(", ")}`].filter(Boolean);
+      if (parts.length) S.addLog(state, `올여름 — ${parts.join(" / ")}.`, mine(flooded.concat(stormed.flatMap((p) => provCities(state, p)), C.drought.provs.flatMap((p) => provCities(state, p)))) ? "warn" : "sys");
     } else if (season === 2) {
       // 황충: the longer since the last swarm, the likelier.
       const L = SE.locust;
@@ -94,9 +113,11 @@
       for (const p of L.provs) {
         if (C.locust[p] == null) C.locust[p] = state.year - Math.floor(S.rand(state) * (L.years + 1)); // the land as the game finds it
         const ripe = clamp((state.year - C.locust[p]) / L.years, 0, 1);
-        const pw = 1 - Math.pow(1 - L.season * ripe, 1 / SE.weeks);
-        const w = ripe > 0 ? strikeWeek(state, pw) : -1;
-        if (w >= 0) { add("locust", w, { prov: p }); C.locust[p] = state.year; swarm.push(p); }
+        if (!(ripe > 0 && S.rand(state) < L.season * ripe)) continue;
+        C.locust[p] = state.year;
+        swarm.push(p);
+        for (const c of provCities(state, p)) woe(c).locust = { until, year: state.year };
+        items.push({ kind: "locust", prov: p });
       }
       // 작황, by province; no rich harvest where it is dry or the locusts come.
       C.crop = { year: state.year, prov: {} };
@@ -108,93 +129,77 @@
         if (k === 2 && (dry.includes(p) || swarm.includes(p))) k = 1;
         C.crop.prov[p] = k;
         by[k].push(p);
-        if (k !== 1) add("crop", 0, { prov: p }, { crop: k, quiet: true });
+        if (k !== 1) items.push({ kind: "crop", prov: p, crop: k });
       }
+      if (swarm.length) S.addLog(state, `${swarm.map(provName).join(", ")}에 메뚜기 떼(황충)가 일었습니다. 가을 내내 쌓아 둔 군량을 갉아먹고 올해 수확을 망칩니다.`,
+        mine(swarm.flatMap((p) => provCities(state, p))) ? "warn" : "sys");
       S.addLog(state, `올해 작황 — 풍작: ${by[2].map(provName).join(", ") || "없음"} / 흉작: ${by[0].map(provName).join(", ") || "없음"}. 나머지는 평작입니다.`, "sys");
     }
-    const news = { key: `${state.year}-${season}`, year: state.year, season, items, plagueYear: !!items.plagueYear };
+    const news = { key: `${state.year}-${season}`, year: state.year, season, items, plagueYear };
     state.seasonNews = news;
     return news;
   };
-  // The chance (%) of a hazard this season, for the help and the city panel.
   S.locustRipe = (state, p) => {
     const C = cal(state);
     return C.locust[p] == null ? null : clamp((state.year - C.locust[p]) / SE.locust.years, 0, 1);
   };
 
-  // ---------- striking ----------
-  function strike(state, it) {
-    it.done = true;
+  // ---------- each month of the season: a third of the harm ----------
+  function monthHarm(state) {
     const M = S.monthsElapsed(state);
-    const mine = (c) => !!state.playerForce && c.owner === state.playerForce;
-    const say = (text, cs) => S.addLog(state, text, cs.some(mine) ? "warn" : "info");
-    if (it.kind === "plague") {
-      const c = state.cities[it.city];
-      const P = SE.plague;
-      const med = c.owner ? S.techBonus(state, c.owner, "medicine") : 0;
-      const toll = (P.toll[0] + S.rand(state) * (P.toll[1] - P.toll[0])) * (1 - P.medicine.toll * med);
-      const dead = Math.round(c.pop * toll);
-      c.pop -= dead;
-      c.manpower = Math.max(0, Math.round(c.manpower * (1 - toll)));
-      woe(c).plague = M + 2;
-      it.dead = dead;
-      say(`${c.name}에 역병이 돌아 백성 ${UIfmt(dead)}명이 죽었습니다.${med ? " (의술로 피해를 줄였습니다)" : ""}`, [c]);
-    } else if (it.kind === "flood") {
-      const c = state.cities[it.city];
-      const lost = Math.round(c.manpower * SE.flood.manpower);
-      c.manpower -= lost;
-      woe(c).flood = M + (6 - state.month) + 1; // until summer ends
-      it.lost = lost;
-      say(`${c.name}에 홍수가 나 장정 ${UIfmt(lost)}명을 잃었습니다. 여름이 끝날 때까지 병역 인구가 돌아오지 않습니다.`, [c]);
-    } else if (it.kind === "typhoon") {
-      const cs = provCities(state, it.prov);
-      for (const c of cs) woe(c).typhoon = M + SE.typhoon.months;
-      say(`${provName(it.prov)}에 태풍이 덮쳐 ${SE.typhoon.months}달 동안 목재 생산이 줄어듭니다.`, cs);
-    } else if (it.kind === "locust") {
-      const cs = provCities(state, it.prov);
-      for (const c of cs) {
-        c.food = Math.round(c.food * (1 - SE.locust.store));
-        woe(c).locust = state.year;
+    const notes = [];
+    for (const c of Object.values(state.cities)) {
+      const w = c.woe;
+      if (!w) continue;
+      if (w.plague && w.plague.until > M) {
+        const k = w.plague.toll / 3;
+        const dead = Math.round(c.pop * k);
+        c.pop -= dead;
+        c.manpower = Math.max(0, Math.round(c.manpower * (1 - k)));
+        if (state.playerForce && c.owner === state.playerForce) notes.push(`${c.name} ${fmtN(dead)}명`);
       }
-      say(`${provName(it.prov)}에 메뚜기 떼(황충)가 일어 쌓아 둔 군량을 갉아먹고 올해 수확을 망칩니다.`, cs);
+      if (w.flood && w.flood.until > M) c.manpower = Math.max(0, Math.round(c.manpower * (1 - SE.flood.manpower / 3)));
+      if (w.locust && w.locust.until > M) c.food = Math.max(0, Math.round(c.food * (1 - SE.locust.store / 3)));
     }
+    if (notes.length) S.addLog(state, `역병으로 이번 달 백성이 죽었습니다: ${notes.join(", ")}.`, "warn");
   }
-  const UIfmt = (n) => (n >= 10000 ? `${Math.round(n / 1000) / 10}만` : String(n));
-  const woe = (c) => (c.woe = c.woe || {});
 
-  // Each day: a new season is settled on its first day; hazards strike in their week.
+  // Each day: a new season is settled on its first day; the harm falls on the 1st of each month.
   S.runSeasons = function (state) {
-    const day = state.day || 1;
-    if (day === 1 && (state.month - 1) % 3 === 0) {
+    if ((state.day || 1) !== 1) return;
+    const C = cal(state);
+    const M = S.monthsElapsed(state);
+    if ((state.month - 1) % 3 === 0) {
       const key = `${state.year}-${S.seasonOf(state.month)}`;
       if (!state.seasonNews || state.seasonNews.key !== key) S.rollSeason(state);
     }
-    const news = state.seasonNews;
-    if (!news) return;
-    const now = S.today(state);
-    for (const it of news.items) if (!it.done && it.at <= now) strike(state, it);
+    if (C.harmed === M) return;
+    C.harmed = M;
+    monthHarm(state);
   };
 
   // ---------- what it does to a city ----------
+  const live = (state, x) => !!x && typeof x === "object" && x.until > S.monthsElapsed(state);
   // The harvest this year: crop, drought, locusts.
   S.harvestMul = function (state, c) {
     const C = cal(state);
     let m = 1;
     if (C.crop && C.crop.year === state.year && C.crop.prov[c.prov] != null) m *= SE.crop.mul[C.crop.prov[c.prov]];
     if (C.drought && C.drought.year === state.year && C.drought.provs.includes(c.prov)) m *= SE.drought.harvest;
-    if (c.woe && c.woe.locust === state.year) m *= SE.locust.harvest;
+    if (c.woe && c.woe.locust && c.woe.locust.year === state.year) m *= SE.locust.harvest;
     return m;
   };
   // What weighs on a city now: [{kind, label}].
   S.woesOf = function (state, c) {
     const out = [];
-    const M = S.monthsElapsed(state), w = c.woe || {}, C = cal(state);
-    if (w.plague > M) out.push({ kind: "plague", label: "역병" });
-    if (w.flood > M) out.push({ kind: "flood", label: "홍수 (병역 인구 회복 없음)" });
-    if (w.typhoon > M) out.push({ kind: "typhoon", label: `태풍 (목재 생산 ${Math.round(SE.typhoon.wood * 100)}%)` });
-    if (w.locust === state.year && state.month <= 9) out.push({ kind: "locust", label: `황충 (수확 ${Math.round(SE.locust.harvest * 100)}%)` });
-    if (C.drought && C.drought.year === state.year && C.drought.provs.includes(c.prov) && state.month <= 9) out.push({ kind: "drought", label: `가뭄 (수확 ${Math.round(SE.drought.harvest * 100)}%)` });
-    if (C.crop && C.crop.year === state.year && state.month <= 9 && C.crop.prov[c.prov] !== 1 && C.crop.prov[c.prov] != null) {
+    const w = c.woe || {}, C = cal(state);
+    const autumn = state.month <= 9;
+    if (live(state, w.plague)) out.push({ kind: "plague", label: `역병 (석 달에 걸쳐 인구 -${Math.round(w.plague.toll * 100)}%)` });
+    if (live(state, w.flood)) out.push({ kind: "flood", label: `홍수 (병역 인구 -${Math.round(SE.flood.manpower * 100)}%, 회복 없음)` });
+    if (live(state, w.typhoon)) out.push({ kind: "typhoon", label: `태풍 (목재 생산 ${Math.round(SE.typhoon.wood * 100)}%)` });
+    if (live(state, w.locust)) out.push({ kind: "locust", label: `황충 (비축 군량 -${Math.round(SE.locust.store * 100)}%, 수확 ${Math.round(SE.locust.harvest * 100)}%)` });
+    if (autumn && C.drought && C.drought.year === state.year && C.drought.provs.includes(c.prov)) out.push({ kind: "drought", label: `가뭄 (수확 ${Math.round(SE.drought.harvest * 100)}%)` });
+    if (autumn && C.crop && C.crop.year === state.year && C.crop.prov[c.prov] != null && C.crop.prov[c.prov] !== 1) {
       const k = C.crop.prov[c.prov];
       out.push({ kind: k ? "rich" : "crop", label: `${SE.crop.names[k]} (수확 ${Math.round(SE.crop.mul[k] * 100)}%)` });
     }
@@ -204,14 +209,14 @@
   const regen = S.manpowerRegen;
   S.manpowerRegen = function (c) {
     const st = S.GAME;
-    if (st && c.woe && c.woe.flood > S.monthsElapsed(st)) return 0;
+    if (st && c.woe && live(st, c.woe.flood)) return 0;
     return regen.apply(this, arguments);
   };
   const resYield = S.resYield;
   S.resYield = function (c, k) {
     const v = resYield.apply(this, arguments);
     const st = S.GAME;
-    if (k === "wood" && st && c.woe && c.woe.typhoon > S.monthsElapsed(st)) return Math.round(v * SE.typhoon.wood);
+    if (k === "wood" && st && c.woe && live(st, c.woe.typhoon)) return Math.round(v * SE.typhoon.wood);
     return v;
   };
 })(globalThis.SAM = globalThis.SAM || {});
