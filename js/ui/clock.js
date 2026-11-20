@@ -152,6 +152,15 @@
       UI.showPeace();
       return;
     }
+    // A governor raided over the border.
+    const raids = (state.raidReports || []).filter((a) => a.fid === state.playerForce);
+    const newRaid = raids.find((a) => !(clock.raidSeen || []).includes(a.id));
+    if (newRaid && !S.spectating(state)) {
+      clock.raidSeen = raids.map((a) => a.id);
+      pause("태수가 국경을 습격했습니다");
+      UI.showRaids();
+      return;
+    }
     // An officer asks for a seat at court.
     const asks = (state.officeAsks || []).filter((a) => a.fid === state.playerForce);
     const newAsk = asks.find((a) => !(clock.askSeen || []).includes(a.id));

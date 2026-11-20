@@ -412,7 +412,7 @@
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       let r = null;
-      const unit = affordable() && c.manpower > 400 && c.gold > 250 && c.order > 50 && foodMonths > 10 ? pickDraft(state, c) : null;
+      const unit = affordable() && c.manpower > 400 && c.gold > 250 && c.order > (S.draftOrderFloor ? S.draftOrderFloor(state, c) : 50) && foodMonths > 10 ? pickDraft(state, c) : null;
       if (unit) r = S.draft(state, take(byDesc("cmd")).id, c.id, unit);
       else if (c.train < 75 && c.troops > 1000) r = S.drill(state, take(byDesc("cmd")).id, c.id);
       else break;

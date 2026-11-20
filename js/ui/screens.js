@@ -264,7 +264,7 @@
     const off = S.officeOf(state, o);
     if (off) return `<b>${off.name}</b>`;
     const c = S.governs(state, o);
-    return c ? `${c.name} 태수` : "-";
+    return c ? `<span title="${S.GOVERNOR_TYPES[S.governorType(state, o)]}">${c.name} 태수 · ${S.governorType(state, o)}</span>` : "-";
   };
   UI.contentCell = function (o) {
     const v = o.content == null ? 50 : o.content;
@@ -305,7 +305,23 @@
       (asks.length ? `<h3>관직 요구</h3>${asks.map(UI.officeAskRow).join("")}` : "") +
       `<p class="hint">관직 이름에 마우스를 올리면 하는 일이 보입니다. 적성은 그 자리에 맞는 능력, 명성, 공적, 군주의 의견을 합친 값입니다. ` +
       `공적과 명성이 높은데 자리가 낮은 출세욕 강한 무장은 만족이 떨어지고 더 높은 자리를 요구합니다. 밀려나거나 파면된 사람은 군주에게 불만을 품습니다.</p>` +
+      (edit ? `<p>국경 습격: <b>${state.forces[me].noRaids ? "금지" : "허용"}</b> <button data-action="toggleRaids">${state.forces[me].noRaids ? "허용한다" : "금한다"}</button> ` +
+        `<span class="hint">출세형 태수는 공을 세우려 이웃 세력의 성을 습격합니다. 금하면 할거형 태수만 습격합니다.</span></p>` : "") +
       `<div class="footer"><button data-action="officers">무장 일람</button> <button class="primary" data-action="close">닫기</button></div>`, true);
+  };
+  // ---------- border raids (국경 습격) ----------
+  UI.raidRow = function (a) {
+    const o = state.officers[a.oid], t = state.cities[a.city];
+    if (!o || !t) return "";
+    return `<p><b>${S.josa(o.name, "이", "가")}</b> <span class="hint">(${S.governorType(state, o) || "-"}형)</span> ${S.forceName(state, a.foe)}의 ${S.josa(t.name, "을", "를")} 습격해 ${a.won ? "노획을 거두었습니다" : "쫓겨났습니다"}. ` +
+      `<button data-action="raidScold" data-id="${a.id}">문책한다</button> <button data-action="raidPass" data-id="${a.id}">묵인한다</button></p>`;
+  };
+  UI.showRaids = function () {
+    const list = (state.raidReports || []).filter((a) => a.fid === state.playerForce);
+    if (!list.length) { if (UI.modalOpen()) UI.closeModal(); UI.renderAll(); return; }
+    UI.openModal(title("국경 습격 보고") + list.map(UI.raidRow).join("") +
+      `<p class="hint">습격당한 세력은 관계가 나빠지고 보복할 곳을 찾습니다. 문책하면 관계가 조금 풀리지만 태수의 공적이 깎이고 그는 불만을 품습니다. 한 달 안에 정하지 않으면 묵인한 것으로 칩니다.</p>` +
+      `<div class="footer"><button data-action="offices">관직 창</button> <button class="primary" data-action="close">나중에 정한다</button></div>`, true);
   };
   UI.showOfficeAsks = function () {
     const me = state.playerForce;
@@ -533,6 +549,9 @@
     officers: () => state && UI.showOfficers(),
     factions: () => state && UI.showFactions(),
     offices: () => state && UI.showOffices(),
+    toggleRaids: () => { const f = state.forces[state.playerForce]; if (f && UI.result(S.setRaids(state, f.id, !!f.noRaids))) UI.showOffices(); },
+    raidScold: (d) => { UI.result(S.answerRaid(state, +d.id, true)); UI.showRaids(); },
+    raidPass: (d) => { UI.result(S.answerRaid(state, +d.id, false)); UI.showRaids(); },
     appoint: (d) => {
       const el = $("#off_" + d.key);
       if (!el || !el.value) return;

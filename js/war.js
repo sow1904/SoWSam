@@ -98,14 +98,15 @@
       const capId = S.capitalOf(state, c.owner);
       const cap = capId && state.cities[capId];
       if (!cap || !S.route(state, c.id, capId, "cargo")) continue; // cut off from the capital
-      const gold = Math.max(0, Math.floor(c.gold - S.keepGold(c)));
-      const food = Math.max(0, Math.floor(c.food - S.keepFood(state, c)));
+      const hold = S.withhold ? S.withhold(state, c) : 0; // a 할거 governor keeps some back (js/conduct.js)
+      const gold = Math.max(0, Math.floor((c.gold - S.keepGold(c)) * (1 - hold)));
+      const food = Math.max(0, Math.floor((c.food - S.keepFood(state, c)) * (1 - hold)));
       c.gold -= gold;
       c.food -= food;
       cap.gold += gold;
       cap.food += food;
       c.sent = { gold, food };
-      if (!camping(state, c)) sendToCapital(state, c, S.overCap(state, c));
+      if (!camping(state, c)) sendToCapital(state, c, S.overCap(state, c) - Math.round(S.garrisonCap(state, c) * hold));
     }
   };
 
@@ -374,7 +375,7 @@
         const a = called ? "border" : S.chooseAim(state, fid, foe);
         const ratio = S.might(state, fid) / Math.max(1, S.might(state, foe));
         const v = ratio + (a === "annihilate" ? 0.5 : a === "decisive" ? 0.2 : 0) - S.rel(state, fid, foe) / 100 +
-          (called ? 1 : 0) + (S.foeBusy(state, foe) ? 0.5 : 0);
+          (called ? 1 : 0) + (S.foeBusy(state, foe) ? 0.5 : 0) + (S.provoked ? S.provoked(state, fid, foe) : 0);
         if (!pick || v > pick.v) pick = { foe, a, v, called };
       }
       aim = pick ? pick.a : "border";

@@ -64,6 +64,7 @@
     p *= clamp(c.troops / Math.max(1000, cap ? cap.troops : 0), 0.3, 2);
     p *= weary(state, fid);
     if (sameClan(o, rulerOf(state, fid))) p *= R.kin;
+    if (S.rebelNature) p *= S.rebelNature(state, o); // a 할거 governor (js/conduct.js)
     return Math.min(R.max, Math.round(p * 10) / 10);
   };
   // The cities o would take: his own, and those of his faction's discontented.
