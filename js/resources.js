@@ -17,10 +17,12 @@
   // too, and 남중 is forest.
   // Horses are bred everywhere, but few away from the herds: the north China
   // plain raises a third of what 유주 does, and 촉 and 오 (the rest) half of that.
+  // The horse country (량주, 옹주, 병주, 유주, 요동) has little timber and
+  // iron, so its armies lean to cavalry (the user's design).
   S.REGION = {
-    liang: { horse: 2, label: "말(많음)" },
-    bing: { horse: 1, label: "말" },
-    you: { horse: 1, label: "말" },
+    liang: { horse: 2, wood: 0.5, iron: 0.5, label: "말(많음), 목재·철 적음" },
+    bing: { horse: 1, wood: 0.65, iron: 0.65, label: "말, 목재·철 적음" },
+    you: { horse: 1, wood: 0.65, iron: 0.65, label: "말, 목재·철 적음" },
     ji: { food: 1.25, pop: 1.5, label: "군량, 인구" },
     yi: { food: 1.25, gold: 1.2, label: "군량, 금" },
     sili: { gold: 1.2, label: "금" },
@@ -31,8 +33,8 @@
     yu: { pop: 1.5, label: "인구" },
     jingbei: { wood: 1.5, iron: 1.25, label: "목재, 철" },
     jingnan: { wood: 1.5, iron: 1.25, label: "목재, 철" },
-    yong: { horse: 1, label: "말" },
-    liaodong: { horse: 1, label: "말" },
+    yong: { horse: 1, wood: 0.65, iron: 0.65, label: "말, 목재·철 적음" },
+    liaodong: { horse: 1, wood: 0.65, iron: 0.65, label: "말, 목재·철 적음" },
     nanzhong: { wood: 1.5, label: "목재" },
     yang: { wood: 1.5, label: "목재" },
   };

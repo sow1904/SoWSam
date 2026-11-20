@@ -125,6 +125,11 @@
     if (big) { UI.renderMap(); UI.keepScroll(UI.renderPanel); }
     if (month) UI.saveGame(true);
     if (state.over) { setRunning(false); return UI.showEnd(); }
+    // A new season: its news, briefly (js/ui/seasons.js).
+    if (state.seasonNews && clock.seasonSeen !== state.seasonNews.key) {
+      clock.seasonSeen = state.seasonNews.key;
+      if (UI.showSeason) { UI.showSeason(state.seasonNews, true); UI.renderPanel(); }
+    }
     const s = clock.settings;
     // The player's character died: who carries on (js/ui/persona.js).
     if (state.heirPick) {

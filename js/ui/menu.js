@@ -34,8 +34,11 @@
     return cache.st;
   }
   // The land in small: roads, and every city in its owner's colour. The
-  // chosen force stands out and the rest fade.
-  function miniMap(st, pick) {
+  // chosen force stands out and the rest fade. opts.marks {cid: [kind]}
+  // rings cities in opts.colors (the season's news, js/ui/seasons.js).
+  UI.miniMap = (st, pick, opts) => miniMap(st, pick, opts);
+  function miniMap(st, pick, opts) {
+    const marks = (opts && opts.marks) || null;
     const cs = Object.values(st.cities);
     const seen = new Set();
     let roads = "";
@@ -48,6 +51,14 @@
     const dot = (c) => {
       const f = c.owner && st.forces[c.owner];
       const on = pick && c.owner === pick;
+      if (marks) {
+        // Faded owners, and a ring for each thing that befalls the city.
+        const ks = marks[c.id] || [];
+        const base = 15 + c.size * 6;
+        return `<g class="${ks.length ? "hit" : "off"}"><circle cx="${c.x}" cy="${c.y}" r="${base}" fill="${f ? f.color : "#77736a"}"/>` +
+          ks.map((k, i) => `<circle class="mark" cx="${c.x}" cy="${c.y}" r="${base + 14 + i * 16}" style="stroke:${opts.colors[k]}"/>`).join("") +
+          `<title>${c.name}</title>` + (ks.length && c.size >= 3 ? `<text x="${c.x}" y="${c.y - base - 24 - (ks.length - 1) * 16}">${c.name}</text>` : "") + `</g>`;
+      }
       const cap = f && S.capitalOf(st, f.id) === c.id;
       const r = 15 + c.size * 6 + (on ? 8 : 0);
       return `<g class="${on ? "on" : pick ? "off" : ""}"${f ? ` data-action="pickForce" data-force="${f.id}"` : ""}>` +

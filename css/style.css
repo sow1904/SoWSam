@@ -485,6 +485,23 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 .minimap .off { opacity: 0.28; }
 .minimap .on circle { stroke: #fff3c4; stroke-width: 9; }
 .minimap .cap { fill: none; stroke: rgba(255, 243, 196, 0.75); stroke-width: 6; }
+.minimap circle.mark { fill: none; stroke-width: 11; }
+.minimap .hit circle:first-child { opacity: 0.75; }
+
+/* ---------- the season's news (js/ui/seasons.js) ---------- */
+/* The small map's picture: set --season-bg to an image, e.g.
+   url("../assets/ui/minimap.png"), when one is drawn. */
+#seasonPop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); cursor: pointer; transition: opacity 0.3s; }
+#seasonPop.hidden { display: none; }
+#seasonPop .card { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; background: var(--panel); border: 1px solid #a8843c; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); padding: 10px 18px 12px; }
+#seasonPop h2 { margin: 4px 0 8px; text-align: center; font-family: var(--serif); letter-spacing: 6px; color: var(--gold2); }
+#seasonPop .season-map { background: var(--season-bg, #1d3a52) center / cover no-repeat; border: 1px solid #6a5433; }
+#seasonPop .season-map .minimap { max-height: 46vh; }
+#seasonPop ul { list-style: none; padding: 0; margin: 10px 0 4px; line-height: 1.7; }
+#seasonPop .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.seasonchip { margin-left: 6px; padding: 0 8px; font-size: 12px; }
+.seasonchip.s0 { color: #f3b8c8; } .seasonchip.s1 { color: #8fd48a; } .seasonchip.s2 { color: #f0b35e; } .seasonchip.s3 { color: #b8d4f0; }
+.woes { margin: 6px 0; } .woe { display: inline-block; padding: 1px 7px; margin: 0 4px 3px 0; border: 1px solid var(--c); color: var(--c); font-size: 12px; }
 .minimap text { fill: #fff3c4; font-size: 46px; font-family: var(--serif); text-anchor: middle; paint-order: stroke; stroke: #000; stroke-width: 10px; pointer-events: none; }
 .scn-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .scn-list button { padding: 3px 9px 3px 7px; font-size: 13px; }

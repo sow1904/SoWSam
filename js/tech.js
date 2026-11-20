@@ -39,7 +39,7 @@
     binghu: { name: "병호", group: "내정", max: 2, per: 0.03, gain: "병역 인구 +3%p, 대신 인구 증가 -30%, 호족 협력 -5", after: ["census", 2] },
     academy: { name: "학관", group: "내정", max: 3, per: 0.2, gain: "연구 진척 +20%" },
     // plague: less camp sickness per level
-    medicine: { name: "의술", group: "내정", max: 3, per: 0.3, plague: 0.2, gain: "부상병 회복 +30%, 진중 역병 -20%" },
+    medicine: { name: "의술", group: "내정", max: 3, per: 0.3, plague: 0.2, gain: "부상병 회복 +30%, 진중 역병 -20%, 겨울 역병 확률 -25%·피해 -20%" },
   };
   S.TECH_GROUPS = ["군사", "특수", "내정"];
   S.BINGHU = { growth: 0.7, consent: -5 }; // what 병호 costs

@@ -1125,7 +1125,7 @@
           const lost = loseTroops(c, Math.ceil(c.troops * 0.05));
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (harvest) c.food += Math.round((c.farm * 9 + c.pop / 50) * eff * S.regionMul(c, "food") * S.techMul(c, "irrigation", state));
+        if (harvest) c.food += Math.round((c.farm * 9 + c.pop / 50) * eff * S.regionMul(c, "food") * S.techMul(c, "irrigation", state) * (S.harvestMul ? S.harvestMul(state, c) : 1));
         c.food -= S.foodUse(c.troops);
         if (c.food < 0) {
           c.food = 0;

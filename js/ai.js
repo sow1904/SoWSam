@@ -604,6 +604,7 @@
         if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
       }
     }
+    if (S.runSeasons) S.runSeasons(state); // the season's calamities (js/seasons.js)
     S.runMarches(state, onEvent);
     if (S.runSpotting) S.runSpotting(state);
     S.runBattles(state, onEvent);

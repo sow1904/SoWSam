@@ -11,7 +11,8 @@
   // ---------- top bar ----------
   const chip = (label, value, extra) => `<span class="chip"><i>${label}</i><b>${value}</b>${extra || ""}</span>`;
   UI.renderStatus = function () {
-    const date = `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>`;
+    const date = `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>` +
+      (S.seasonName ? `<button class="seasonchip s${S.seasonOf(state.month)}" data-action="season" title="이번 계절의 소식">${S.seasonName(state)}</button>` : "");
     const me = S.playerChar(state);
     const meChip = me ? `<span class="chip me"><i>나</i><b>${me.name}</b><button data-action="persona" title="내 인물 (P)">${UI.roleLabel()}</button></span>` : "";
     if (!state.playerForce && me) {
@@ -287,7 +288,8 @@
       (own && c.cut > 0.05 ? stat("반발 위험", `월 ${S.unrestChance(c).toFixed(1)}%`) : "") +
       (own && S.cityHead(state, c) && S.rebelChance(state, S.cityHead(state, c), c) >= 0.1 ? stat("태수 반란", `월 ${S.rebelChance(state, S.cityHead(state, c), c)}%`) : "") +
       `</div>` +
-      (own && c.unrest ? `<p class="bad">호족들이 둔전에 반발해 들고일어났습니다. 둔전이 멈추고 매달 치안이 떨어집니다. <button data-action="unrest">처리</button></p>` : "");
+      (own && c.unrest ? `<p class="bad">호족들이 둔전에 반발해 들고일어났습니다. 둔전이 멈추고 매달 치안이 떨어집니다. <button data-action="unrest">처리</button></p>` : "") +
+      (UI.woeLine ? UI.woeLine(c) : "");
   }
   function fortSummary(f) {
     const ends = f.road.map((id) => state.cities[id].name);
