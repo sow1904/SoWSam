@@ -610,6 +610,7 @@
     S.runBattles(state, onEvent);
     if (state.over) return null;
     S.runEnvoys(state, onEvent);
+    if (S.runTitles) S.runTitles(state); // imperial envoys with titles (js/titles.js)
     // Freed rulers reaching home.
     const today = S.today(state);
     for (const f of Object.values(state.forces)) {

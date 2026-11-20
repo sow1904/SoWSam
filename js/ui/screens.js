@@ -50,6 +50,7 @@
     const cols = [
       ["세력", (r) => r.f.name, (r) => `${swatch(r.f)}${r.f.name}군${r.f.emperor ? " (황제)" : ""}${r.f.id === state.playerForce ? " <em>나</em>" : ""}` +
         (S.houseOf(state, r.f.id) ? ` <em title="${S.HOUSES[S.houseOf(state, r.f.id)].help}">${S.HOUSES[S.houseOf(state, r.f.id)].name}</em>` : "")],
+      ["작위", (r) => (r.f.emperor ? 99 : S.titleRank(S.titleKey(state, r.f.id))), (r) => S.titleName(state, r.f.id) + (r.f.titleDue ? ` <span class="hint" title="헌제의 칙사가 오는 중">→${S.TITLES[S.titleRank(r.f.titleDue.key)].name}</span>` : "")],
       ["체제", (r) => S.regime(state, r.f.id).label],
       ["수도", (r) => (state.cities[S.capitalOf(state, r.f.id)] || {}).name || "-"],
       ["도시", (r) => r.t.cities], ["무장", (r) => r.t.officers],
@@ -536,6 +537,25 @@
       `<div class="links"><button class="primary" data-action="demand" data-yes="1"${can ? "" : " disabled"}>바친다</button>` +
       `<button data-action="demand">거절한다</button></div>`;
   }
+  // Titles (js/titles.js): the ladder, where this force stands, and the envoy on the way.
+  function titleSection(me) {
+    let html = `<h3>작위</h3>`;
+    if (!S.titlesOpen(state)) html += `<p class="hint">한 왕조가 없으므로 헌제의 칙사가 더는 오지 않습니다. 받은 작위는 그대로 남습니다.</p>`;
+    if (me) {
+      const f = state.forces[me];
+      const w = S.wholeLands(state, me);
+      html += `<p>지금 작위: <b>${S.titleName(state, me)}</b>` +
+        ` <span class="hint">(성 ${S.citiesOf(state, me).length}개, 온전한 주 ${w.provs.map((p) => S.PROVINCES[p]).join("·") || "없음"}, 온전한 지방 ${w.regions.map((r) => S.REGIONS[r].name).join("·") || "없음"}, 군주 명성 ${state.officers[f.ruler].fame || 0})</span></p>` +
+        (f.titleDue ? `<p>헌제의 칙사가 ${S.TITLES[S.titleRank(f.titleDue.key)].name} 작위를 가지고 오는 중입니다. (${Math.max(0, f.titleDue.at - S.today(state))}일 뒤)</p>` : "");
+    }
+    html += `<div class="otable titles"><table><tr><th>작위</th><th>조건</th><th>지금 받은 세력</th></tr>` +
+      S.TITLES.slice().reverse().map((t) => {
+        const who = Object.values(state.forces).filter((f) => f.alive && !f.emperor && S.titleKey(state, f.id) === t.key).map((f) => f.name);
+        return `<tr${me && !state.forces[me].emperor && S.titleKey(state, me) === t.key ? ' class="me"' : ""}><td><b>${t.name}</b></td><td>${t.need}</td><td>${who.join(", ") || "-"}</td></tr>`;
+      }).join("") + `</table></div>` +
+      `<p class="hint">조건을 채운 지 한 달 뒤에 헌제의 칙사가 이르러 작위를 내립니다. 그때 조건을 잃었으면 그냥 돌아갑니다. 받은 작위는 땅을 잃어도 남고, 군주가 바뀌어도 세력이 이어받습니다. 황제는 선양이나 칭제로만 오릅니다.</p>`;
+    return html;
+  }
   UI.showCourt = function () {
     S.syncCourt(state);
     const han = state.han;
@@ -566,6 +586,7 @@
             `<button data-action="moveEmperor">천도</button></div>` : `<p class="hint">옮길 수 있는 도시가 없습니다.</p>`);
       }
     }
+    html += titleSection(me);
     const emperors = Object.values(state.forces).filter((f) => f.alive && f.emperor);
     html += `<h3>황제</h3><p>${emperors.length ? emperors.map((f) => `${f.name} (${f.emperorYear}년${f.hanHeir ? ", 한 황실 계승" : ""})`).join(", ") : "아직 황제를 칭한 군주가 없습니다."}</p>`;
     const can = me ? S.canProclaim(state, me) : { ok: false };

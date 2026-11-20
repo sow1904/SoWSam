@@ -36,7 +36,7 @@
     const ruler = state.officers[f.ruler];
     const cap = state.cities[S.capitalOf(state, state.playerForce)];
     UI.setHTML($("#status"), date +
-      `<span class="banner" style="--force:${f.color}"><b>${f.name}군</b><i>군주 ${ruler.name}</i></span>` +
+      `<span class="banner" style="--force:${f.color}"><b>${f.name}군</b><i>${S.titleName ? S.titleName(state, f.id) : "군주"} ${ruler.name}</i></span>` +
       (me && me !== ruler ? meChip + chip("공적", me.merit || 0) + chip("주군의 의견", UI.signed(S.opinion(state, ruler, me))) : "") +
       (state.auto ? `<span class="chip auto"><b>세력 위임 중</b><button data-action="auto" title="다시 직접 다스립니다">해제</button></span>`
         : S.spectating(state) && S.playerRules(state) ? chip("통치", "모든 도시 완전 위임") : "") +

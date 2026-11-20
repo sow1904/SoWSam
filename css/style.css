@@ -320,6 +320,8 @@ tr:nth-child(odd) td { background: rgba(255, 240, 200, 0.018); }
 .otable th, .otable td { white-space: nowrap; }
 .otable.list { max-height: 62vh; overflow-y: auto; }
 .otable.list th { position: sticky; top: 0; background: #33291b; }
+.otable.titles td, .otable.titles th { white-space: normal; text-align: left; }
+.otable.titles tr.me td { background: rgba(214, 178, 94, 0.18); }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--gold2); }
 th.asc::after { content: " ▲"; font-size: 9px; color: var(--gold2); }
