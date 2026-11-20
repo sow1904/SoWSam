@@ -151,7 +151,14 @@
       const o = UI.newOpts;
       UI.setState(S.newGame(S.scenarioOf(UI.scenario) || S.SCENARIOS[0], d.force || null, null, { lifespan: o.lifespan, fiction: o.fiction, women: o.women }));
       if (!d.force) { begin(state.cities[state.emperor] || S.cityList(state)[0], "관전을 시작합니다. 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다."); return; }
-      begin(state.cities[S.capitalOf(state, d.force)] || S.citiesOf(state, d.force)[0], `${state.forces[d.force].name}군으로 천하통일을 시작합니다! 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`);
+      // Who to play: the ruler, or anyone of the force (js/ui/persona.js).
+      UI.showCharPick(d.force, () => {
+        const me = S.playerChar(state);
+        const rules = S.playerRules(state);
+        begin(state.cities[rules ? S.capitalOf(state, d.force) : me.city] || S.citiesOf(state, d.force)[0],
+          rules ? `${state.forces[d.force].name}군으로 천하통일을 시작합니다! 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`
+            : `${S.josa(me.name, "으로", "로")} 시작합니다(${UI.roleLabel()}). 「인물」 창(P)에서 할 일을 고르고, 스페이스 바로 시간을 흐르게 합니다.`);
+      });
     },
     saveMenu: () => state && UI.showSlots("save", "game"),
     loadMenu: (d) => UI.showSlots("load", d.from || "game"),
@@ -165,7 +172,8 @@
       if (!saved) { UI.toast("불러올 수 없는 저장입니다."); return; }
       if (d.from === "game" && state && !state.over && !confirm("지금 하던 게임에서 저장하지 않은 진행은 사라집니다. 불러올까요?")) return;
       UI.setState(S.migrate(saved));
-      const cap = state.playerForce ? S.capitalOf(state, state.playerForce) : S.capitalOf(state, UI.viewForce());
+      const me = S.playerChar(state);
+      const cap = me && !S.playerRules(state) ? me.city : state.playerForce ? S.capitalOf(state, state.playerForce) : S.capitalOf(state, UI.viewForce());
       begin(state.cities[cap] || UI.myCities()[0] || S.cityList(state)[0], `${UI.slotName(d.slot)}을 불러왔습니다. 스페이스 바나 ▶ 진행 버튼으로 시간을 흐르게 합니다.`);
     },
     delSlot: (d) => {

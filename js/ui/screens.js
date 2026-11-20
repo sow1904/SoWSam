@@ -572,6 +572,18 @@
 
   UI.showEnd = function () {
     const o = state.over;
+    const me = S.playerChar(state);
+    if (me) {
+      // The character's ending (js/persona.js).
+      const won = o.result === "win" || o.mine;
+      const head = o.reason === "dead" ? "끝" : won ? "천하통일" : "패배";
+      const line = o.reason === "dead" ? `${state.year}년 ${state.month}월, ${o.who || me.name}의 뒤를 이을 사람이 없습니다.`
+        : won ? `${state.year}년 ${state.month}월, ${state.forces[o.force].name}군이 천하를 통일했습니다!` + (state.forces[o.force].ruler !== me.id ? ` ${S.josa(me.name, "은", "는")} 그 신하로서 공적 ${me.merit || 0}을 남겼습니다.` : "")
+        : `${state.forces[o.force].name}군이 천하를 통일했습니다.`;
+      UI.openModal(`<div class="title-hero end"><h1>${head}</h1><p>${line}</p></div><div class="footer"><button class="primary" data-action="title">타이틀로</button></div>`);
+      UI.clearSave();
+      return;
+    }
     const win = o.result === "win" && (o.force === state.playerForce || !state.playerForce);
     UI.openModal(`<div class="title-hero end"><h1>${win ? "천하통일" : "패배"}</h1><p>${!state.playerForce
       ? `${state.year}년 ${state.month}월, ${state.forces[o.force].name}군이 천하를 통일했습니다.`

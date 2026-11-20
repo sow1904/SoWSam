@@ -374,6 +374,7 @@
     S.opAdd(o, r, ST.op.granted - ST.op.appointed);
     return res;
   }
+  S.settleAsk = settleAsk;
   S.answerOfficeAsk = function (state, id, yes) {
     const asks = state.officeAsks || [];
     const a = asks.find((x) => x.id === id);
@@ -430,7 +431,7 @@
       // One who has earned more asks for it.
       const A = ST.ask;
       if (o.content >= A.content || (o.merit || 0) < A.merit || (o.askAt != null && t - o.askAt < A.wait)) continue;
-      if (S.ambitionOf(state, o).rise < 1 || !S.chance(state, A.chance)) continue;
+      if (S.ambitionOf(state, o).rise < 1 || (S.isPlayer && S.isPlayer(state, o)) || !S.chance(state, A.chance)) continue;
       const want = S.seatWanted(state, o);
       if (!want) continue;
       const fid = o.force;

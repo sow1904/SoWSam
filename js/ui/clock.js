@@ -125,9 +125,27 @@
     if (big) { UI.renderMap(); UI.keepScroll(UI.renderPanel); }
     if (month) UI.saveGame(true);
     if (state.over) { setRunning(false); return UI.showEnd(); }
+    const s = clock.settings;
+    // The player's character died: who carries on (js/ui/persona.js).
+    if (state.heirPick) {
+      setRunning(false);
+      if (clock.heirSeen !== state.heirPick.from) { clock.heirSeen = state.heirPick.from; UI.toast("일시정지: 뒤를 이을 인물을 고르세요"); UI.showHeirPick(); }
+      return;
+    }
+    // Serving a computer lord, wandering or held: his own news stops the clock.
+    const meP = S.playerChar(state);
+    if (meP && !S.playerRules(state)) {
+      clock.pending = state.han && state.han.pending;
+      const about = fresh.find((e) => e.kind !== "mine" && e.text.includes(meP.name));
+      if (s.bad && about) return pause(about.text);
+      const pc = S.playerCity(state);
+      const hit = pc && (state.battles || []).find((b) => b.place === pc && !seen.has("p" + b.id));
+      if (hit) { seen.add("p" + hit.id); if (s.attacked) return pause(`${UI.battleTitle(hit)}이 시작되었습니다`); }
+      if (s.month && month) return pause(`${state.year}년 ${state.month}월`);
+      return;
+    }
     // With no one playing, or the force left to itself, nothing stops the clock.
     if (UI.handsOff()) { clock.pending = state.han && state.han.pending; return; }
-    const s = clock.settings;
     // A city just taken stands unstaffed: show it so posts and policy can be set.
     const taken = UI.myCities().filter((c) => !held.has(c.id));
     if (s.captured && taken.length) {

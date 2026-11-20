@@ -218,29 +218,39 @@
       const targets = raidTargets(state, c);
       if (!targets.length) continue;
       const t = targets.sort((a, b) => a.troops - b.troops)[0];
+      if (S.isPlayer && S.isPlayer(state, o)) continue; // the player raids when he says so (js/persona.js)
       if (!S.chance(state, S.borderRaidChance(state, o, c, t))) continue;
-      const fid = c.owner, foe = t.owner;
-      const res = raid(state, o, c, t);
-      const head = `${S.forceName(state, fid)} ${c.name} 태수 ${S.josa(o.name, "이", "가")} ${S.forceName(state, foe)}의 ${S.josa(t.name, "을", "를")} 습격해`;
-      const loot = lootText(res.got);
-      const tail = !res.won ? " 쫓겨났습니다." : loot ? ` ${S.josa(loot, "을", "를")} 빼앗았습니다.` : " 적을 흩었습니다.";
-      if (playerRuns(state, fid)) {
-        state.raidSeq = (state.raidSeq || 0) + 1;
-        state.raidReports = state.raidReports || [];
-        state.raidReports.push({ id: state.raidSeq, fid, oid: o.id, foe, city: t.id, won: res.won, until: t0 + R.answer });
-        S.addLog(state, head + tail + ` ${S.forceName(state, foe)}과의 관계가 나빠졌습니다.`, "warn");
-        continue;
-      }
-      S.addLog(state, head + tail, foe === state.playerForce ? "threat" : "info");
-      if (S.reproveWish(state, fid, foe, res.relBefore)) {
-        reprove(state, fid, o, foe);
-        const r = rulerOf(state, fid);
-        S.addLog(state, `${S.josa(r.name, "이", "가")} 습격한 ${S.josa(o.name, "을", "를")} 문책했습니다.`, foe === state.playerForce ? "info" : "strife");
-      }
+      S.raidNow(state, o, c, t);
     }
     // Unanswered reports lapse: the lord let it pass.
     state.raidReports = (state.raidReports || []).filter((x) => x.until > t0);
   }
+  S.raidTargets = raidTargets;
+  // Governor o of c raids t: the raid, the log, the lord's answer. Returns the line.
+  S.raidNow = function (state, o, c, t) {
+    const t0 = now(state);
+    const fid = c.owner, foe = t.owner;
+    const res = raid(state, o, c, t);
+    const head = `${S.forceName(state, fid)} ${c.name} 태수 ${S.josa(o.name, "이", "가")} ${S.forceName(state, foe)}의 ${S.josa(t.name, "을", "를")} 습격해`;
+    const loot = lootText(res.got);
+    const tail = !res.won ? " 쫓겨났습니다." : loot ? ` ${S.josa(loot, "을", "를")} 빼앗았습니다.` : " 적을 흩었습니다.";
+    if (playerRuns(state, fid)) {
+      state.raidSeq = (state.raidSeq || 0) + 1;
+      state.raidReports = state.raidReports || [];
+      state.raidReports.push({ id: state.raidSeq, fid, oid: o.id, foe, city: t.id, won: res.won, until: t0 + R.answer });
+      S.addLog(state, head + tail + ` ${S.forceName(state, foe)}과의 관계가 나빠졌습니다.`, "warn");
+      return head + tail;
+    }
+    S.addLog(state, head + tail, foe === state.playerForce ? "threat" : "info");
+    if (S.reproveWish(state, fid, foe, res.relBefore)) {
+      reprove(state, fid, o, foe);
+      const r = rulerOf(state, fid);
+      const line = `${S.josa(r.name, "이", "가")} 습격한 ${S.josa(o.name, "을", "를")} 문책했습니다.`;
+      S.addLog(state, line, foe === state.playerForce ? "info" : "strife");
+      return head + tail + " " + line;
+    }
+    return head + tail;
+  };
 
   // ---------- officers acting for themselves ----------
   // 교류: he wins over the worthiest colleague in his city he is not yet close to.
@@ -291,7 +301,7 @@
   function runActs(state) {
     const F = C.act.flee;
     for (const o of Object.values(state.officers)) {
-      if (o.status !== "serving" || o.transit || S.isRuler(state, o) || !S.chance(state, C.act.chance)) continue;
+      if (o.status !== "serving" || o.transit || S.isRuler(state, o) || (S.isPlayer && S.isPlayer(state, o)) || !S.chance(state, C.act.chance)) continue;
       const content = o.content == null ? 50 : o.content;
       if (content < F.content && o.loyalty < F.loyalty) {
         const to = S.fleeTo(state, o);

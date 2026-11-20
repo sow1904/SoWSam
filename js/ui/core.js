@@ -27,7 +27,10 @@
   UI.fmt = (n) => (n >= 10000 ? (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "만" : String(n));
   UI.forceColor = (fid) => (fid && state.forces[fid] ? state.forces[fid].color : "#9c9c9c");
   // A game may have no player at all (관전): then nothing is "mine".
-  UI.mine = (c) => !!c && !!state.playerForce && c.owner === state.playerForce;
+  // home: the player's force holds it. mine: the player gives its orders
+  // (all of them as ruler, his own city as governor; js/persona.js).
+  UI.home = (c) => !!c && !!state.playerForce && c.owner === state.playerForce;
+  UI.mine = (c) => UI.home(c) && (S.playerRules(state) || S.playerCity(state) === c.id);
   UI.myCities = () => (state.playerForce ? S.citiesOf(state, state.playerForce) : []);
   // The force whose lists are shown: the player's, or when only watching,
   // that of the selected place, else the largest.
@@ -80,8 +83,10 @@
     const sc = S.scenarioOf && S.scenarioOf(g.scenario);
     const f = g.playerForce && g.forces[g.playerForce];
     const cities = f ? Object.values(g.cities).filter((c) => c.owner === f.id).length : 0;
+    const me = g.player && g.officers[g.player];
+    const who = me && (!f || f.ruler !== me.id) ? `${me.name} · ` : "";
     return { slot, info: { savedAt: g.savedAt || 0,
-      text: `${g.year}년 ${g.month}월 · ${f ? `${f.name}군 (도시 ${cities})` : "관전"}${sc ? ` · ${sc.title}` : ""}` } };
+      text: `${g.year}년 ${g.month}월 · ${who}${f ? `${f.name}군 (도시 ${cities})` : me ? "재야" : "관전"}${sc ? ` · ${sc.title}` : ""}` } };
   });
   UI.loadSaved = function (slot) {
     try {
@@ -153,7 +158,7 @@
   // The outcome of a command: say it, log it, redraw.
   UI.result = function (r) {
     if (!r.ok) { UI.toast(r.msg); return false; }
-    S.addLog(state, r.msg, "mine");
+    if (!r.logged) S.addLog(state, r.msg, "mine"); // some say it in the log themselves
     UI.toast(r.msg);
     UI.renderAll();
     return true;

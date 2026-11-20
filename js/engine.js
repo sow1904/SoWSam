@@ -599,6 +599,7 @@
   S.recruitChance = function (state, recruiter, target) {
     // One who keeps faith with a fallen lord never serves its destroyer.
     if (S.recruitBar(state, recruiter.force, target)) return 0;
+    if (S.isPlayer && S.isPlayer(state, target)) return 0; // the player chooses his own lord (js/persona.js)
     const court = S.courtRecruitBonus(state, recruiter, target) + S.recruitFeel(state, recruiter.force, target);
     if (target.status === "free") return clamp(Math.round(35 + recruiter.speech / 2 + court), 5, 95);
     if (target.status === "captive") {
@@ -1134,11 +1135,12 @@
     if (S.runStanding) S.runStanding(state); // merit, contentment, asking for seats (js/standing.js)
     if (S.runConduct) S.runConduct(state); // governors' ways, border raids, officers acting alone (js/conduct.js)
     if (S.runCouncil) S.runCouncil(state); // proposals to the player, old council records (js/council.js)
+    if (S.runPersona) S.runPersona(state); // the player's character (js/persona.js)
     // Loyalty and defection.
     for (const o of Object.values(state.officers)) {
       o.done = false;
       o.rewarded = false;
-      if (o.status !== "serving" || S.isRuler(state, o)) continue;
+      if (o.status !== "serving" || S.isRuler(state, o) || (S.isPlayer && S.isPlayer(state, o))) continue;
       const leaveAt = S.leaveThreshold(o);
       if (o.loyalty < leaveAt && S.chance(state, (leaveAt - o.loyalty) / 2)) {
         const f = o.force;

@@ -91,9 +91,19 @@
     return clamp(s - 0.1, -1, 1);
   }
   const STANCE = { war: warStance, peace: peaceStance };
+  // The player's character speaks as the player says (js/persona.js): "war" or "peace".
+  function playerStance(state, o, kind) {
+    if (!S.isPlayer || !S.isPlayer(state, o) || !state.persona) return null;
+    const s = state.persona.stance;
+    if (s !== "war" && s !== "peace") return null;
+    return (s === "war") === (kind === "war") ? 0.8 : -0.8;
+  }
   // The council's view of q {kind, foe, ...}: {support (-1..1), seats: [{o, voice, stance}], pro, con}.
   S.debate = function (state, fid, q) {
-    const seats = S.councilors(state, fid).map((c) => Object.assign(c, { stance: STANCE[q.kind](state, c.o, q) }));
+    const seats = S.councilors(state, fid).map((c) => {
+      const ps = playerStance(state, c.o, q.kind);
+      return Object.assign(c, { stance: ps != null ? ps : STANCE[q.kind](state, c.o, q) });
+    });
     const total = seats.reduce((s, c) => s + c.voice, 0);
     const support = total ? seats.reduce((s, c) => s + c.voice * c.stance, 0) / total : 0;
     const side = (sign) => seats.filter((c) => c.stance * sign > 0.15).sort((a, b) => b.voice * Math.abs(b.stance) - a.voice * Math.abs(a.stance));
@@ -239,28 +249,30 @@
   };
 
   // ---------- proposals to the player (진언) ----------
-  // The main army's best expedition now: {t, ratio, team, troops, unit, way} or null.
-  function bestExpedition(state, fid) {
+  // The main army's expeditions now, best first: [{t, ratio, team, troops, unit, way}].
+  function expeditions(state, fid) {
     const capId = S.capitalOf(state, fid);
     const cap = capId && state.cities[capId];
-    if (!cap || S.besieged(state, capId) || S.isBroken(state, fid)) return null;
-    if ((state.marches || []).some((m) => m.force === fid && m.kind === "army" && m.origin === capId)) return null;
+    if (!cap || S.besieged(state, capId) || S.isBroken(state, fid)) return [];
+    if ((state.marches || []).some((m) => m.force === fid && m.kind === "army" && m.origin === capId)) return [];
     const idle = S.idle(state, capId).sort((a, b) => S.leadScore(state, b) - S.leadScore(state, a));
-    if (!idle.length) return null;
+    if (!idle.length) return [];
     const team = idle.slice(0, Math.min(S.MAX_SORTIE_OFFICERS, Math.max(1, idle.length - 1)));
     const troops = Math.floor(S.marchable(cap) - Math.max(S.WAR.expedition.guardMin, cap.troops * S.WAR.aim.guard.border));
-    if (troops < S.WAR.expedition.min) return null;
-    let best = null;
+    if (troops < S.WAR.expedition.min) return [];
+    const out = [];
     for (const way of S.attackTargets(state, capId)) {
       const t = S.place(state, way.id);
       if (!t || !t.owner || t.owner === fid || S.allied(state, fid, t.owner) || S.truceLeft(state, fid, t.owner) || S.landingLink(way.path)) continue;
       if (S.inTruce(state)) continue;
       const unit = S.pickAttackUnit(state, cap, t, troops);
       const est = S.estimate(state, capId, t.id, team.map((o) => o.id), troops, unit);
-      if (est && (!best || est.ratio > best.ratio)) best = { t, ratio: est.ratio, team, troops, unit, way };
+      if (est) out.push({ t, ratio: est.ratio, team, troops, unit, way });
     }
-    return best;
+    return out.sort((a, b) => b.ratio - a.ratio);
   }
+  const bestExpedition = (state, fid) => expeditions(state, fid)[0] || null;
+  S.expeditionList = (state, fid) => expeditions(state, fid).map((e) => ({ t: e.t, ratio: Math.round(e.ratio * 100) / 100, team: e.team.map((o) => o.id) }));
   // What the court thinks of the best expedition now (the council window).
   S.warOutlook = function (state, fid) {
     const e = bestExpedition(state, fid);
@@ -344,6 +356,85 @@
     if (!res.ok) return res;
     if (o) { S.addMerit(o, P.adopt.merit); S.opAdd(o, r, P.adopt.op); }
     return res;
+  };
+
+  // ---------- the player's own proposal (js/persona.js) ----------
+  // The player's character, serving a computer lord, proposes an expedition
+  // (target: a city) or peace (foe: a force). The lord hears the court with
+  // the proposer pressing it, weighs what he thinks of him, and decides.
+  S.memorialOdds = function (state, q) {
+    const o = S.playerChar(state);
+    const fid = o.force;
+    const r = rulerOf(state, fid);
+    const d = S.debate(state, fid, q);
+    const PP = S.PERSONA.propose;
+    const temper = S.traitsOf(r).reduce((s, t) => s + (K.temper[t] || 0), 0);
+    const v = d.support + PP.push + S.opinion(state, r, o) / PP.opinion + (o.speech - 50) / PP.speech + temper;
+    return { d, v: Math.round(v * 100) / 100, adopted: v >= PP.bar };
+  };
+  S.canMemorial = function (state) {
+    const o = S.playerChar(state);
+    if (!o || o.status !== "serving" || S.isRuler(state, o)) return "주군을 섬길 때만 진언할 수 있습니다.";
+    if (!S.councilors(state, o.force).some((c) => c.o === o) && !S.governs(state, o)) return "조정(수도나 관직)에 있거나 태수여야 진언할 수 있습니다.";
+    const PP = S.PERSONA.propose;
+    if (o.propAt != null && now(state) - o.propAt < PP.wait) return `진언은 ${PP.wait - (now(state) - o.propAt)}달 뒤에 다시 할 수 있습니다.`;
+    return "";
+  };
+  S.peaceFoes = function (state, fid) {
+    const out = [];
+    for (const k of Object.keys(state.warLog || {})) {
+      const [a, b] = k.split("|");
+      if (a !== fid && b !== fid) continue;
+      const foe = a === fid ? b : a;
+      if (!state.forces[foe] || !state.forces[foe].alive || S.truceLeft(state, fid, foe) || out.includes(foe)) continue;
+      const terms = S.peaceTerms(state, fid, foe);
+      if (terms) out.push(foe);
+    }
+    return out;
+  };
+  S.memorial = function (state, kind, id) {
+    const o = S.playerChar(state);
+    const err = S.personaBlocked(state) || S.canMemorial(state);
+    if (err) return fail(err);
+    const fid = o.force;
+    const r = rulerOf(state, fid);
+    const PP = S.PERSONA.propose;
+    let q;
+    if (kind === "war") {
+      const e = expeditions(state, fid).find((x) => x.t.id === id);
+      if (!e) return fail("지금 수도의 주력군이 갈 수 있는 곳이 아닙니다.");
+      q = { kind: "war", foe: e.t.owner, target: e.t.id, ratio: e.ratio, team: e.team.map((x) => x.id) };
+    } else {
+      if (!S.peaceFoes(state, fid).includes(id)) return fail("강화를 논할 상대가 아닙니다.");
+      const terms = S.peaceTerms(state, fid, id);
+      q = { kind: "peace", foe: id, losing: terms.loser === fid };
+    }
+    const odds = S.memorialOdds(state, q);
+    o.propAt = now(state);
+    o.pact = state.year * 100 + state.month;
+    const what = kind === "war" ? `${S.forceName(state, q.foe)}의 ${S.place(state, q.target).name} 출정` : `${S.forceName(state, q.foe)}과의 강화`;
+    if (!odds.adopted) {
+      record(state, fid, q, odds.d, false, "memorial");
+      o.content = clamp((o.content == null ? 50 : o.content) + PP.refuse.content, 0, 100);
+      return { ok: true, msg: `${S.josa(what, "을", "를")} 진언했으나 ${S.josa(r.name, "이", "가")} 받아들이지 않았습니다(조정 여론 ${S.supportLabel(odds.d.support)}).` };
+    }
+    let res;
+    if (kind === "war") {
+      res = S.launchExpedition(state, fid, q.target);
+      if (!res.ok) return res;
+      const rec = record(state, fid, q, odds.d, true, "memorial");
+      rec.pro = [o.id].concat(rec.pro.filter((x) => x !== o.id)).slice(0, K.leaders);
+      rec.lead = res.march.officers[0] || null;
+      S.addLog(state, `${S.forceName(state, fid)}: ${o.name}의 진언대로 주력군 ${res.march.troops}명이 ${S.ro(S.place(state, q.target).name)} 출진합니다.`, "strife");
+    } else {
+      res = S.proposePeace(state, fid, q.foe);
+      if (!res.ok) return res;
+      const rec = record(state, fid, q, odds.d, true, "memorial");
+      rec.result = "made";
+    }
+    S.addMerit(o, PP.adopt.merit);
+    S.opAdd(r, o, PP.adopt.op);
+    return { ok: true, msg: `${S.josa(r.name, "이", "가")} ${what} 진언을 받아들였습니다. ` + (res.msg || "") };
   };
 
   // ---------- each month ----------

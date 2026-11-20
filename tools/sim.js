@@ -5,7 +5,7 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.join(__dirname, "..", "js");
-for (const f of ["data/map.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/roster.js", "data/homes.js", "data/ambition.js", "data/scenario191.js", "data/scenario219.js", "engine.js", "resources.js", "march.js", "units.js", "tech.js", "capital.js", "forts.js", "battle.js", "court.js", "houses.js", "diplomacy.js", "data/ties.js", "bonds.js", "gentry.js", "factions.js", "succession.js", "rebellion.js", "strife.js", "hanplot.js", "standing.js", "conduct.js", "ai.js", "war.js", "council.js"]) {
+for (const f of ["data/map.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/roster.js", "data/homes.js", "data/ambition.js", "data/scenario191.js", "data/scenario219.js", "engine.js", "resources.js", "march.js", "units.js", "tech.js", "capital.js", "forts.js", "battle.js", "court.js", "houses.js", "diplomacy.js", "data/ties.js", "bonds.js", "gentry.js", "factions.js", "succession.js", "rebellion.js", "strife.js", "hanplot.js", "standing.js", "conduct.js", "ai.js", "war.js", "council.js", "persona.js"]) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;

@@ -80,7 +80,8 @@
   S.cityHead = function (state, c) {
     const staff = S.serving(state, c.id).filter((o) => o.force === c.owner);
     if (!staff.length) return null;
-    return staff.find((o) => S.isRuler(state, o)) || staff.reduce((a, b) => (b.cmd + b.pol > a.cmd + a.pol ? b : a));
+    // The player's character heads any city he is in, after the ruler (js/persona.js).
+    return staff.find((o) => S.isRuler(state, o)) || staff.find((o) => o.id === state.player) || staff.reduce((a, b) => (b.cmd + b.pol > a.cmd + a.pol ? b : a));
   };
   // Standing within a faction: who leads it.
   const standing = (o) => Math.max(o.cmd, o.pol) + o.speech / 2 + (o.bond || 0) / 4;

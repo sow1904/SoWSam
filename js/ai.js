@@ -528,7 +528,8 @@
     S.warAI(state, fid);
     manageForts(state, fid);
     S.reliefAI(state, fid);
-    for (const c of S.citiesOf(state, fid)) domestic(state, c, fid);
+    const mine = S.playerCity ? S.playerCity(state) : null; // the player's own city is his to run (js/persona.js)
+    for (const c of S.citiesOf(state, fid)) if (c.id !== mine) domestic(state, c, fid);
     S.diploAI(state, fid);
     S.courtAI(state, fid);
     S.capitalAI(state, fid);

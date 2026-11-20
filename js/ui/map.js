@@ -191,7 +191,7 @@
       // The art already grows with the tier; bigger tiers are also drawn a little larger.
       const tier = icon.startsWith("palace") ? 5 : S.cityTier(c);
       const w = iw * 0.2 * (0.9 + tier * 0.04) * k, h = w * ih / iw;
-      const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.mine(c) ? "mine" : ""].join(" ");
+      const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.home(c) ? "mine" : "", c.id === S.playerCity(state) ? "seat" : ""].join(" ");
       return `<g class="${cls}" data-city="${c.id}">` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>` +
@@ -207,7 +207,7 @@
   // fort. Unbuilt sites are drawn faintly.
   const FORT_ICONS = { pass: [28, 26], fort: [30, 22], site: [26, 15], fort_ruin: [26, 24] }; // display sizes
   function fortGlyph(f, targets) {
-    const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.mine(f) ? "mine" : ""].join(" ");
+    const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
     const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind;
     const [iw, ih] = FORT_ICONS[icon];
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +

@@ -12,6 +12,15 @@
   const chip = (label, value, extra) => `<span class="chip"><i>${label}</i><b>${value}</b>${extra || ""}</span>`;
   UI.renderStatus = function () {
     const date = `<span class="date"><b>${state.year}</b>년 <b>${state.month}</b>월 <b>${state.day || 1}</b>일</span>`;
+    const me = S.playerChar(state);
+    const meChip = me ? `<span class="chip me"><i>나</i><b>${me.name}</b><button data-action="persona" title="내 인물 (P)">${UI.roleLabel()}</button></span>` : "";
+    if (!state.playerForce && me) {
+      // A wanderer or a captive with no force: where he is, and the land.
+      const fs = Object.values(state.forces).filter((x) => x.alive).map((x) => ({ x, n: S.citiesOf(state, x.id).length })).sort((a, b) => b.n - a.n);
+      UI.setHTML($("#status"), date + `<span class="banner" style="--force:#6b5b3a"><b>${UI.roleLabel()}</b><i>${UI.personaLine()}</i></span>` + meChip +
+        chip("명성", me.fame || 0) + fs.slice(0, 5).map((r) => chip(`<span class="swatch" style="--force:${r.x.color}"></span>${r.x.name}`, `${r.n}성`)).join(""));
+      return;
+    }
     if (!state.playerForce) {
       // Only watching: the state of the land.
       const fs = Object.values(state.forces).filter((x) => x.alive).map((x) => ({ x, n: S.citiesOf(state, x.id).length })).sort((a, b) => b.n - a.n);
@@ -27,8 +36,9 @@
     const cap = state.cities[S.capitalOf(state, state.playerForce)];
     UI.setHTML($("#status"), date +
       `<span class="banner" style="--force:${f.color}"><b>${f.name}군</b><i>군주 ${ruler.name}</i></span>` +
+      (me && me !== ruler ? meChip + chip("공적", me.merit || 0) + chip("주군의 의견", UI.signed(S.opinion(state, ruler, me))) : "") +
       (state.auto ? `<span class="chip auto"><b>세력 위임 중</b><button data-action="auto" title="다시 직접 다스립니다">해제</button></span>`
-        : S.spectating(state) ? chip("통치", "모든 도시 완전 위임") : "") +
+        : S.spectating(state) && S.playerRules(state) ? chip("통치", "모든 도시 완전 위임") : "") +
       (cap ? chip(S.capitalLabel(state, state.playerForce), cap.name, helpTip(H.capital)) : "") +
       (S.houseOf(state, state.playerForce) ? chip("가문", S.HOUSES[S.houseOf(state, state.playerForce)].name, helpTip(S.HOUSES[S.houseOf(state, state.playerForce)].help)) : "") +
       chip("체제", S.regime(state, state.playerForce).label) +
@@ -47,7 +57,7 @@
   // Small marks after a name: a figure of the novel, a woman.
   UI.personMarks = function (o) {
     const p = S.PEOPLE[o.name] || {};
-    return (p.fiction ? `<sup class="mark" title="연의의 인물">演</sup>` : "") + (p.female ? `<sup class="mark f" title="여성">女</sup>` : "");
+    return (state && state.player === o.id ? `<sup class="mark me" title="플레이어 인물">나</sup>` : "") + (p.fiction ? `<sup class="mark" title="연의의 인물">演</sup>` : "") + (p.female ? `<sup class="mark f" title="여성">女</sup>` : "");
   };
   UI.abilityHead = () => S.ABILITY_KEYS.map((k) => `<th>${S.ABILITY_NAMES[k]}</th>`).join("");
   Object.assign(UI, { abilityCells, traitTags, skillTags });
@@ -312,6 +322,17 @@
     if (!UI.selected) {
       UI.winOpen = false;
       win.classList.add("hidden");
+      const me = S.playerChar(state);
+      if (me && !S.playerRules(state)) {
+        const pc = S.playerCity(state);
+        UI.setHTML(info, `<h2>${me.name}</h2><p>${UI.personaLine()}</p>` +
+          `<p class="hint">${state.heirPick ? "뒤를 이을 인물을 골라야 합니다." : S.personaBlocked(state) || "이번 달 행동을 할 수 있습니다."}</p>` +
+          `<div class="links"><button class="primary" data-action="persona">인물 창 (P)</button>` +
+          (pc ? `<button data-action="select" data-city="${pc}">${state.cities[pc].name} (내 성)</button>` : "") +
+          (me.city && state.cities[me.city] && me.city !== pc ? `<button data-action="select" data-city="${me.city}">${state.cities[me.city].name} (있는 곳)</button>` : "") + `</div>` +
+          `<p class="hint">군주가 아니므로 세력의 결정은 컴퓨터 군주가 내립니다. 지도에서 도시를 누르면 정보가 나옵니다.</p>`);
+        return;
+      }
       UI.setHTML(info, !state.playerForce
         ? `<h2>관전</h2><p class="hint">지도에서 도시를 누르면 그곳의 정보가 나옵니다. 위쪽 메뉴의 도시·무장·기술은 고른 도시의 세력 것을 보여 줍니다. 시간은 「▶ 진행」이나 스페이스 바로 흐르게 합니다.</p>`
         : `<h2>도시를 선택하세요</h2><p class="hint">지도에서 도시를 누르면 정보와 명령이 나옵니다. ` +

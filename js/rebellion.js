@@ -52,6 +52,7 @@
   S.rebelChance = function (state, o, c) {
     const fid = o && o.force;
     if (!fid || o.status !== "serving" || S.isRuler(state, o) || c.owner !== fid) return 0;
+    if (S.isPlayer && S.isPlayer(state, o)) return 0; // the player rises when he says so (js/persona.js)
     if (S.rebelWait(state, fid) !== 0) return 0;
     if (S.capitalOf(state, fid) === c.id || S.cityHead(state, c) !== o) return 0;
     // Discontent: low loyalty, little bond, and a poor lot (js/standing.js).
@@ -92,6 +93,8 @@
     S.addLog(state, msg, fid === state.playerForce ? "warn" : "fall");
     return msg;
   }
+
+  S.rebelNow = rebel;
 
   // ---------- stepping down ----------
   // The faction that might force the ruler out, and the % a month: {g, p}.
