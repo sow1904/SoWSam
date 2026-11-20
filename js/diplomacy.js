@@ -87,7 +87,7 @@
   S.envoysOf = (state, fid) => (state.envoys || []).filter((e) => e.from === fid);
   // Envoys waiting at this force's capital for an answer.
   S.asksFor = (state, fid) => (state.envoys || []).filter((e) => e.to === fid && e.phase === "wait");
-  S.envoyKind = { tribute: "조공", pact: "동맹 제의", swap: "포로 교환" };
+  S.envoyKind = { tribute: "조공", pact: "동맹 제의", swap: "포로 교환", urge: "항복 권고", submit: "귀순" };
 
   // ---------- what an envoy can win ----------
   S.tributeGain = function (state, to, gold, speech) {
@@ -202,6 +202,10 @@
       take = (opts.take || []).filter((id) => can.take.some((x) => x.id === id));
       gold = Math.max(0, Math.floor(opts.gold || 0));
       if (!give.length && !take.length) return fail("주고받을 포로를 골라 주세요.");
+    } else if (kind === "urge" || kind === "submit") {
+      // js/surrender.js
+      const bar = kind === "urge" ? S.urgeBar(state, from, to) : S.submitBar(state, from, to);
+      if (bar) return fail(bar);
     } else return fail("알 수 없는 용건입니다.");
     if (cap.gold < gold) return fail(`${cap.name}의 금이 부족합니다. (필요 ${gold})`);
     cap.gold -= gold;
@@ -243,9 +247,26 @@
     e.take = e.take.filter((id) => held(id, e.to, e.from));
   }
   const names = (state, ids) => ids.map((id) => state.officers[id].name).join(", ");
+  // The other side's chance of saying yes.
+  function chanceOf(state, e, o) {
+    if (e.kind === "pact") return S.pactChance(state, e.from, e.to, o.speech, e.months);
+    if (e.kind === "urge" || e.kind === "submit") return S.surrenderEnvoyChance(state, e, o.speech);
+    return S.swapChance(state, e.from, e.to, e.give, e.take, e.gold, o.speech);
+  }
   function settle(state, e, yes) {
     const o = state.officers[e.officer];
     const F = S.forceName(state, e.from), T = S.forceName(state, e.to);
+    if (e.kind === "urge" || e.kind === "submit") {
+      // js/surrender.js logs a surrender itself.
+      const lines = S.settleSurrender(state, e, yes);
+      const made = alive(state, e.kind === "urge" ? e.to : e.from) === false;
+      if (!made) for (const l of lines) say(state, e, l, e.from === state.playerForce ? "warn" : "sys");
+      if (alive(state, e.from)) return turnBack(state, e, false);
+      if (o && o.transit === "e" + e.id) o.transit = null; // his force is gone into the other
+      e.phase = "back";
+      e.back = S.today(state);
+      return;
+    }
     if (e.kind === "pact") {
       pay(state, e.to, e.gold); // the gift is kept either way
       const renew = S.pactRenewable(state, e.from, e.to);
@@ -289,17 +310,19 @@
       prune(state, e);
       if (!e.give.length && !e.take.length) return turnBack(state, e, true);
     }
+    if ((e.kind === "urge" && S.urgeBar(state, e.from, e.to)) || (e.kind === "submit" && S.submitBar(state, e.from, e.to))) {
+      if (involves(state, e)) say(state, e, `${S.forceName(state, e.from)}의 ${S.envoyKind[e.kind]} 사자 ${S.josa(o.name, "이", "가")} 사정이 바뀌어 용건을 전하지 못하고 돌아갑니다.`);
+      return turnBack(state, e, false);
+    }
     // The player answers for himself; the envoy waits a while.
     if (e.to === state.playerForce && !S.spectating(state)) {
       e.phase = "wait";
       e.expires = S.today(state) + D.askDays;
-      S.addLog(state, `${S.forceName(state, e.from)}의 사자 ${S.josa(o.name, "이", "가")} ${S.envoyKind[e.kind]}${e.kind === "pact" ? "를" : "을"} 들고 왔습니다. 외교 창에서 답할 수 있습니다.`, "sys");
+      S.addLog(state, `${S.forceName(state, e.from)}의 사자 ${S.josa(o.name, "이", "가")} ${S.josa(S.envoyKind[e.kind], "을", "를")} 들고 왔습니다. 외교 창에서 답할 수 있습니다.`, e.kind === "urge" || e.kind === "submit" ? "warn" : "sys");
       if (onEvent) onEvent({ envoy: e });
       return;
     }
-    const pct = e.kind === "pact" ? S.pactChance(state, e.from, e.to, o.speech, e.months)
-      : S.swapChance(state, e.from, e.to, e.give, e.take, e.gold, o.speech);
-    settle(state, e, S.chance(state, pct));
+    settle(state, e, S.chance(state, chanceOf(state, e, o)));
   }
   // The player's answer to a waiting envoy.
   S.answerEnvoy = function (state, id, yes) {
@@ -307,7 +330,7 @@
     if (!e) return fail("기다리는 사자가 없습니다.");
     const F = S.forceName(state, e.from);
     settle(state, e, !!yes);
-    return { ok: true, msg: `${F}의 ${S.envoyKind[e.kind]}${e.kind === "pact" ? "를" : "을"} ${yes ? "받아들였습니다" : "거절했습니다"}.` };
+    return { ok: true, msg: `${F}의 ${S.josa(S.envoyKind[e.kind], "을", "를")} ${yes ? "받아들였습니다" : "거절했습니다"}.` };
   };
 
   // Every day: envoys arrive, wait, and come home.
@@ -328,10 +351,8 @@
       if (e.phase === "out" && now >= e.arrive) resolve(state, e, onEvent);
       else if (e.phase === "wait" && (now >= e.expires || !alive(state, e.to) || S.spectating(state))) {
         if (!alive(state, e.to)) turnBack(state, e, true);
-        else if (S.spectating(state)) {
-          const pct = e.kind === "pact" ? S.pactChance(state, e.from, e.to, o.speech, e.months) : S.swapChance(state, e.from, e.to, e.give, e.take, e.gold, o.speech);
-          settle(state, e, S.chance(state, pct));
-        } else settle(state, e, false); // no answer is a refusal
+        else if (S.spectating(state)) settle(state, e, S.chance(state, chanceOf(state, e, o)));
+        else settle(state, e, false); // no answer is a refusal
       } else if (e.phase === "back" && now >= e.back) {
         o.transit = null;
         const cap = S.capitalOf(state, e.from);
@@ -381,6 +402,8 @@
     const envoy = who[0];
     const out = S.envoysOf(state, fid);
     if (out.length >= 2) return;
+    // Giving itself up, or urging another to (js/surrender.js).
+    if (S.surrenderAI && S.surrenderAI(state, fid, envoy)) return;
     const month = S.monthsElapsed(state);
     const free = (x) => !out.some((e) => e.to === x) &&
       !(state.envoyAt && state.envoyAt[fid + ">" + x] != null && month - state.envoyAt[fid + ">" + x] < D.aiWait);

@@ -90,12 +90,41 @@
     if (q.foe) s += clamp(S.opinion(state, o, rulerOf(state, q.foe)) / 100, -0.3, 0.3);
     return clamp(s - 0.1, -1, 1);
   }
-  const STANCE = { war: warStance, peace: peaceStance };
+  // 항복: give the force up to q.foe, q.ratio times as strong (js/surrender.js).
+  // The cautious and the old want safety, the ambitious a bigger stage; the
+  // conquest-minded and the lord's own kin lose most. The faithful stand by
+  // their lord; the fickle go where the wind blows.
+  function surrenderStance(state, o, q) {
+    const a = S.ambitionOf(state, o);
+    const lord = rulerOf(state, o.force);
+    let s = 0.35 * a.safety - 0.3 * a.land + 0.1 * a.rise + clamp((q.ratio - 3) / 8, -0.3, 0.35);
+    if (q.foe) {
+      s += clamp(S.opinion(state, o, rulerOf(state, q.foe)) / 100, -0.3, 0.3);
+      if (state.han && !state.han.ended && state.han.holder === q.foe) s += 0.2 * a.han; // the emperor's side
+      if (S.vowed(o, q.foe)) s -= 0.8;
+    }
+    if (S.hasTrait(o, "의리")) s -= 0.35;
+    if (S.hasTrait(o, "변심")) s += 0.2;
+    if (S.hasTrait(o, "과감")) s -= 0.15;
+    if (S.hasTrait(o, "신중")) s += 0.1;
+    if (lord && S.CLAN[o.name] && S.CLAN[lord.name] && S.CLAN[o.name].clan === S.CLAN[lord.name].clan) s -= 0.3; // the house is lost
+    return clamp(s - 0.45, -1, 1);
+  }
+  // 귀순 받기: take in q.foe, which offers to submit. Most are glad of it.
+  function acceptStance(state, o, q) {
+    const a = S.ambitionOf(state, o);
+    let s = 0.35 + 0.15 * a.land;
+    if (q.foe) s += clamp(S.opinion(state, o, rulerOf(state, q.foe)) / 120, -0.4, 0.3) + (S.rel(state, o.force, q.foe) - 50) / 200;
+    return clamp(s, -1, 1);
+  }
+  const STANCE = { war: warStance, peace: peaceStance, surrender: surrenderStance, accept: acceptStance };
   // The player's character speaks as the player says (js/persona.js): "war" or "peace".
   function playerStance(state, o, kind) {
     if (!S.isPlayer || !S.isPlayer(state, o) || !state.persona) return null;
     const s = state.persona.stance;
     if (s !== "war" && s !== "peace") return null;
+    if (kind === "surrender") return s === "peace" ? 0.8 : -0.8; // the dove would yield
+    if (kind !== "war" && kind !== "peace") return null;
     return (s === "war") === (kind === "war") ? 0.8 : -0.8;
   }
   // The council's view of q {kind, foe, ...}: {support (-1..1), seats: [{o, voice, stance}], pro, con}.
@@ -124,6 +153,8 @@
     return rec;
   }
   S.councilsOf = (state, fid) => (state.forces[fid] && state.forces[fid].councils) || [];
+  S.councilRecord = record;
+  S.councilLine = lineOf;
   function lineOf(state, d) {
     return `찬성 ${d.pro.length ? names(state, d.pro.slice(0, K.leaders).map((c) => c.o.id)) : "없음"}, 반대 ${d.con.length ? names(state, d.con.slice(0, K.leaders).map((c) => c.o.id)) : "없음"}`;
   }
