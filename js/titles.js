@@ -242,14 +242,39 @@
     // The player names his own realm when he first becomes 공 (js/ui/screens.js).
     if (key === "duke" && f.id === state.playerForce) f.realmAsk = true;
   }
+  // The player names his dynasty whenever he becomes emperor (js/court.js).
+  S.askDynasty = function (state, fid) {
+    if (fid === state.playerForce) state.forces[fid].realmAsk = true;
+  };
 
-  // The player's choice of realm name: any name no other ruler holds.
+  // An emperor's names besides the list: the one he holds now, his realm as
+  // 공·왕, his own (위(魏) 조조, ...) and the Han for its heir. {name, fit, free}.
+  S.dynastyChoices = function (state, fid) {
+    const f = state.forces[fid];
+    const extra = [[f.dynasty, "now"], [EMPEROR_OF[rulerOf(state, f).name], "own"], [f.hanHeir ? HAN : null, "han"], [f.realm, "realm"]]
+      .filter(([n], i, all) => n && all.findIndex(([m]) => m === n) === i)
+      .map(([name, fit]) => ({ name, fit, free: !S.realmTaken(state, fid, name) }));
+    return extra.concat(S.realmChoices(state, fid).filter((r) => !extra.some((x) => x.name === r.name)));
+  };
+
+  // The player's choice of realm name: any name no other ruler holds. For
+  // an emperor it names the dynasty, and the realm with it (not the Han).
   S.chooseRealm = function (state, fid, name) {
     const f = state.forces[fid];
+    if (f.emperor) {
+      if (!S.dynastyChoices(state, fid).some((r) => r.name === name)) return { ok: false, msg: "그 이름은 고를 수 없습니다." };
+      if (S.realmTaken(state, fid, name)) return { ok: false, msg: "이미 다른 군주가 쓰는 나라 이름입니다." };
+      delete f.realmAsk;
+      const was = S.titleName(state, fid);
+      f.dynasty = name;
+      if (name !== HAN) f.realm = name;
+      if (was !== S.titleName(state, fid)) S.addLog(state, `${S.forceName(state, fid)}의 국호를 정했습니다: ${name} (${was} → ${S.titleName(state, fid)})`, "sys");
+      return { ok: true, msg: `국호: ${name}` };
+    }
     if (!REALMS.some((r) => r.name === name)) return { ok: false, msg: "그런 나라 이름은 없습니다." };
     if (S.realmTaken(state, fid, name)) return { ok: false, msg: "이미 다른 군주가 쓰는 나라 이름입니다." };
     const key = S.titleKey(state, fid);
-    if (RANK[key] < RANK.duke || f.emperor) return { ok: false, msg: "나라 이름은 공 작위를 받을 때 정합니다." };
+    if (RANK[key] < RANK.duke) return { ok: false, msg: "나라 이름은 공 작위를 받을 때 정합니다." };
     delete f.realmAsk;
     const before = S.titleName(state, fid);
     f.realm = name;

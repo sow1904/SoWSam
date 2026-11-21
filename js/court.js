@@ -124,6 +124,7 @@
     f.emperor = true;
     f.emperorYear = state.year;
     f.dynasty = S.dynastyName ? S.dynastyName(state, fid) : null; // js/titles.js
+    if (S.askDynasty) S.askDynasty(state, fid);
     loyaltyShock(state, fid, { H: 15, U: 4, N: 0 });
     S.addLog(state, `헌제가 ${rulerOf(state, fid).name}에게 제위를 물려주었습니다. 4백 년 한 왕조가 막을 내리고 ${f.dynasty || ""} 황제가 즉위합니다.`.replace("  ", " "), "fall");
   }
@@ -165,6 +166,7 @@
     f.emperorYear = state.year;
     f.hanHeir = heir;
     f.dynasty = S.dynastyName ? S.dynastyName(state, fid) : null; // js/titles.js
+    if (S.askDynasty) S.askDynasty(state, fid);
     const as = f.dynasty ? `${f.dynasty} 황제` : "황제";
     if (!heir) {
       loyaltyShock(state, fid, { H: 25, U: 8, N: 0 });

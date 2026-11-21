@@ -204,9 +204,10 @@
     }
     // Made 공: the player names his realm (js/titles.js).
     const meF = state.forces[state.playerForce];
-    if (meF && meF.realmAsk && clock.realmAsked !== meF.titleName && !S.spectating(state)) {
-      clock.realmAsked = meF.titleName;
-      pause("공 작위를 받았습니다. 나라 이름을 고르세요");
+    const askKey = meF && S.titleName(state, meF.id);
+    if (meF && meF.realmAsk && clock.realmAsked !== askKey && !S.spectating(state)) {
+      clock.realmAsked = askKey;
+      pause(meF.emperor ? "황제에 올랐습니다. 국호를 고르세요" : "공 작위를 받았습니다. 나라 이름을 고르세요");
       UI.showRealmPick();
       return;
     }
