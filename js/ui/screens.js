@@ -546,6 +546,7 @@
       const w = S.wholeLands(state, me);
       html += `<p>지금 작위: <b>${S.titleName(state, me)}</b>` +
         ` <span class="hint">(성 ${S.citiesOf(state, me).length}개, 온전한 주 ${w.provs.map((p) => S.PROVINCES[p]).join("·") || "없음"}, 온전한 지방 ${w.regions.map((r) => S.REGIONS[r].name).join("·") || "없음"}, 군주 명성 ${state.officers[f.ruler].fame || 0})</span></p>` +
+        (f.realmAsk ? `<p><button data-action="realmPick">나라 이름 고르기</button></p>` : "") +
         (f.titleDue ? `<p>헌제의 칙사가 ${S.TITLES[S.titleRank(f.titleDue.key)].name} 작위를 가지고 오는 중입니다. (${Math.max(0, f.titleDue.at - S.today(state))}일 뒤)</p>` : "");
     }
     html += `<div class="otable titles"><table><tr><th>작위</th><th>조건</th><th>이름</th><th>지금 받은 세력</th></tr>` +
@@ -555,9 +556,26 @@
         return `<tr${me && !state.forces[me].emperor && S.titleKey(state, me) === t.key ? ' class="me"' : ""}><td><b>${t.name}</b></td><td>${t.need}</td><td class="hint">${t.named}</td><td>${who.join(", ") || "-"}</td></tr>`;
       }).join("") + `</table></div>` +
       `<p class="hint">조건을 채운 지 한 달 뒤에 헌제의 칙사가 이르러 작위를 내립니다. 그때 조건을 잃었으면 그냥 돌아갑니다. 작위 이름은 칙사가 떠날 때의 수도와 주로 정해집니다. 받은 작위는 땅을 잃어도 남고, 군주가 바뀌어도 세력이 이어받습니다. ` +
-      `황제는 선양이나 칭제로만 오르며, 나라 이름은 공의 이름을 따릅니다(중 원술, 위 조조, 오 손권, 촉한 유비는 그 이름). 한조중시 군주는 한 왕조가 끝난 뒤 한을 잇고, 한 황제는 여럿일 수 있습니다.</p>`;
+      `공을 받을 때 나라 이름을 정합니다. 컴퓨터는 수도에 맞는 이름을 고르고, 플레이어는 직접 고릅니다. 한 나라 이름은 한 군주만 쓸 수 있습니다. 황제는 선양이나 칭제로만 오르며, 그 나라 이름을 씁니다(중(仲) 원술, 위(魏) 조조, 오(吳) 손권, 촉한 유비는 그 이름, 다른 군주가 쓰고 있으면 제 나라 이름). 한조중시 군주는 한 왕조가 끝난 뒤 한(漢)을 잇고, 한(漢) 황제만은 여럿일 수 있습니다.</p>`;
     return html;
   }
+  // Naming the realm when the player is made 공 (js/titles.js S.chooseRealm).
+  UI.showRealmPick = function () {
+    const me = state.playerForce;
+    const f = me && state.forces[me];
+    if (!f) return;
+    const list = S.realmChoices(state, me);
+    const btn = (r) => `<button data-action="pickRealm" data-name="${r.name}"${r.free ? "" : " disabled"}` +
+      ` title="${r.free ? (r.fit === "home" ? "수도에 맞는 이름" : r.fit === "near" ? "수도 가까운 이름" : "") : "다른 군주가 쓰는 이름"}">` +
+      `${r.name === f.realm ? `<b>${r.name}</b>` : r.name}</button>`;
+    const fit = list.filter((r) => r.fit), rest = list.filter((r) => !r.fit);
+    UI.openModal(title("나라 이름") +
+      `<p>지금 작위: <b>${S.titleName(state, me)}</b>. 공과 왕, 황제의 이름이 될 나라 이름을 고르세요.</p>` +
+      `<p class="hint">다른 군주가 쓰는 이름은 고를 수 없습니다. 고르지 않으면 지금 이름(${f.realm || "-"})을 그대로 씁니다.</p>` +
+      (fit.length ? `<h3>수도에 맞는 이름</h3><div class="links realms">${fit.map(btn).join(" ")}</div>` : "") +
+      `<h3>다른 이름</h3><div class="links realms">${rest.map(btn).join(" ")}</div>` +
+      `<div class="footer"><button class="primary" data-action="keepRealm">${f.realm || "지금 이름"} 그대로 쓴다</button></div>`, true);
+  };
   UI.showCourt = function () {
     S.syncCourt(state);
     const han = state.han;
@@ -683,6 +701,9 @@
       if (d.yes && !confirm("선양을 받아 황제에 오를까요? 한 왕조가 끝납니다.")) return;
       if (UI.result(S.answerAbdication(state, !!d.yes))) UI.showCourt();
     },
+    pickRealm: (d) => { if (UI.result(S.chooseRealm(state, state.playerForce, d.name))) UI.closeModal(); },
+    keepRealm: () => { const f = state.forces[state.playerForce]; if (f) delete f.realmAsk; UI.closeModal(); UI.renderAll(); },
+    realmPick: () => UI.showRealmPick(),
     moveEmperor: () => { if (UI.result(S.moveEmperor(state, state.playerForce, $("#ctDest").value))) UI.showCourt(); },
     proclaim: () => {
       if (!confirm("황제를 칭할까요?")) return;

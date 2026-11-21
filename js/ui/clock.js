@@ -202,6 +202,14 @@
       UI.showOfficeAsks();
       return;
     }
+    // Made 공: the player names his realm (js/titles.js).
+    const meF = state.forces[state.playerForce];
+    if (meF && meF.realmAsk && clock.realmAsked !== meF.titleName && !S.spectating(state)) {
+      clock.realmAsked = meF.titleName;
+      pause("공 작위를 받았습니다. 나라 이름을 고르세요");
+      UI.showRealmPick();
+      return;
+    }
     // A slander waits for the player's answer.
     const sl = state.forces[state.playerForce] && state.forces[state.playerForce].slander;
     const slKey = sl ? `${sl.by}>${sl.target}@${sl.until}` : null;
