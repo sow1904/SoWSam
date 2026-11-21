@@ -32,13 +32,15 @@
   };
 
   // Seats at court. min: cities the force needs before the seat opens.
+  // 장사 and 군사 are every force's, whatever its ruler's title (js/titles.js);
+  // for the player they also counsel on commands (js/ui/commands.js).
   S.OFFICES = [
-    { key: "chancellor", name: "승상", role: "내정", rank: 1, min: 1, stat: (o) => o.pol,
-      help: "수도로 오는 상납 금이 정치에 비례해 늘어납니다(정치 90이면 9%)." },
+    { key: "chancellor", name: "장사", role: "내정", rank: 1, min: 1, stat: (o) => o.pol,
+      help: "수도로 오는 상납 금이 정치에 비례해 늘어납니다(정치 90이면 9%). 플레이어 세력이면 인사·경제 명령에서 실행할 무장을 추천합니다." },
     { key: "marshal", name: "대장군", role: "군권", rank: 1, min: 2, stat: (o) => Math.round(o.cmd * 0.6 + o.war * 0.2 + o.strat * 0.2),
       help: "수도에 있으면 원정과 맞대응 주력군을 앞장서 이끕니다." },
-    { key: "adviser", name: "군사", role: "작전", rank: 2, min: 3, stat: (o) => o.strat,
-      help: "원정을 정할 때 군략이 높을수록 이길 수 있는 싸움을 더 잘 알아봅니다. 원정에 함께 나섭니다." },
+    { key: "adviser", name: "군사", role: "작전", rank: 2, min: 1, stat: (o) => o.strat,
+      help: "원정을 정할 때 군략이 높을수록 이길 수 있는 싸움을 더 잘 알아봅니다. 원정에 함께 나섭니다. 플레이어 세력이면 군사·계략·외교 명령에서 실행할 무장을 추천합니다." },
     { key: "secretary", name: "상서령", role: "인사", rank: 2, min: 6, stat: (o) => Math.round((o.pol + o.wit) / 2),
       help: "사람을 고르게 써서 세력 무장들의 만족이 오릅니다." },
     { key: "envoy", name: "대홍려", role: "외교·첩보", rank: 2, min: 6, stat: (o) => Math.round((o.speech + o.wit) / 2),

@@ -36,18 +36,82 @@
   const UNIT_HINT = UI.HELP.units;
 
   const SIMPLE = {
-    train: { title: "훈련", stat: "cmd", run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
+    train: { title: "훈련", stat: "cmd", counsel: "adviser", score: (o) => S.preview.train(o), run: (o, c) => S.drill(state, o, c), preview: (o) => `훈련 +${S.preview.train(o)}` },
     woo: {
-      title: "회유", stat: "speech", run: (o, c) => S.woo(state, o, c),
+      title: "회유", stat: "speech", counsel: "adviser", score: (o) => S.wooPreview(o), run: (o, c) => S.woo(state, o, c),
       preview: (o) => `호족 협력 +${S.wooPreview(o)} (금 ${S.COST.woo})`,
     },
-    stake: { title: "녹각", stat: "cmd", run: (o, c) => S.stake(state, o, c), preview: () => `녹각 100 (목재 ${S.STAKES.wood})` },
-    search: { title: "탐색", stat: "wit", run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${S.searchChance(o)}%` },
+    stake: { title: "녹각", stat: "cmd", counsel: "adviser", score: () => 0, run: (o, c) => S.stake(state, o, c), preview: () => `녹각 100 (목재 ${S.STAKES.wood})` },
+    search: { title: "탐색", stat: "wit", counsel: "chancellor", score: (o) => S.searchChance(o), run: (o, c) => S.search(state, o, c), preview: (o) => `인재 발견률 ${S.searchChance(o)}%` },
   };
 
-  function officerPicker(head, desc, list, action, extra) {
+  function officerPicker(head, desc, list, action, extra, advice) {
     UI.openModal(title(head) + `<p class="hint">${desc}</p>` +
-      UI.officerTable(list, { pick: action, extraHead: "효과", extra }) + footer(), true);
+      UI.officerTable(list, { pick: action, extraHead: "효과", extra }) + (advice || "") + footer(), true);
+  }
+
+  // Counsel (조언): the player's 군사 (adviser) speaks on military, scheming
+  // and diplomatic commands, his 장사 (chancellor) on people and economy.
+  // Each names the officer to send, shown as the last line of the window.
+  const counsellor = (key) => (state.playerForce && !S.spectating(state) ? S.holder(state, state.playerForce, key) : null);
+  // A line of counsel. attrs: the button that follows it, or none.
+  UI.adviceRow = function (key, text, attrs) {
+    const o = counsellor(key);
+    if (!o) return "";
+    return `<div class="advice"><b>${S.officeDef(key).name}의 조언</b> <span class="hint">${o.name}</span> ` +
+      `<span>「${text}」</span>${attrs ? ` <button ${attrs}>따른다</button>` : ""}</div>`;
+  };
+  // The best of list by score; among equals the lesser officer, to keep the able free.
+  const ableness = (o) => S.ABILITY_KEYS.reduce((s, k) => s + (o[k] || 0), 0);
+  function bestOf(list, score) {
+    let best = null, bv = -Infinity;
+    for (const o of list) {
+      const v = score(o);
+      if (v > bv || (v === bv && best && ableness(o) < ableness(best))) { best = o; bv = v; }
+    }
+    return best;
+  }
+  // How the counsellor names someone: himself, his lord, or by name.
+  const entrust = (key, o) => (o === counsellor(key) ? "제가 맡겠습니다." : S.isRuler(state, o) ? "주공께서 몸소 맡으십시오." : `${o.name}에게 맡기십시오.`);
+  // Counsel on a window where one officer is picked from a table.
+  function pickAdvice(key, list, score, label, action, data) {
+    if (!counsellor(key) || !list.length) return "";
+    const o = bestOf(list, score);
+    const more = Object.entries(data || {}).map(([k, v]) => ` data-${k}="${v}"`).join("");
+    return UI.adviceRow(key, `${entrust(key, o)}${label ? ` (${label(o)})` : ""}`, `data-action="${action}" data-oid="${o.id}"${more}`);
+  }
+  UI.pickAdvice = pickAdvice;
+  // A team for the field: the best at leading, at strategy and at arms, as
+  // the battle counts each (up to max officers).
+  function teamOf(list, max) {
+    const team = [];
+    for (const k of ["cmd", "strat", "war"]) {
+      if (team.length >= max) break;
+      const o = bestOf(list.filter((x) => !team.includes(x)), (x) => x[k]);
+      if (o) team.push(o);
+    }
+    return team;
+  }
+  function teamAdvice(list, max) {
+    if (!counsellor("adviser") || !list.length) return "";
+    const team = teamOf(list, max);
+    const who = team.map((o) => `${o === counsellor("adviser") ? "저" : S.isRuler(state, o) ? "주공" : o.name}(용${o.cmd} 군${o.strat} 무${o.war})`).join(", ");
+    return UI.adviceRow("adviser", `${who}, 이렇게 나서십시오. 용병·군략·무력이 가장 높은 이의 능력이 각각 싸움에 쓰입니다.`,
+      `data-action="adviseCheck" data-ids="${team.map((o) => o.id).join(",")}"`);
+  }
+  // A post in the city: the ablest officer with no other post, or a clerk if none is better.
+  function postAdvice(kind, def, officers) {
+    if (!counsellor("chancellor") || def.policy) return "";
+    const free = officers.filter((o) => !S.postOf(state, o) || S.postOf(state, o) === kind);
+    const o = bestOf(free, def.stat);
+    const ci = S.CLERKS.reduce((b, cl, i) => (cl.ability > S.CLERKS[b].ability ? i : b), 0);
+    const cl = S.CLERKS[ci];
+    if (o && def.stat(o) >= cl.ability) {
+      return UI.adviceRow("chancellor", `${entrust("chancellor", o)} (${def.statLabel} ${def.stat(o)}, 월 ${signed(S.postGain(kind, def.stat(o)))}, 봉급 없음)`,
+        `data-action="doPost" data-kind="${kind}" data-oid="${o.id}"`);
+    }
+    return UI.adviceRow("chancellor", `무장 가운데 ${cl.name}보다 나은 이가 없습니다. ${cl.name}을 쓰십시오. (능력 ${cl.ability}, 봉급 금 ${cl.salary}/월)`,
+      `data-action="doPost" data-kind="${kind}" data-tier="${ci}"`);
   }
 
   const commands = (UI.commands = {
@@ -65,7 +129,9 @@
         UI.officerTable(list, { pick: "doDraft", extraHead: "효과", extra: (o) => {
           const n = Math.min(S.preview.draft(state, c, o), S.armable(c, cur));
           return `${S.unitName(cur)} +${n} (금 ${Math.ceil(n * S.COST.draftPerTroop)})`;
-        } }) + footer(), true);
+        } }) +
+        pickAdvice("adviser", list, (o) => Math.min(S.preview.draft(state, c, o), S.armable(c, cur)), (o) => `${S.unitName(cur)} +${Math.min(S.preview.draft(state, c, o), S.armable(c, cur))}`, "doDraft") +
+        footer(), true);
       UI.modalOnInput = () => {
         const v = $("#dfUnit") && $("#dfUnit").value;
         if (v && v !== UI.pending.unit) { UI.pending.unit = v; commands.draft(); }
@@ -77,7 +143,7 @@
       const list = S.idle(state, c.id).sort((a, b) => b[def.stat] - a[def.stat]);
       UI.pending = { cmd };
       officerPicker(def.title, `실행할 무장을 고르세요. ${S.STAT_NAMES[def.stat]} 능력이 높을수록 효과가 큽니다.`, list, "doSimple",
-        (o) => def.preview(o, c));
+        (o) => def.preview(o, c), pickAdvice(def.counsel, list, def.score, (o) => def.preview(o, c), "doSimple"));
     },
     research() {
       const c = state.cities[UI.selected];
@@ -89,7 +155,8 @@
         `기술은 세력 전체의 것입니다. 군사 기술은 단계가 오르면 그 계열의 상위 병종을 쓸 수 있고, 내정 기술은 단계마다 생산이나 인구가 늘어납니다. 마정은 목장의 도시, 염철은 소금이 나는 도시가 있어야 연구할 수 있고, 그런 도시를 모두 잃으면 효과가 멈춥니다.</p>` +
         UI.techTable(fid) +
         `<div class="row"><label>연구할 기술</label><select id="rsField">${S.TECH_GROUPS.map((g) => { const ks = open.filter((k) => S.TECH[k].group === g); return ks.length ? `<optgroup label="${g}">${ks.map((k) => `<option value="${k}">${S.TECH[k].name}</option>`).join("")}</optgroup>` : ""; }).join("")}</select></div>` +
-        UI.officerTable(list, { pick: "doResearch", extraHead: "진척", extra: (o) => `+${S.researchPoints(o, state)}` }) + footer(), true);
+        UI.officerTable(list, { pick: "doResearch", extraHead: "진척", extra: (o) => `+${S.researchPoints(o, state)}` }) +
+        pickAdvice("chancellor", list, (o) => S.researchPoints(o, state), (o) => `진척 +${S.researchPoints(o, state)}`, "doResearch") + footer(), true);
     },
     recruit() {
       const c = state.cities[UI.selected];
@@ -127,14 +194,19 @@
         `<table><tr><th>담당</th><th>능력</th><th>월 변화</th><th>봉급</th><th></th></tr>` +
         clerkRows + officerRows +
         `<tr class="pick" data-action="doPost" data-kind="${kind}" data-empty="1"><td>${def.policy ? "실시하지 않기" : "공석으로 두기"}</td><td>-</td>` +
-        `<td>${def.policy ? "호족 세력이 서서히 회복" : signed(S.postPenalty(c, kind))}</td><td>-</td><td>${!cur ? "현재" : ""}</td></tr></table>` + footer());
+        `<td>${def.policy ? "호족 세력이 서서히 회복" : signed(S.postPenalty(c, kind))}</td><td>-</td><td>${!cur ? "현재" : ""}</td></tr></table>` +
+        postAdvice(kind, def, officers) + footer());
     },
     reward() {
       const c = state.cities[UI.selected];
       const list = S.serving(state, c.id).filter((o) => !S.isRuler(state, o)).sort((a, b) => a.loyalty - b.loyalty);
       if (!list.length) { UI.toast("포상할 무장이 없습니다."); return; }
+      const low = list[0];
+      const advice = !counsellor("chancellor") ? ""
+        : low.loyalty >= 90 ? UI.adviceRow("chancellor", "지금은 상을 내려야 할 만큼 충성이 낮은 사람이 없습니다.")
+        : UI.adviceRow("chancellor", `충성이 가장 낮은 ${low === counsellor("chancellor") ? "저에게" : `${low.name}에게`} 내리십시오. (충성 ${low.loyalty})`, `data-action="doReward" data-oid="${low.id}"`);
       officerPicker("포상", `금 ${S.josa(S.COST.reward, "을", "를")} 하사해 충성을 올립니다. 행동력은 쓰지 않습니다. (보유 금 ${c.gold})`, list, "doReward",
-        (o) => `충성 ${o.loyalty}`);
+        (o) => `충성 ${o.loyalty}`, advice);
     },
     move() {
       const c = S.place(state, UI.selected);
@@ -238,7 +310,7 @@
           return `<option value="${w.id}">${UI.placeLabel(w.id)} (포위군 ${S.forceName(state, b.att.force)} ${S.unitName(b.att.unit)} ${b.att.troops}명, ${b.day}일째)</option>`;
         }).join("")}</select></div>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
-        unitRows("rlfU_", c, 0.7) +
+        unitRows("rlfU_", c, 0.7) + teamAdvice(idle, S.MAX_SORTIE_OFFICERS) +
         `<div class="row"><label>전망</label><span id="rlfEst" class="est"></span></div>` +
         footer(`<button class="primary" data-action="doRelieve">원군 출발</button>`));
       UI.modalOnInput = updateRelief;
@@ -261,7 +333,7 @@
         checkList(idle, S.MAX_SORTIE_OFFICERS) +
         unitRows("atU_", c, 0.7) +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 출진하지 않고 성에 남습니다.</p>` : "") +
-        `<div class="row"><label>전력</label><span id="atEst" class="est"></span></div>` +
+        `<div class="row"><label>전력</label><span id="atEst" class="est"></span></div>` + teamAdvice(idle, S.MAX_SORTIE_OFFICERS) +
         footer(`<button class="primary" data-action="doAttack">출진</button>`));
       UI.modalOnInput = updateEstimate;
       updateEstimate();
@@ -477,6 +549,10 @@
     $("#scInfo").innerHTML = `${t.name} 치안 ${t.order} · 호족 협력 ${Math.round(t.consent)} · 수비 지략 ${guard ? `${guard.name} ${guard.wit}` : "없음"}`;
     const list = S.idle(state, UI.selected).sort((a, b) => b.plot - a.plot);
     if (discord && !victim) { $("#scList").innerHTML = `<p class="hint">이 도시에는 이간할 무장이 없습니다.</p>`; return; }
+    const chance = (o) => (discord ? S.discordChance(state, o, victim) : S.rumorChance(state, o, city));
+    const odds = list.length ? Math.max(...list.map(chance)) : 0;
+    const advice = !odds ? (counsellor("adviser") && list.length ? UI.adviceRow("adviser", "이 계략은 통하지 않습니다. 다른 대상을 고르십시오.") : "")
+      : pickAdvice("adviser", list, chance, (o) => `성공률 ${chance(o)}%`, "doScheme");
     $("#scList").innerHTML = UI.officerTable(list, {
       pick: "doScheme", extraHead: "효과",
       extra: (o) => {
@@ -487,7 +563,7 @@
         const p = S.discordChance(state, o, victim);
         return p ? `성공률 ${p}% · 충성 -${S.schemeEffect.discord(o)}` : "통하지 않음 (군주·혈족)";
       },
-    });
+    }) + advice;
   }
 
   // ---------- carrying the commands out ----------
@@ -515,12 +591,19 @@
       UI.pending = { target: d.oid };
       const list = S.idle(state, UI.selected).sort((a, b) => b.speech - a.speech);
       officerPicker(`${target.name} 등용`, "설득할 무장을 고르세요. 언변이 높을수록 성공률이 오릅니다.", list, "doRecruit",
-        (o) => `성공률 ${S.recruitChance(state, o, target)}%`);
+        (o) => `성공률 ${S.recruitChance(state, o, target)}%`,
+        pickAdvice("chancellor", list, (o) => S.recruitChance(state, o, target), (o) => `성공률 ${S.recruitChance(state, o, target)}%`, "doRecruit"));
     },
     doRecruit: (d) => {
       const r = S.recruit(state, d.oid, UI.selected, UI.pending.target);
       UI.closeModal();
       UI.result(r);
+    },
+    // Following the 군사's choice of team: tick those officers and no others.
+    adviseCheck: (d) => {
+      const ids = String(d.ids || "").split(",");
+      for (const el of document.querySelectorAll(".pickOfficer")) el.checked = ids.includes(el.value);
+      if (UI.modalOnInput) UI.modalOnInput();
     },
     doReward: (d) => { if (UI.result(S.reward(state, UI.selected, d.oid))) commands.reward(); },
     unrest: () => UI.showUnrest(),

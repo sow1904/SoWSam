@@ -160,6 +160,7 @@
       `<h3>돌려받을 포로 <span class="hint">저쪽에 잡혀 있는 우리 무장</span></h3><div class="checks">${boxes(sw.take, "envTake")}</div>` +
       `<div class="row"><label>몸값</label><input type="number" id="envRansom" min="0" step="50" value="0"> <span class="hint">모자라는 값을 금으로 채웁니다. 거절당하면 돌려받습니다.</span></div></div>` +
       `<div class="row"><label>전망</label><span id="envEst" class="est"></span></div>` +
+      UI.pickAdvice("adviser", who, (o) => o.speech, (o) => `언변 ${o.speech}`, "adviseEnvoy") +
       `<div class="footer"><button data-action="diplomacy">돌아가기</button><button class="primary" data-action="doEnvoy" data-force="${fid}">사자 출발</button></div>`);
     UI.modalOnInput = () => updateEnvoy(fid);
     updateEnvoy(fid);
@@ -715,6 +716,7 @@
       if (UI.result(S.proclaim(state, state.playerForce))) { if (state.forces[state.playerForce].realmAsk) UI.showRealmPick(); else UI.showCourt(); }
     },
     envoy: (d) => UI.showEnvoy(d.force),
+    adviseEnvoy: (d) => { $("#envWho").value = d.oid; if (UI.modalOnInput) UI.modalOnInput(); },
     doEnvoy: (d) => {
       const f = envoyForm();
       if (f.kind === "submit" && !confirm(`${state.forces[d.force].name}군에 귀순을 청할까요? 받아들여지면 세력이 사라지고 군주는 그 신하가 됩니다.`)) return;
