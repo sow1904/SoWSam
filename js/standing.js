@@ -29,7 +29,13 @@
     fame: { capture: 2, captureMen: 1, decisive: 5, decisiveMen: 2, beaten: 3 },
     ask: { content: 50, merit: 40, chance: 10, wait: 12, answer: 1 },
     op: { granted: 15, pushed: -15, refused: -10, appointed: 10, dismissed: -20, decay: 0.8 },
+    // Counsel to the player (js/ui/commands.js): a 군사 judges by 군략, a 장사
+    // by 정치. He misjudges each officer's worth by up to blur × (100 - his
+    // ability)%: ±10% at 80, ±25% at 50, none at 100.
+    counsel: { blur: 0.5 },
   };
+  // How far off (as a share) a counsellor's judgement may be.
+  S.counselBlur = (o, key) => Math.max(0, 100 - (key === "adviser" ? o.strat : o.pol)) / 100 * ST.counsel.blur;
 
   // Seats at court. min: cities the force needs before the seat opens.
   // 장사 and 군사 are every force's, whatever its ruler's title (js/titles.js);

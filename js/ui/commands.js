@@ -58,9 +58,21 @@
   UI.adviceRow = function (key, text, attrs) {
     const o = counsellor(key);
     if (!o) return "";
-    return `<div class="advice"><b>${S.officeDef(key).name}의 조언</b> <span class="hint">${o.name}</span> ` +
+    const by = key === "adviser" ? `군략 ${o.strat}` : `정치 ${o.pol}`;
+    return `<div class="advice"><b>${S.officeDef(key).name}의 조언</b> <span class="hint" title="능력이 낮을수록 잘못 볼 수 있습니다">${o.name} (${by})</span> ` +
       `<span>「${text}」</span>${attrs ? ` <button ${attrs}>따른다</button>` : ""}</div>`;
   };
+  // What the counsellor makes of value v for officer o: off by up to his blur,
+  // the same all day for the same man and question (salt).
+  function judge(key, o, v, salt) {
+    const c = counsellor(key);
+    const blur = c ? S.counselBlur(c, key) : 0;
+    if (!blur) return v;
+    let h = 2166136261;
+    for (const ch of `${c.id}|${o.id}|${S.today(state)}|${salt || ""}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    const r = ((h >>> 0) % 10000) / 10000; // 0..1
+    return v * (1 + blur * (2 * r - 1));
+  }
   // The best of list by score; among equals the lesser officer, to keep the able free.
   const ableness = (o) => S.ABILITY_KEYS.reduce((s, k) => s + (o[k] || 0), 0);
   function bestOf(list, score) {
@@ -76,7 +88,7 @@
   // Counsel on a window where one officer is picked from a table.
   function pickAdvice(key, list, score, label, action, data) {
     if (!counsellor(key) || !list.length) return "";
-    const o = bestOf(list, score);
+    const o = bestOf(list, (x) => judge(key, x, score(x), action));
     const more = Object.entries(data || {}).map(([k, v]) => ` data-${k}="${v}"`).join("");
     return UI.adviceRow(key, `${entrust(key, o)}${label ? ` (${label(o)})` : ""}`, `data-action="${action}" data-oid="${o.id}"${more}`);
   }
@@ -87,7 +99,7 @@
     const team = [];
     for (const k of ["cmd", "strat", "war"]) {
       if (team.length >= max) break;
-      const o = bestOf(list.filter((x) => !team.includes(x)), (x) => x[k]);
+      const o = bestOf(list.filter((x) => !team.includes(x)), (x) => judge("adviser", x, x[k], k));
       if (o) team.push(o);
     }
     return team;
@@ -103,10 +115,11 @@
   function postAdvice(kind, def, officers) {
     if (!counsellor("chancellor") || def.policy) return "";
     const free = officers.filter((o) => !S.postOf(state, o) || S.postOf(state, o) === kind);
-    const o = bestOf(free, def.stat);
+    const seen = (x) => judge("chancellor", x, def.stat(x), kind);
+    const o = bestOf(free, seen);
     const ci = S.CLERKS.reduce((b, cl, i) => (cl.ability > S.CLERKS[b].ability ? i : b), 0);
     const cl = S.CLERKS[ci];
-    if (o && def.stat(o) >= cl.ability) {
+    if (o && seen(o) >= cl.ability) {
       return UI.adviceRow("chancellor", `${entrust("chancellor", o)} (${def.statLabel} ${def.stat(o)}, 월 ${signed(S.postGain(kind, def.stat(o)))}, 봉급 없음)`,
         `data-action="doPost" data-kind="${kind}" data-oid="${o.id}"`);
     }
@@ -201,10 +214,10 @@
       const c = state.cities[UI.selected];
       const list = S.serving(state, c.id).filter((o) => !S.isRuler(state, o)).sort((a, b) => a.loyalty - b.loyalty);
       if (!list.length) { UI.toast("포상할 무장이 없습니다."); return; }
-      const low = list[0];
+      const low = list.reduce((a, b) => (judge("chancellor", b, b.loyalty, "reward") < judge("chancellor", a, a.loyalty, "reward") ? b : a));
       const advice = !counsellor("chancellor") ? ""
         : low.loyalty >= 90 ? UI.adviceRow("chancellor", "지금은 상을 내려야 할 만큼 충성이 낮은 사람이 없습니다.")
-        : UI.adviceRow("chancellor", `충성이 가장 낮은 ${low === counsellor("chancellor") ? "저에게" : `${low.name}에게`} 내리십시오. (충성 ${low.loyalty})`, `data-action="doReward" data-oid="${low.id}"`);
+        : UI.adviceRow("chancellor", `충성이 가장 흔들리는 듯한 ${low === counsellor("chancellor") ? "저에게" : `${low.name}에게`} 내리십시오. (충성 ${low.loyalty})`, `data-action="doReward" data-oid="${low.id}"`);
       officerPicker("포상", `금 ${S.josa(S.COST.reward, "을", "를")} 하사해 충성을 올립니다. 행동력은 쓰지 않습니다. (보유 금 ${c.gold})`, list, "doReward",
         (o) => `충성 ${o.loyalty}`, advice);
     },
