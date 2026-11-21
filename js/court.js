@@ -123,8 +123,9 @@
     han.endedYear = state.year;
     f.emperor = true;
     f.emperorYear = state.year;
+    f.dynasty = S.dynastyName ? S.dynastyName(state, fid) : null; // js/titles.js
     loyaltyShock(state, fid, { H: 15, U: 4, N: 0 });
-    S.addLog(state, `헌제가 ${rulerOf(state, fid).name}에게 제위를 물려주었습니다. 4백 년 한 왕조가 막을 내립니다.`, "fall");
+    S.addLog(state, `헌제가 ${rulerOf(state, fid).name}에게 제위를 물려주었습니다. 4백 년 한 왕조가 막을 내리고 ${f.dynasty || ""} 황제가 즉위합니다.`.replace("  ", " "), "fall");
   }
 
   S.answerAbdication = function (state, accept) {
@@ -163,6 +164,8 @@
     f.emperor = true;
     f.emperorYear = state.year;
     f.hanHeir = heir;
+    f.dynasty = S.dynastyName ? S.dynastyName(state, fid) : null; // js/titles.js
+    const as = f.dynasty ? `${f.dynasty} 황제` : "황제";
     if (!heir) {
       loyaltyShock(state, fid, { H: 25, U: 8, N: 0 });
       // Loyalists will not stay allied with a usurper.
@@ -173,8 +176,8 @@
       }
     }
     const msg = heir
-      ? `${S.josa(ruler.name, "이", "가")} 한 황실을 잇는다며 황제에 올랐습니다.`
-      : `${S.josa(ruler.name, "이", "가")} 스스로 황제를 칭했습니다.`;
+      ? `${S.josa(ruler.name, "이", "가")} 한 황실을 잇는다며 ${as}에 올랐습니다.`
+      : `${S.josa(ruler.name, "이", "가")} 스스로 ${S.josa(as, "을", "를")} 칭했습니다.`;
     if (fid !== state.playerForce) S.addLog(state, msg, "fall");
     return { ok: true, msg: heir ? msg : msg + " 한조를 중시하는 무장들의 충성이 크게 떨어졌습니다." };
   };

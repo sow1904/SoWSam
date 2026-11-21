@@ -540,7 +540,7 @@
   // Titles (js/titles.js): the ladder, where this force stands, and the envoy on the way.
   function titleSection(me) {
     let html = `<h3>작위</h3>`;
-    if (!S.titlesOpen(state)) html += `<p class="hint">한 왕조가 없으므로 헌제의 칙사가 더는 오지 않습니다. 받은 작위는 그대로 남습니다.</p>`;
+    if (!S.titlesOpen(state)) html += `<p class="hint">한 왕조가 없으므로 칙사는 오지 않고, 군주가 조건을 채우는 즉시 스스로 작위를 칭합니다. 같은 작위를 여럿이 가질 수 있습니다.</p>`;
     if (me) {
       const f = state.forces[me];
       const w = S.wholeLands(state, me);
@@ -548,12 +548,14 @@
         ` <span class="hint">(성 ${S.citiesOf(state, me).length}개, 온전한 주 ${w.provs.map((p) => S.PROVINCES[p]).join("·") || "없음"}, 온전한 지방 ${w.regions.map((r) => S.REGIONS[r].name).join("·") || "없음"}, 군주 명성 ${state.officers[f.ruler].fame || 0})</span></p>` +
         (f.titleDue ? `<p>헌제의 칙사가 ${S.TITLES[S.titleRank(f.titleDue.key)].name} 작위를 가지고 오는 중입니다. (${Math.max(0, f.titleDue.at - S.today(state))}일 뒤)</p>` : "");
     }
-    html += `<div class="otable titles"><table><tr><th>작위</th><th>조건</th><th>지금 받은 세력</th></tr>` +
+    html += `<div class="otable titles"><table><tr><th>작위</th><th>조건</th><th>이름</th><th>지금 받은 세력</th></tr>` +
       S.TITLES.slice().reverse().map((t) => {
-        const who = Object.values(state.forces).filter((f) => f.alive && !f.emperor && S.titleKey(state, f.id) === t.key).map((f) => f.name);
-        return `<tr${me && !state.forces[me].emperor && S.titleKey(state, me) === t.key ? ' class="me"' : ""}><td><b>${t.name}</b></td><td>${t.need}</td><td>${who.join(", ") || "-"}</td></tr>`;
+        const who = Object.values(state.forces).filter((f) => f.alive && !f.emperor && S.titleKey(state, f.id) === t.key)
+          .map((f) => (S.titleName(state, f.id) === t.name ? f.name : `${f.name}(${S.titleName(state, f.id)})`));
+        return `<tr${me && !state.forces[me].emperor && S.titleKey(state, me) === t.key ? ' class="me"' : ""}><td><b>${t.name}</b></td><td>${t.need}</td><td class="hint">${t.named}</td><td>${who.join(", ") || "-"}</td></tr>`;
       }).join("") + `</table></div>` +
-      `<p class="hint">조건을 채운 지 한 달 뒤에 헌제의 칙사가 이르러 작위를 내립니다. 그때 조건을 잃었으면 그냥 돌아갑니다. 받은 작위는 땅을 잃어도 남고, 군주가 바뀌어도 세력이 이어받습니다. 황제는 선양이나 칭제로만 오릅니다.</p>`;
+      `<p class="hint">조건을 채운 지 한 달 뒤에 헌제의 칙사가 이르러 작위를 내립니다. 그때 조건을 잃었으면 그냥 돌아갑니다. 작위 이름은 칙사가 떠날 때의 수도와 주로 정해집니다. 받은 작위는 땅을 잃어도 남고, 군주가 바뀌어도 세력이 이어받습니다. ` +
+      `황제는 선양이나 칭제로만 오르며, 나라 이름은 공의 이름을 따릅니다(중 원술, 위 조조, 오 손권, 촉한 유비는 그 이름). 한조중시 군주는 한 왕조가 끝난 뒤 한을 잇고, 한 황제는 여럿일 수 있습니다.</p>`;
     return html;
   }
   UI.showCourt = function () {
