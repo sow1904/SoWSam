@@ -552,3 +552,13 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 /* Leave the corner to it: the city window stops above it, the legend left of it. */
 #mapWrap.has-mini #cityWin { max-height: calc(100% - 248px); }
 #mapWrap.has-mini #logLegend { max-width: calc(100% - 226px); }
+
+/* A corps' number banner beside the force's (js/ui/corps.js): the five phases, 청적황백흑. */
+.corpsflag { display: inline-block; min-width: 22px; margin-left: 4px; padding: 2px 9px 2px 6px; font: 700 12px var(--sans); text-align: center; vertical-align: middle;
+  color: #fff; text-shadow: 0 1px 2px #000; background: var(--corps); border-left: 2px solid var(--gold);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 50%, 100% 100%, 0 100%); }
+.corpsflag.c1 { --corps: #2f6fb3; }
+.corpsflag.c2 { --corps: #c0392b; }
+.corpsflag.c3 { --corps: #d4a82a; color: #241a06; text-shadow: none; }
+.corpsflag.c4 { --corps: #ece6d6; color: #241a06; text-shadow: none; }
+.corpsflag.c5 { --corps: #1d1d1d; box-shadow: inset 0 0 0 1px #6a5433; }

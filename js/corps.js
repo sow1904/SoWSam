@@ -28,7 +28,11 @@
 (function (S) {
   const CORPS = S.CORPS = {
     policies: { war: "전쟁 위임", border: "국지전 위임", defend: "방어" },
-    max: 6, // corps per force, 1군단 included
+    max: 5, // corps per force, 1군단 included: one banner for each of the five phases
+    // The corps banners, the same for every force: the five phases (오행)
+    // 목화토금수 in their colours 청적황백흑, 1군단 to 5군단.
+    colors: ["#2f6fb3", "#c0392b", "#d4a82a", "#ece6d6", "#1d1d1d"],
+    phases: ["목(木)", "화(火)", "토(土)", "금(金)", "수(水)"],
     goldShare: 0.5, // of the gold a seat can spare, sent to the capital each month
     // When a computer force cuts a new corps: it holds this many cities, and
     // one corps per this many; the new seat lies over this many days' march
@@ -169,6 +173,7 @@
     if (!CORPS.policies[spec.policy]) return fail("군단 방침을 골라 주세요.");
     f.corps = listOf(f).slice();
     const k = { n: freeN(f), seat: spec.seat, head: head.id, policy: spec.policy, war: null, brokenUntil: 0, since: months(state) };
+    if (k.n > CORPS.max) return fail(`군단은 ${CORPS.max}개까지 둘 수 있습니다.`);
     f.corps.push(k);
     for (const id of ids) { state.cities[id].corps = k.n; state.cities[id].corpsFid = fid; state.cities[id].delegate = null; }
     bringHead(state, k);
@@ -178,6 +183,7 @@
       if (m && S.redirectMarch(state, m, k.seat)) { delete m.fromCorps; took += m.troops; }
     }
     const seat = state.cities[k.seat];
+    if (spec.quiet) return { ok: true, n: k.n };
     S.addLog(state, `${S.corpsLabel(state, fid, k.n)}을 세웠습니다. 도독 ${head.name}, 치소 ${seat.name}, 도시 ${ids.length}곳, ${CORPS.policies[k.policy]}.` +
       (took ? ` 이동 중이던 병사 ${took}명이 ${S.ro(seat.name)} 향합니다.` : ""), fid === state.playerForce ? "sys" : "info");
     return { ok: true, logged: true, n: k.n, msg: `${S.corpsName(k.n)}을 세웠습니다.` };
@@ -305,6 +311,18 @@
     S.reliefAI(state, fid, n);
     const mine = fid === state.playerForce && S.playerCity ? S.playerCity(state) : null;
     for (const c of S.corpsCities(state, fid, n)) if (c.id !== mine && S.aiDomestic) S.aiDomestic(state, c, fid);
+  };
+
+  // ---------- at the start ----------
+  // A scenario's corps: [{force, head (name), seat, cities, policy}]. The head
+  // starts at the seat. Before the armies gather, so they gather at the seats.
+  S.initCorps = function (state, scenario) {
+    for (const spec of scenario.corps || []) {
+      const head = Object.values(state.officers).find((o) => o.name === spec.head && o.force === spec.force && o.status === "serving");
+      if (!head || !state.forces[spec.force]) continue;
+      head.city = spec.seat;
+      S.formCorps(state, spec.force, { cities: spec.cities, seat: spec.seat, head: head.id, policy: spec.policy || "war", quiet: true });
+    }
   };
 
   // ---------- each month ----------

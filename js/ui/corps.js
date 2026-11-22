@@ -7,6 +7,10 @@
   const title = (text) => `<h2>${text}</h2>`;
   const canRule = () => !!state.playerForce && S.playerRules(state) && !S.spectating(state);
   const AIMS = () => S.WAR_AIMS;
+  // The corps' number banner, coloured by its phase (S.CORPS.colors).
+  UI.corpsFlag = (n) => `<span class="corpsflag c${n || 1}" title="${S.corpsName(n)} · ${S.CORPS.phases[(n || 1) - 1]}">${n || 1}</span>`;
+  // Beside a force's banner: only for a force cut into more than one corps.
+  UI.corpsFlagOf = (place) => (place && place.owner && S.corpsList(state, place.owner).length > 1 ? UI.corpsFlag(S.placeCorps(state, place)) : "");
 
   function status(fid, k) {
     const out = [];
@@ -27,7 +31,7 @@
       const cities = S.corpsCities(state, fid, k.n);
       const btn = rule && k.n > 1
         ? `<button data-action="corpsEdit" data-n="${k.n}">관리</button> <button data-action="corpsOrder" data-n="${k.n}">출진 명령</button>` : "";
-      return `<tr><td><b>${S.corpsName(k.n)}</b></td><td>${head ? head.name : "-"}${k.n === 1 ? " <span class=\"hint\">(군주)</span>" : ""}</td>` +
+      return `<tr><td>${UI.corpsFlag(k.n)} <b>${S.corpsName(k.n)}</b></td><td>${head ? head.name : "-"}${k.n === 1 ? " <span class=\"hint\">(군주)</span>" : ""}</td>` +
         `<td>${seat ? `<a data-action="goto" data-city="${seat.id}">${seat.name}</a>` : "-"}</td>` +
         `<td>${k.n === 1 ? (fid === state.playerForce && !S.spectating(state) ? "직접" : "군주") : S.CORPS.policies[k.policy]}</td>` +
         `<td>${cities.length}</td><td>${seat ? seat.troops.toLocaleString() : "-"}</td><td>${status(fid, k)}</td><td>${btn}</td></tr>`;

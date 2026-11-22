@@ -228,6 +228,7 @@
     S.courtInit(state, scenario.hanFavor);
     S.initForts(state);
     S.initCapitals(state);
+    if (S.initCorps) S.initCorps(state, scenario); // the scenario's corps (js/corps.js)
     if (S.consolidate) S.consolidate(state); // soldiers beyond each city's cap join the main army (js/war.js)
     if (S.initStanding) S.initStanding(state); // fame, merit, seats at court (js/standing.js)
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");

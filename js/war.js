@@ -81,10 +81,10 @@
   // army at once.
   S.consolidate = function (state) {
     for (const c of S.cityList(state)) {
-      if (!c.owner || S.isCapitalCity(state, c)) continue;
+      if (!c.owner || S.isSeatCity(state, c)) continue;
       const n = S.overCap(state, c);
       if (n <= 0) continue;
-      const cap = state.cities[S.capitalOf(state, c.owner)];
+      const cap = state.cities[S.seatOfCity(state, c)]; // the seat of its corps
       const counts = S.mixCounts(S.garrisonUnit(c), n);
       const unit = S.takeTroops(c, counts);
       if (!unit) continue;

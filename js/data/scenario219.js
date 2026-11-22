@@ -39,6 +39,15 @@
     // Most had served their lords for many years by 219: added to every bond.
     bondBonus: 20,
     alliances: [["sunquan", "shixie"], ["liubei", "sunquan", 12]],
+    // Corps (js/corps.js), as the user set them: 관우 in 형주 (이릉 goes
+    // with 강릉), 육손 on the 형주 border and in 교주, 조인 in 형북 and
+    // 사마의 in 옹주 (with the 량주 commanderies the map puts in it).
+    corps: [
+      { force: "liubei", head: "관우", seat: "nanjun", cities: ["nanjun", "wuling", "lingling"] },
+      { force: "sunquan", head: "육손", seat: "wuchang", cities: ["wuchang", "changsha", "guiyang", "cangwu", "nanhai"] },
+      { force: "caocao", head: "조인", seat: "xiangyang", cities: ["nanyang", "xinye", "xiangyang", "jiangxia"] },
+      { force: "caocao", head: "사마의", seat: "jingzhao", cities: ["jingzhao", "zuopingyi", "youfufeng", "hanyang", "longxi", "wuwei", "jincheng", "jiuquan", "zhangye"] },
+    ],
     develop: 0.75,
     spread: 5,
     relations: [

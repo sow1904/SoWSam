@@ -269,7 +269,7 @@
       })(S.cityCorps(state, c)),
       own && S.governorOf && S.governorOf(state, c) && ((g) => `태수: ${g.name} (${S.governorType(state, g)}형)${helpTip(S.GOVERNOR_TYPES[S.governorType(state, g)])}`)(S.governorOf(state, c)),
     ].filter(Boolean);
-    return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>` +
+    return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span>${UI.corpsFlagOf(c)}</h2>` +
       `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
       `<div class="stats">` +
       (S.isSeatCity(state, c) ? stat("주력군", c.troops.toLocaleString())
@@ -300,7 +300,7 @@
     const ends = f.road.map((id) => state.cities[id].name);
     const between = ends.length > 2 ? `${ends[0]}에서 ${S.ro(ends.slice(1).join("·"))} 가는 길` : `${ends.join("–")} 사이 길`;
     const ally = f.owner && S.allied(state, state.playerForce, f.owner) ? " · 동맹" : "";
-    let html = `<h2>${f.name}<span class="badge" style="--force:${UI.forceColor(f.owner)}">${f.built ? (f.owner ? S.forceName(state, f.owner) : "비어 있음") : "터"}${ally}</span></h2>` +
+    let html = `<h2>${f.name}<span class="badge" style="--force:${UI.forceColor(f.owner)}">${f.built ? (f.owner ? S.forceName(state, f.owner) : "비어 있음") : "터"}${ally}</span>${f.built ? UI.corpsFlagOf(f) : ""}</h2>` +
       `<div class="cinfo"><div>${S.FORT_KINDS[f.kind]} · ${between}</div><div>소속: ${state.cities[f.home].name}</div></div>`;
     if (!f.built) {
       return html + `<p>${f.building ? `${S.forceName(state, f.building.force)}이 쌓고 있습니다.` : "아직 쌓지 않은 터입니다."} ` +
