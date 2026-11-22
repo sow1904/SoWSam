@@ -262,12 +262,17 @@
       S.specialLand("louchuan", c) && "장강 수군(누선)",
       S.landHas("salt", c) && "소금이 나는 땅",
       S.houseLabel(c, state) && `가문: ${S.houseLabel(c, state)}${helpTip(S.HOUSES[S.houseAt(c, state).key].help)}`,
+      c.owner && S.corpsList(state, c.owner).length > 1 && ((k) => {
+        const rec = S.corpsList(state, c.owner).find((x) => x.n === k);
+        const head = rec && state.officers[rec.head];
+        return `${S.corpsName(k)}${S.isSeatCity(state, c) ? " 치소" : ""}${k > 1 && head ? ` (도독 ${head.name})` : ""}`;
+      })(S.cityCorps(state, c)),
       own && S.governorOf && S.governorOf(state, c) && ((g) => `태수: ${g.name} (${S.governorType(state, g)}형)${helpTip(S.GOVERNOR_TYPES[S.governorType(state, g)])}`)(S.governorOf(state, c)),
     ].filter(Boolean);
     return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span></h2>` +
       `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
       `<div class="stats">` +
-      (S.isCapitalCity(state, c) ? stat("주력군", c.troops.toLocaleString())
+      (S.isSeatCity(state, c) ? stat("주력군", c.troops.toLocaleString())
         : stat("수비대", `${c.troops.toLocaleString()}/${S.garrisonCap(state, c).toLocaleString()}`)) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
       (own && c.sent ? stat("지난달 상납", `금 ${fmt(c.sent.gold)} · 군량 ${fmt(c.sent.food)}`) : "") +

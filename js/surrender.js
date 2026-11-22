@@ -147,7 +147,7 @@
     state.peaceOffers = (state.peaceOffers || []).filter((x) => x.winner !== loser && x.loser !== loser);
     state.proposals = (state.proposals || []).filter((x) => x.fid !== loser);
     state.officeAsks = (state.officeAsks || []).filter((x) => x.fid !== loser);
-    for (const f of Object.values(state.forces)) if (f.war && f.war.foe === loser) f.war = null;
+    for (const f of Object.values(state.forces)) S.endWarsWith(state, f.id, loser);
     L.alive = false;
     L.war = null;
     S.noteFall(state, { fid: loser, foe: winner, ruler: lord.id, gone, how: "submit" });

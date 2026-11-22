@@ -129,7 +129,7 @@
     if (S.hasTrait(o, "신중")) p *= R.wary;
     p += Math.max(0, -S.feelFor(o, t.owner)) / R.grudge;
     if (c.gold < R.poorGold) p += R.poor;
-    if (f.war && f.war.foe === t.owner) p += R.war;
+    if (S.atWarWith(state, f.id, t.owner)) p += R.war;
     if (S.rel(state, c.owner, t.owner) < R.feudRel) p += R.feud;
     return Math.round(p * 10) / 10;
   };
@@ -180,7 +180,7 @@
   S.reproveWish = function (state, fid, foe, relBefore) {
     const r = rulerOf(state, fid);
     const f = state.forces[fid];
-    if (f.war && f.war.foe === foe) return false;
+    if (S.atWarWith(state, f.id, foe)) return false;
     const ratio = S.might(state, fid) / Math.max(1, S.might(state, foe));
     return relBefore >= R.reprove.rel || ratio < R.reprove.might || (S.hasTrait(r, "신중") && !S.hasTrait(r, "과감"));
   };

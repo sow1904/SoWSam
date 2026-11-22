@@ -284,7 +284,7 @@
     const b = newBattle(state, {
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
       att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target),
-        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null },
+        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null, corps: m.corps || 1 },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
@@ -898,7 +898,7 @@
       b.relief.officers.push(...ids);
     } else {
       const rel = crewOf(state, ids, m.force);
-      b.relief = { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(rel), origin: m.origin, path: m.path };
+      b.relief = { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(rel), origin: m.origin, path: m.path, corps: m.corps || 1 };
     }
     hold(state, b, ids);
     say(b, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 ${S.placeName(state, m.origin)}에서 달려왔습니다!`);
@@ -952,21 +952,23 @@
   // Computer forces decide whether to send relief to a besieged place: when
   // relief and garrison together outnumber the besiegers, or when a raid on
   // the besiegers' supply has a fair chance within a couple of weeks.
-  S.reliefAI = function (state, fid) {
+  // n: only the places and cities of that corps (a player's corps, js/corps.js).
+  S.reliefAI = function (state, fid, n) {
     for (const b of state.battles || []) {
       const t = S.place(state, b.place);
       if (b.kind !== "siege" || t.owner !== fid || b.relief) continue;
+      if (n && S.placeCorps(state, t) !== n) continue;
       if ((state.marches || []).some((m) => m.kind === "relief" && m.target === b.place)) continue;
-      // The news of the siege must reach the capital first.
-      const capId = S.capitalOf(state, fid);
+      // The news of the siege must reach the seat of its corps first.
+      const capId = S.corpsSeat(state, fid, S.placeCorps(state, t));
       const newsDays = capId ? Math.ceil(S.nodeKm(state, capId, b.place) / (S.WAR ? S.WAR.newsKm : 80)) : 0;
       if (S.today(state) - b.start < newsDays) continue;
       let best = null;
-      for (const c of S.citiesOf(state, fid)) {
+      for (const c of n ? S.corpsCities(state, fid, n) : S.citiesOf(state, fid)) {
         if (c.id === b.place || S.besieged(state, c.id)) continue;
         const idle = S.idle(state, c.id);
-        // The main army may send all but a guard; a garrison keeps most of its men.
-        const main = c.id === capId;
+        // A main army may send all but a guard; a garrison keeps most of its men.
+        const main = S.isSeatCity(state, c);
         const spare = Math.min(S.marchable(c) - Math.max(3000, Math.round(c.troops * (main ? 0.25 : 0.6))), c.troops);
         if (!idle.length || spare < 2000) continue;
         const way = S.reliefTargets(state, c.id).find((x) => x.id === b.place);

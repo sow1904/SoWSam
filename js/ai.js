@@ -392,7 +392,7 @@
     // Soldiers and stores go to the capital by themselves (js/war.js). Spare
     // officers go there too, to lead the main army: a city keeps one (two
     // on the frontier) besides those on its posts.
-    const capId = S.capitalOf(state, fid);
+    const capId = S.seatOfCity(state, c); // the seat of its corps
     if (capId && capId !== c.id && idle.length > (frontier ? 2 : 1) && S.idle(state, capId).length < 8) {
       const go = [...idle].sort((a, b) => b.cmd + b.war - a.cmd - a.war).slice(0, idle.length - (frontier ? 2 : 1));
       if (S.relocate(state, c.id, capId, go.map((o) => o.id)).ok) idle = idle.filter((o) => !go.includes(o));
@@ -403,9 +403,9 @@
       const o = [...idle].sort((a, b) => a.cmd - b.cmd)[0];
       if (S.stake(state, o.id, c.id).ok) idle = idle.filter((x) => x !== o);
     }
-    // Every city drafts while the realm can pay the upkeep: the soldiers
-    // beyond the city's cap march on to the main army (js/war.js).
-    const realm = S.citiesOf(state, fid);
+    // Every city drafts while the realm (its corps) can pay the upkeep: the
+    // soldiers beyond the city's cap march on to the main army (js/war.js).
+    const realm = S.corpsCities(state, fid, S.cityCorps(state, c));
     const upkeep = realm.reduce((s, x) => s + x.troops / 100, 0);
     const purse = realm.reduce((s, x) => s + S.income(x) - S.salaries(x), 0);
     const capGold = capId && state.cities[capId] ? state.cities[capId].gold : 0;
@@ -516,6 +516,7 @@
     return Object.entries(done).map(([k, n]) => (n > 1 ? `${k} ${n}회` : k)).join(", ");
   };
 
+  S.aiDomestic = domestic; // a corps runs its cities with it (js/corps.js)
   S.runAI = function (state, fid, onEvent) {
     const log = onEvent || (() => {});
     const cities = S.citiesOf(state, fid);
@@ -528,7 +529,9 @@
     // keep their garrisons.
     // With the ruler held or on his way home, only the governors act.
     const away = S.rulerAway(state, fid);
-    if (!away) S.warAI(state, fid);
+    if (!away) S.warAI(state, fid, 1);
+    // Each other corps goes to war by its own policy (js/corps.js).
+    for (const k of S.corpsList(state, fid)) if (k.n > 1 && k.policy !== "defend") S.warAI(state, fid, k.n);
     manageForts(state, fid);
     S.reliefAI(state, fid);
     const mine = S.playerCity ? S.playerCity(state) : null; // the player's own city is his to run (js/persona.js)
@@ -600,9 +603,13 @@
       state.governed = stamp;
       // With every city wholly delegated the force runs itself, like any other.
       if (S.spectating(state)) S.runAI(state, state.playerForce, onEvent);
-      else for (const c of S.citiesOf(state, state.playerForce)) {
-        const did = S.govern(state, c);
-        if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
+      else {
+        for (const c of S.citiesOf(state, state.playerForce)) {
+          if (S.cityCorps(state, c) > 1) continue; // left to its 도독
+          const did = S.govern(state, c);
+          if (did) S.addLog(state, `${c.name} 위임(${S.DELEGATE[S.delegateOf(state, c)]}): ${did}`, "info");
+        }
+        for (const k of S.corpsList(state, state.playerForce)) if (k.n > 1) S.runCorpsAI(state, state.playerForce, k.n);
       }
     }
     if (S.runSeasons) S.runSeasons(state); // the season's calamities (js/seasons.js)

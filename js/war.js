@@ -15,6 +15,10 @@
 // defender has days, not weeks, to answer.
 // why: the user's design: frontier fighting city against city never let a
 // great power use its weight (no unification in 30 years of simulation).
+//
+// With corps (js/corps.js) all of this is per corps: "the capital" is the
+// seat of the city's corps, each corps has its own main army, war and
+// campaign, and an invader is met by the corps whose land he enters.
 (function (S) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const W = S.WAR = {
@@ -37,7 +41,7 @@
 
   // ---------- garrisons and the main army ----------
   S.isCapitalCity = (state, c) => !!(c && c.owner && S.capitalOf(state, c.owner) === c.id);
-  S.garrisonCap = (state, c) => (S.isCapitalCity(state, c) ? Infinity : Math.round(W.cap.base + c.pop * W.cap.pop));
+  S.garrisonCap = (state, c) => (S.isSeatCity(state, c) ? Infinity : Math.round(W.cap.base + c.pop * W.cap.pop));
   // A city next to a place of another force (not an ally).
   S.isBorder = (state, c) => S.links(state, c.id).some((n) => {
     const p = S.place(state, n);
@@ -61,7 +65,7 @@
   // Send soldiers from c to the capital (no officer needed: they march under
   // their own captains).
   function sendToCapital(state, c, n) {
-    const capId = S.capitalOf(state, c.owner);
+    const capId = S.seatOfCity(state, c); // the seat of its corps
     if (!capId || capId === c.id || n < 100) return false;
     const route = S.route(state, c.id, capId, "army");
     if (!route) return false;
@@ -94,8 +98,8 @@
   S.runTribute = function (state) {
     for (const c of S.cityList(state)) {
       c.sent = null;
-      if (!c.owner || S.isCapitalCity(state, c) || S.besieged(state, c.id)) continue;
-      const capId = S.capitalOf(state, c.owner);
+      if (!c.owner || S.isSeatCity(state, c) || S.besieged(state, c.id)) continue;
+      const capId = S.seatOfCity(state, c); // the seat of its corps
       const cap = capId && state.cities[capId];
       if (!cap || !S.route(state, c.id, capId, "cargo")) continue; // cut off from the capital
       const hold = S.withhold ? S.withhold(state, c) : 0; // a 할거 governor keeps some back (js/conduct.js)
@@ -117,11 +121,12 @@
   const nearTargets = S.attackTargets;
   S.attackTargets = function (state, from) {
     const p = S.place(state, from);
-    if (!p || !state.cities[from] || !S.isCapitalCity(state, p)) return nearTargets(state, from);
+    if (!p || !state.cities[from] || !S.isSeatCity(state, p)) return nearTargets(state, from);
     const me = p.owner;
+    const k = S.cityCorps(state, p);
     const best = new Map();
     for (const [cid, days] of Object.entries(S.reachable(state, from, "army")).concat([[from, 0]])) {
-      if (!state.cities[cid]) continue;
+      if (!state.cities[cid] || S.cityCorps(state, state.cities[cid]) !== k) continue; // the corps' own front
       const lead = cid === from ? null : S.route(state, from, cid, "army");
       for (const t of nearTargets(state, cid)) {
         const path = lead ? lead.path.concat(t.path.slice(1)) : t.path;
@@ -174,7 +179,14 @@
       const t = S.place(state, m.target);
       if (!t.owner) continue;
       if (t.owner === state.playerForce && m.force !== state.playerForce) {
+        const k = S.placeCorps(state, t);
         S.addLog(state, `첩보: ${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명이 ${S.placeName(state, S.marchBase(state, m.path, m.force))}을 지나 ${S.ro(t.name)} 진군하고 있습니다. (${S.daysLeft(state, m)}일 뒤 도착)`, "threat");
+        if (k > 1) {
+          // The player's other corps meet it by themselves (their 도독 decides).
+          const before = (state.marches || []).length;
+          S.answerArmy(state, m);
+          if ((state.marches || []).length === before) S.addLog(state, `${S.corpsName(k)} 도독은 주력군을 내지 않고 ${t.name}의 수비대에 맡깁니다.`, "info");
+        }
       } else if (t.owner !== state.playerForce || S.spectating(state)) {
         S.answerArmy(state, m);
       }
@@ -190,10 +202,11 @@
   S.answerArmy = function (state, m) {
     const t = S.place(state, m.target);
     const fid = t.owner;
-    const capId = S.capitalOf(state, fid);
+    const k = S.placeCorps(state, t);
+    const capId = S.corpsSeat(state, fid, k);
     const cap = capId && state.cities[capId];
     if (!cap || capId === t.id || S.besieged(state, capId)) return;
-    if (S.isBroken(state, fid)) return note("answer: broken");
+    if (S.isBroken(state, fid, k)) return note("answer: broken");
     const route = S.route(state, capId, t.id, "army");
     if (!route || route.days > W.answer.days) return;
     const ruler = rulerOf(state, fid);
@@ -213,12 +226,12 @@
     if (!unit) return;
     cap.food -= S.drawFood(state, route.path.concat([t.id]), fid, food);
     const r = S.launch(state, { kind: "relief", counter: true, force: fid, path: route.path, km: route.km, speed: S.unitSpeed(counts),
-      officers: team.map((o) => o.id), troops: total, unit, train: cap.train, origin: capId, target: t.id });
+      officers: team.map((o) => o.id), troops: total, unit, train: cap.train, origin: capId, target: t.id, corps: k });
     r.base = S.marchBase(state, r.path, fid);
     r.campaign = { foe: m.force, taken: 0, since: S.monthsElapsed(state), counter: true };
     note("ANSWER");
-    S.addLog(state, `${S.forceName(state, fid)} 주력군 ${total}명이 ${S.forceName(state, m.force)}의 침공에 맞서 ${S.ro(t.name)} 떠났습니다.`,
-      m.force === state.playerForce ? "threat" : "info");
+    S.addLog(state, `${S.corpsLabel(state, fid, k)} 주력군 ${total}명이 ${S.forceName(state, m.force)}의 침공에 맞서 ${S.ro(t.name)} 떠났습니다.`,
+      m.force === state.playerForce ? "threat" : fid === state.playerForce ? "sys" : "info");
   };
   // An answering army arrives where the siege is over: it joins the garrison
   // if the city held, or lays siege to take it back. Returns true if handled.
@@ -236,9 +249,10 @@
     return true;
   };
 
-  // Is the force already at war with its main army? (One campaign at a time.)
-  S.onCampaign = (state, fid) => (state.marches || []).some((m) => m.force === fid && m.kind === "army" && m.campaign) ||
-    (state.battles || []).some((b) => b.att && b.att.force === fid && b.att.campaign);
+  // Is the corps (1군단 if none named) already at war with its main army?
+  // (One campaign at a time.)
+  S.onCampaign = (state, fid, n) => (state.marches || []).some((m) => m.force === fid && m.kind === "army" && m.campaign && (m.corps || 1) === (n || 1)) ||
+    (state.battles || []).some((b) => b.att && b.att.force === fid && b.att.campaign && (b.att.corps || 1) === (n || 1));
 
   // ---------- wars and their aims (전쟁 목표) ----------
   // A computer force at war has one foe and one aim (f.war):
@@ -266,7 +280,8 @@
     bigArmy: 8000, // an army this large, beaten in the field, breaks its force
     pursuit: 0.25, // share of the beaten main army lost again in the rout
   });
-  S.isBroken = (state, fid) => !!(state.forces[fid] && (state.forces[fid].brokenUntil || 0) > S.monthsElapsed(state));
+  // Is the main army of the corps (1군단 if none named) broken?
+  S.isBroken = (state, fid, n) => { const r = S.corpsRec(state, fid, n); return !!(r && (r.brokenUntil || 0) > S.monthsElapsed(state)); };
   // A force's fighting strength: its soldiers in cities, on the road and in battle.
   S.might = function (state, fid) {
     let n = S.citiesOf(state, fid).reduce((s, c) => s + S.marchable(c), 0);
@@ -277,7 +292,7 @@
     }
     return n;
   };
-  S.warOf = (state, fid) => (state.forces[fid] && state.forces[fid].war) || null;
+  S.warOf = (state, fid, n) => { const r = S.corpsRec(state, fid, n); return (r && r.war) || null; };
 
   // The aim a ruler would choose against foe.
   S.chooseAim = function (state, fid, foe) {
@@ -293,29 +308,30 @@
     if (ratio >= A.decisive.might * bold && n >= A.decisive.cities && (reach === "천하" || reach === "지방")) return "decisive";
     return "border";
   };
-  function endWar(state, fid, why) {
-    const f = state.forces[fid];
+  function endWar(state, fid, why, n) {
+    const f = S.corpsRec(state, fid, n);
     const war = f && f.war;
     if (!war) return;
     f.war = null;
     note("war ends: " + why);
     const foe = S.forceName(state, war.foe);
-    const text = why === "won" ? `${S.josa(S.forceName(state, fid), "이", "가")} ${S.josa(foe, "과", "와")}의 ${AIMS[war.aim]}을 끝냈습니다.`
-      : why === "broken" ? `${S.forceName(state, fid)} 주력군이 꺾여 ${S.josa(foe, "과", "와")}의 ${AIMS[war.aim]}을 거두었습니다.`
-      : why === "weary" ? `${S.forceName(state, fid)}이 지쳐 ${S.josa(foe, "과", "와")}의 ${AIMS[war.aim]}을 거두었습니다.`
+    const me = S.corpsLabel(state, fid, n);
+    const text = why === "won" ? `${S.josa(me, "이", "가")} ${S.josa(foe, "과", "와")}의 ${AIMS[war.aim]}을 끝냈습니다.`
+      : why === "broken" ? `${me} 주력군이 꺾여 ${S.josa(foe, "과", "와")}의 ${AIMS[war.aim]}을 거두었습니다.`
+      : why === "weary" ? `${S.josa(me, "이", "가")} 지쳐 ${S.josa(foe, "과", "와")}의 ${AIMS[war.aim]}을 거두었습니다.`
       : null;
     if (text && war.aim !== "border") S.addLog(state, text, war.foe === state.playerForce || fid === state.playerForce ? "warn" : "info");
   }
   // Is the war still worth it? Ends it if not.
-  function keepWar(state, fid) {
+  function keepWar(state, fid, n) {
     const f = state.forces[fid];
-    const war = f.war;
+    const war = S.warOf(state, fid, n);
     if (!war) return null;
-    if (!state.forces[war.foe] || !state.forces[war.foe].alive) { endWar(state, fid, "won"); return null; }
-    if (S.isBroken(state, fid)) { endWar(state, fid, "broken"); return null; }
-    if (f.weariness > W.aim.wearyLimit[war.aim]) { endWar(state, fid, "weary"); return null; }
-    if (S.monthsElapsed(state) - war.since > W.aim.years[war.aim] * 12) { endWar(state, fid, "long"); return null; }
-    if (S.allied(state, fid, war.foe)) { endWar(state, fid, "peace"); return null; }
+    if (!state.forces[war.foe] || !state.forces[war.foe].alive) { endWar(state, fid, "won", n); return null; }
+    if (S.isBroken(state, fid, n)) { endWar(state, fid, "broken", n); return null; }
+    if (f.weariness > W.aim.wearyLimit[war.aim]) { endWar(state, fid, "weary", n); return null; }
+    if (S.monthsElapsed(state) - war.since > W.aim.years[war.aim] * 12) { endWar(state, fid, "long", n); return null; }
+    if (S.allied(state, fid, war.foe)) { endWar(state, fid, "peace", n); return null; }
     return war;
   }
   // Where the campaign should go next among ways (from a city): for a border
@@ -339,15 +355,22 @@
   // A computer force sends its main army to war: against the foe of its
   // current war, or, at peace, against the most promising foe in reach
   // (js/data/ambition.js), with an aim fitting the balance of strength.
-  S.warAI = function (state, fid) {
+  // n: the corps (1군단 if none); a corps under 국지전 위임 wages border
+  // wars only, one under 방어 none (js/corps.js).
+  S.warAI = function (state, fid, n) {
+    n = n || 1;
     const f = state.forces[fid];
-    const capId = S.capitalOf(state, fid);
+    const rec = S.corpsRec(state, fid, n);
+    const policy = n > 1 ? rec.policy : "war";
+    if (policy === "defend") return note("corps defends");
+    const capId = S.corpsSeat(state, fid, n);
     const cap = capId && state.cities[capId];
     note("call");
-    let war = keepWar(state, fid);
+    let war = keepWar(state, fid, n);
+    if (war && policy === "border" && war.aim !== "border" && !war.ordered) { rec.war = null; war = null; }
     if (!cap || S.besieged(state, capId)) return note("capital besieged");
-    if (S.onCampaign(state, fid)) return note("already on campaign");
-    if (S.isBroken(state, fid)) return note("broken");
+    if (S.onCampaign(state, fid, n)) return note("already on campaign");
+    if (S.isBroken(state, fid, n)) return note("broken");
     if (!war && f.weariness > 60) return note("weary");
     const E = W.expedition;
     const idle = S.idle(state, capId).sort((a, b) => S.leadScore(state, b) - S.leadScore(state, a));
@@ -355,8 +378,8 @@
     const team = idle.slice(0, Math.min(S.MAX_SORTIE_OFFICERS, Math.max(1, idle.length - 1)));
     const ids = team.map((o) => o.id);
     const truce = S.inTruce(state);
-    const dom = S.domainOf(state, fid);
-    const call = war ? null : S.callOf(state, fid);
+    const dom = fid === state.playerForce ? null : S.domainOf(state, fid); // the player's 도독 take what is in reach
+    const call = war || n > 1 ? null : S.callOf(state, fid);
     const ways = S.attackTargets(state, capId).filter((w) => {
       const t = S.place(state, w.id);
       if ((truce && t.owner) || (t.owner && (S.allied(state, fid, t.owner) || S.truceLeft(state, fid, t.owner)))) return false;
@@ -372,10 +395,10 @@
       for (const foe of foes) {
         // An ally's call: a strike on the same foe elsewhere (조공).
         const called = call && call.foe === foe;
-        const a = called ? "border" : S.chooseAim(state, fid, foe);
+        const a = called || policy === "border" ? "border" : S.chooseAim(state, fid, foe);
         const ratio = S.might(state, fid) / Math.max(1, S.might(state, foe));
         const v = ratio + (a === "annihilate" ? 0.5 : a === "decisive" ? 0.2 : 0) - S.rel(state, fid, foe) / 100 +
-          (called ? 1 : 0) + (S.foeBusy(state, foe) ? 0.5 : 0) + (S.provoked ? S.provoked(state, fid, foe) : 0);
+          (called ? 1 : 0) + (S.foeBusy(state, foe) ? 0.5 : 0) + (S.provoked ? S.provoked(state, fid, foe) : 0) - (S.atWarWith(state, fid, foe) ? 0 : 0.1);
         if (!pick || v > pick.v) pick = { foe, a, v, called };
       }
       aim = pick ? pick.a : "border";
@@ -398,29 +421,34 @@
     const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
     const amity = best.t.owner && aim === "border" ? Math.max(-0.15, (S.rel(state, fid, best.t.owner) - 50) / 80) : 0;
     // Lighter odds when an ally asked, or when the foe's main army is away.
-    const opening = (war && war.joint ? W.ally.odds : 0) + (best.t.owner && S.foeBusy(state, best.t.owner) ? W.ally.busy : 0);
+    const opening = (war && war.joint ? W.ally.odds : 0) + (best.t.owner && S.foeBusy(state, best.t.owner, S.placeCorps(state, best.t)) ? W.ally.busy : 0);
     const advice = S.adviserEdge ? S.adviserEdge(state, fid) : 0; // a 군사 sees which wars can be won
     if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening - advice) return note("odds too low: " + aim);
     if (!S.chance(state, E.chance)) return note("dice");
-    // The council debates it first (js/council.js).
-    const council = S.conveneWar ? S.conveneWar(state, fid, { foe: best.t.owner, target: best.t.id, aim, ratio: best.est.ratio, team: ids }) : null;
+    // The council debates it first (js/council.js); a 도독 decides alone.
+    const council = S.conveneWar && n === 1 ? S.conveneWar(state, fid, { foe: best.t.owner, target: best.t.id, aim, ratio: best.est.ratio, team: ids }) : null;
     if (council && !council.adopted) return note("council against");
     const r = S.attack(state, capId, best.t.id, ids, troops, best.unit);
     note(r.ok ? "LAUNCH " + aim : "launch failed");
     if (!r.ok) return;
     if (council && S.councilLaunched) S.councilLaunched(state, council, r.march);
+    r.march.corps = n;
     r.march.campaign = { foe: best.t.owner || null, taken: 0, since: S.monthsElapsed(state), aim };
-    if (war && !f.war && best.t.owner) {
-      f.war = war;
+    const me = S.corpsLabel(state, fid, n);
+    const tone = (foe) => (foe === state.playerForce ? "threat" : fid === state.playerForce ? "sys" : "info");
+    if (war && !rec.war && best.t.owner) {
+      rec.war = war;
       if (war.joint) {
         note("JOINT STRIKE");
-        S.addLog(state, `${S.josa(S.forceName(state, fid), "이", "가")} 동맹 ${S.forceName(state, war.joint)}의 청에 따라 ${S.forceName(state, war.foe)}의 ${S.ro(best.t.name)} 군을 냅니다.`,
-          war.foe === state.playerForce ? "threat" : "info");
+        S.addLog(state, `${S.josa(me, "이", "가")} 동맹 ${S.forceName(state, war.joint)}의 청에 따라 ${S.forceName(state, war.foe)}의 ${S.ro(best.t.name)} 군을 냅니다.`, tone(war.foe));
       } else if (aim !== "border") {
         const foe = S.forceName(state, war.foe);
-        S.addLog(state, `${S.josa(S.forceName(state, fid), "이", "가")} ${S.josa(foe, "을", "를")} 상대로 ${AIMS[aim]}을 벌입니다. 주력군 ${troops}명이 ${S.ro(best.t.name)} 향합니다.`,
-          war.foe === state.playerForce ? "threat" : "info");
+        S.addLog(state, `${S.josa(me, "이", "가")} ${S.josa(foe, "을", "를")} 상대로 ${AIMS[aim]}을 벌입니다. 주력군 ${troops}명이 ${S.ro(best.t.name)} 향합니다.`, tone(war.foe));
+      } else if (n > 1 && fid === state.playerForce) {
+        S.addLog(state, `${me} 주력군 ${troops}명이 ${S.forceName(state, best.t.owner)}의 ${S.ro(best.t.name)} 출진합니다.`, "sys");
       }
+    } else if (n > 1 && fid === state.playerForce) {
+      S.addLog(state, `${me} 주력군 ${troops}명이 ${S.ro(best.t.name)} 출진합니다.`, "sys");
     }
   };
 
@@ -434,7 +462,7 @@
     const lost = Math.round(R.troops * W.pursuit);
     R.troops -= lost;
     if (S.creditDecisive) S.creditDecisive(state, b.att, R);
-    breakForce(state, R.force, b.att.force, lost, R.troops0);
+    breakForce(state, R.force, R.corps, b.att.force, b.att.corps, lost, R.troops0);
   };
   // A siege failed. If a relief army drove off a main army in the field, the
   // attacker is the one broken.
@@ -442,23 +470,24 @@
     const A = b.att;
     if (A.campaign && b.relief && A.troops0 >= W.bigArmy) {
       if (S.creditDecisive) S.creditDecisive(state, b.relief, A);
-      breakForce(state, A.force, b.relief.force, 0, A.troops0);
+      breakForce(state, A.force, A.corps, b.relief.force, b.relief.corps, 0, A.troops0);
     }
-    const f = state.forces[A.force];
-    if (f && f.war && f.war.aim === "border") endWar(state, A.force, "failed");
+    const f = S.corpsRec(state, A.force, A.corps);
+    if (f && f.war && f.war.aim === "border") endWar(state, A.force, "failed", A.corps);
   };
-  function breakForce(state, loser, victor, lost, size) {
-    const f = state.forces[loser];
+  // The main army of a corps is broken (lk, vk: the corps of each side).
+  function breakForce(state, loser, lk, victor, vk, lost, size) {
+    const f = S.corpsRec(state, loser, lk);
     if (!f) return;
     f.brokenUntil = S.monthsElapsed(state) + W.broken;
     S.addWeariness(state, loser, 10);
     note("MAIN ARMY BROKEN");
-    const v = state.forces[victor];
+    const v = S.corpsRec(state, victor, vk);
     if (v && v.war && v.war.foe === loser) v.war.devour = true;
-    S.addLog(state, `결전: ${S.forceName(state, loser)} 주력군 ${size}명이 ${S.forceName(state, victor)}에게 크게 패했습니다.` +
+    S.addLog(state, `결전: ${S.corpsLabel(state, loser, lk)} 주력군 ${size}명이 ${S.corpsLabel(state, victor, vk)}에게 크게 패했습니다.` +
       (lost ? ` 쫓기며 ${lost}명을 더 잃었습니다.` : "") + " 한동안 다시 일어서지 못합니다.",
     loser === state.playerForce || victor === state.playerForce ? "warn" : "fall");
-    if (f.war) endWar(state, loser, "broken");
+    if (f.war) endWar(state, loser, "broken", lk);
   }
 
   // The army took a city. A computer force's main army may press on against
@@ -473,7 +502,8 @@
     camp.taken++;
     const fid = A.force;
     const f = state.forces[fid];
-    const war = keepWar(state, fid);
+    const k = A.corps || 1;
+    const war = keepWar(state, fid, k);
     const aim = (war && war.aim) || camp.aim || "border";
     const P = W.press;
     const men = S.serving(state, t.id).filter((o) => o.force === fid && !o.transit);
@@ -491,13 +521,13 @@
     let p = P.base + W.aim.press[aim] + (war && war.devour ? 15 : 0) - weary -
       camp.taken * (aim === "border" ? P.perCity : P.perCity / 3) + (A.morale - 60) * P.morale;
     // Home under attack while the army is away: it turns back (조조 from 한중).
-    const homeHit = S.citiesOf(state, fid).some((c) => c.id !== t.id && S.besieged(state, c.id));
+    const homeHit = S.corpsCities(state, fid, k).some((c) => c.id !== t.id && S.besieged(state, c.id));
     if (homeHit) p -= 40;
     p = clamp(p, homeHit ? 0 : P.min, aim === "border" ? P.max : 97);
     if (homeHit) note("home under attack");
     if (S.WARLOG) note(!team.length ? "home: no officer left" : spare < P.troops ? "home: too few left" : "press roll");
     if (team.length && spare >= P.troops && S.chance(state, p)) {
-      const dom = S.domainOf(state, fid);
+      const dom = fid === state.playerForce ? null : S.domainOf(state, fid);
       const ways = S.attackTargets(state, t.id).filter((w) => {
         const x = S.place(state, w.id);
         return x.owner && !S.allied(state, fid, x.owner) && !S.truceLeft(state, fid, x.owner) &&
@@ -515,16 +545,17 @@
         const r = S.attack(state, t.id, best.t.id, ids, spare, best.unit);
         if (r.ok) {
           note("PRESS ON " + aim);
+          r.march.corps = k;
           r.march.campaign = Object.assign(camp, { foe: best.t.owner, aim });
-          S.addLog(state, `${S.forceName(state, fid)} 주력군이 ${S.josa(t.name, "을", "를")} 넘어 ${S.ro(best.t.name)} 진군을 이어 갑니다.`, best.t.owner === state.playerForce ? "threat" : "info");
+          S.addLog(state, `${S.corpsLabel(state, fid, k)} 주력군이 ${S.josa(t.name, "을", "를")} 넘어 ${S.ro(best.t.name)} 진군을 이어 갑니다.`, best.t.owner === state.playerForce ? "threat" : "info");
           return;
         }
       }
     }
     note("GO HOME");
-    if (war && war.aim === "border") endWar(state, fid, "done");
-    // Home: the garrison stays, the rest go back to the capital.
-    const capId = S.capitalOf(state, fid);
+    if (war && war.aim === "border") endWar(state, fid, "done", k);
+    // Home: the garrison stays, the rest go back to the seat of the corps.
+    const capId = S.corpsSeat(state, fid, k);
     if (!capId || capId === t.id || spare < 100) return;
     const route = S.route(state, t.id, capId, "army");
     if (!route) return;
@@ -587,6 +618,7 @@
       return { ok: false, msg: `${S.josa(S.forceName(state, t.owner), "과", "와")}는 휴전 중입니다. (${S.truceLeft(state, c.owner, t.owner)}개월 남음)` };
     }
     const r = attack.apply(this, arguments);
+    if (r.ok) r.march.corps = S.placeCorps(state, c);
     if (r.ok && t.owner) {
       warRecord(state, c.owner, t.owner);
       if (S.isCapitalCity(state, c) && r.march.troops >= W.bigArmy) S.callAllies(state, c.owner, t.owner);
@@ -596,11 +628,16 @@
   const afterCapture = S.afterCapture;
   S.afterCapture = function (state, t, b) {
     const loser = t.lost && t.lost.fid;
+    // The city joins the corps that took it.
+    if (state.cities[t.id]) {
+      const k = b.att.corps || 1;
+      if (k > 1 && S.corpsExists(state, b.att.force, k)) { t.corps = k; t.corpsFid = b.att.force; } else { delete t.corps; delete t.corpsFid; }
+    }
     if (S.creditCapture) S.creditCapture(state, b.att);
     if (loser && state.forces[loser]) {
       const w = warRecord(state, b.att.force, loser);
       w.taken[b.att.force] = (w.taken[b.att.force] || 0) + 1;
-      const war = state.forces[b.att.force].war;
+      const war = S.warOf(state, b.att.force, b.att.corps);
       if (war && war.foe === loser) war.taken = (war.taken || 0) + 1;
     }
     return afterCapture.apply(this, arguments);
@@ -618,8 +655,9 @@
       }
     }
   };
-  // Is foe's main army away at war, or broken? (An opening for its enemies.)
-  S.foeBusy = (state, foe) => S.onCampaign(state, foe) || S.isBroken(state, foe);
+  // Is foe's main army (of corps n, 1군단 if none) away at war, or broken?
+  // (An opening for its enemies.)
+  S.foeBusy = (state, foe, n) => S.onCampaign(state, foe, n) || S.isBroken(state, foe, n);
   // A call from an ally still standing.
   S.callOf = function (state, fid) {
     const c = state.forces[fid] && state.forces[fid].call;
@@ -649,13 +687,13 @@
     const lf = state.forces[loser], wf = state.forces[winner];
     const took = w.taken[winner] || 0;
     const long = S.monthsElapsed(state) - w.since >= P.long;
-    const loserWants = S.isBroken(state, loser) || took >= P.lose.taken || lf.weariness >= P.lose.weary ||
+    const loserWants = S.anyBroken(state, loser) || took >= P.lose.taken || lf.weariness >= P.lose.weary ||
       S.might(state, loser) / Math.max(1, S.might(state, winner)) < P.lose.might || long;
-    const war = wf.war && wf.war.foe === loser ? wf.war : null;
+    const war = S.warAgainst(state, winner, loser);
     const aim = war ? war.aim : "none";
     const W2 = P.win[aim];
     const winnerWants = took >= W2.taken || wf.weariness >= W2.weary || long;
-    const settled = S.monthsElapsed(state) - w.since >= P.settle || S.isBroken(state, loser);
+    const settled = S.monthsElapsed(state) - w.since >= P.settle || S.anyBroken(state, loser);
     return { winner, loser, cede: cedable(state, loser, winner, P.cede[aim]), aim, loserWants: loserWants && settled, winnerWants: winnerWants && settled };
   };
   // The loser cedes, and a truce begins.
@@ -665,7 +703,7 @@
     for (const c of cede) {
       if (c.owner !== loser) continue;
       // The loser's soldiers and officers withdraw; the families stay.
-      const capId = S.capitalOf(state, loser);
+      const capId = S.seatOfCity(state, c);
       const n = Math.max(0, S.marchable(c));
       const route = capId && S.route(state, c.id, capId, "army");
       if (n >= 100 && route) {
@@ -685,10 +723,7 @@
     state.truces = state.truces || {};
     state.truces[pairKey(winner, loser)] = { since: now, until: now + P.years * 12 };
     if (state.warLog) delete state.warLog[pairKey(winner, loser)];
-    for (const [x, y] of [[winner, loser], [loser, winner]]) {
-      const f = state.forces[x];
-      if (f && f.war && f.war.foe === y) f.war = null;
-    }
+    for (const [x, y] of [[winner, loser], [loser, winner]]) S.endWarsWith(state, x, y);
     S.relAdd(state, winner, loser, P.rel);
     S.capitalOf(state, loser);
     const mine = winner === state.playerForce || loser === state.playerForce;

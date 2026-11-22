@@ -42,7 +42,7 @@
   // Keys: Space runs or pauses, 1-4 set the speed, Esc closes the window on
   // top, Q and E step through the player's cities, and the main menu opens
   // by letter.
-  const MENU_KEYS = { KeyP: "persona", KeyF: "forces", KeyC: "cities", KeyG: "officers", KeyD: "diplomacy", KeyJ: "council", KeyH: "court", KeyT: "tech" };
+  const MENU_KEYS = { KeyP: "persona", KeyF: "forces", KeyC: "cities", KeyG: "officers", KeyD: "diplomacy", KeyJ: "council", KeyK: "corps", KeyH: "court", KeyT: "tech" };
   document.addEventListener("keydown", (ev) => {
     if (!state || state.over || ev.ctrlKey || ev.altKey || ev.metaKey || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.code === "Escape") {

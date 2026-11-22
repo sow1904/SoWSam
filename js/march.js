@@ -229,6 +229,11 @@
     const now = S.today(state);
     const m = Object.assign({ troops: 0, gold: 0, food: 0, train: 0, officers: [] }, spec,
       { id: state.marchSeq, km, start: now, arrive: now + days });
+    // The corps it marches for: that of the city it leaves (js/corps.js).
+    if (m.corps == null && S.placeCorps) {
+      const o = S.place(state, m.origin);
+      m.corps = o && o.owner === m.force ? S.placeCorps(state, o) : 1;
+    }
     state.marches.push(m);
     for (const id of m.officers) {
       const o = state.officers[id];

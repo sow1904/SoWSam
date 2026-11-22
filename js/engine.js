@@ -1149,6 +1149,7 @@
       S.produceRes(c);
     }
     if (S.runTribute) S.runTribute(state); // surplus to the capital (js/war.js)
+    if (S.runCorps) S.runCorps(state); // corps keep seats and heads; computer forces cut new ones (js/corps.js)
     if (S.runPeace) S.runPeace(state); // wars that both sides would end (js/war.js)
     if (S.runRebellion) S.runRebellion(state);
     if (S.runStrife) S.runStrife(state);
