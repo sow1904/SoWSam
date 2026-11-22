@@ -8,6 +8,6 @@
 - An earlier sheet by the author (`assets.png`) gave the icons used until this one. Its cavalry and fleet pictures were never used; armies on the map are drawn by the game itself.
 - Until November 2026 the game used icons by CroN of the Naver cafe 「조조전 모드를 사랑하는 사람들의 모임」 (https://naver.me/Gahr0M8A, 전면 허용). They are no longer in the repository.
 
-## Terrain map (`assets/map/terrain.jpg`)
+## Terrain maps (`assets/map/terrain_spring/summer/autumn/winter.jpg`, `assets/map/mini.jpg`)
 
-- Made by the game's author with ChatGPT and Gemini, for this game. Saved as JPEG (quality 85) from the original 2048 x 2048 PNG, which is kept out of the repository in `resources/`.
+- Made by the game's author with ChatGPT and Gemini, for this game: one map for each season, and a plainer one for the small maps. Saved as JPEG from the original 2048 x 2048 PNGs (`resources/map_*.png`, kept out of the repository); the small map is scaled to 1024 x 1024.

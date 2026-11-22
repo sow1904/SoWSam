@@ -151,11 +151,14 @@
     map.classList.toggle("terrain", !!T);
     baseSvg.classList.toggle("terrain", !!T);
     // The sea and terrain picture are drawn once; only what changes is redrawn.
-    const baseKey = T ? T.image : "outline";
+    // The picture follows the season (js/seasons.js S.seasonOf).
+    const img = T && T.seasons && S.seasonOf ? T.seasons[S.seasonOf(state.month)] : T && T.image;
+    if (T && T.seasons && !UI.__seasonPics) UI.__seasonPics = T.seasons.map((src) => { const i = new Image(); i.src = src; return i; }); // fetch all, so a change does not flash
+    const baseKey = T ? "terrain" : "outline";
     if (map.dataset.base !== baseKey || !$("#cityLayer")) {
       const base = T
         ? `<rect class="sea" x="-2000" y="-2000" width="${T.w + 4000}" height="${T.h + 4000}"/>` +
-          `<image class="terrain-img" href="${T.image}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>`
+          `<image class="terrain-img" href="${img}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>`
         : `<rect class="sea" x="-2000" y="-2000" width="${S.MAP_SIZE.w + 4000}" height="${S.MAP_SIZE.h + 4000}"/>` +
           `<polygon class="land" points="${pts(M.land)}"/>` +
           M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
@@ -164,6 +167,8 @@
       map.innerHTML = LAYERS.map((id) => `<g id="${id}"></g>`).join("");
       map.dataset.base = baseKey;
     }
+    const pic = T && baseSvg.querySelector(".terrain-img");
+    if (pic && pic.getAttribute("href") !== img) pic.setAttribute("href", img);
     // Province names at the centre of their cities.
     let svg = "";
     for (const [pid, pname] of Object.entries(S.PROVINCES)) {

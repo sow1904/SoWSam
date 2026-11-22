@@ -491,8 +491,8 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 .minimap .hit circle:first-child { opacity: 0.75; }
 
 /* ---------- the season's news (js/ui/seasons.js) ---------- */
-/* The small map's picture: set --season-bg to an image, e.g.
-   url("../assets/ui/minimap.png"), when one is drawn. */
+/* The small map's picture is drawn inside the svg (assets/map/mini.jpg);
+   --season-bg colours the frame around it. */
 #seasonPop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); cursor: pointer; transition: opacity 0.3s; }
 #seasonPop.hidden { display: none; }
 #seasonPop .card { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; background: var(--panel); border: 1px solid #a8843c; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); padding: 10px 18px 12px; }

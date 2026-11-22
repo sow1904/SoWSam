@@ -69,7 +69,9 @@
     };
     // Chosen cities last, so their names lie on top.
     const order = cs.slice().sort((a, b) => (a.owner === pick) - (b.owner === pick));
-    return `<svg class="minimap" viewBox="60 -40 2060 2140" preserveAspectRatio="xMidYMid meet"><g class="roads">${roads}</g>${order.map(dot).join("")}</svg>`;
+    const T = S.MAP && S.MAP.terrain;
+    const pic = T && T.mini ? `<image class="mini-img" href="${T.mini}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>` : "";
+    return `<svg class="minimap" viewBox="60 -40 2060 2140" preserveAspectRatio="xMidYMid meet">${pic}<g class="roads">${roads}</g>${order.map(dot).join("")}</svg>`;
   }
   function forceDetail(st, fid) {
     const f = st.forces[fid], r = st.officers[f.ruler], t = S.totals(st, fid);

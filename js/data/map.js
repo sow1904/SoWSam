@@ -351,12 +351,15 @@
     ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"], ["danyang", "hefei"],
   ];
 
-  // The painted terrain map (assets/map/terrain.jpg, 2048 x 2048). It is a
+  // The painted terrain map (assets/map/terrain_*.jpg, 2048 x 2048, one for
+  // each season; mini.jpg is a plainer one for the small maps). It is a
   // picture, not a survey, so places are fitted to it: these anchors tie
   // landmarks on the picture to their real latitude and longitude, and a
   // smooth warp through them places everything else. [x, y, lat, lon]
   const terrain = {
-    image: "assets/map/terrain.jpg", w: 2048, h: 2048,
+    image: "assets/map/terrain_summer.jpg", w: 2048, h: 2048,
+    seasons: ["spring", "summer", "autumn", "winter"].map((s) => `assets/map/terrain_${s}.jpg`), // S.seasonOf order
+    mini: "assets/map/mini.jpg",
     anchors: [
       [1090, 180, 40.2, 111.2], // 황하 하투의 북동쪽 굽이
       [860, 140, 40.3, 107.0], // 하투의 북서쪽 굽이
