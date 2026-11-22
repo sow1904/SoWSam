@@ -10,9 +10,11 @@
 // (낙양, 업) or where a commandery has more than one city (신야).
 //
 // Names and provinces are given as of 220. Where a place was called
-// something else, or belonged to another commandery or province, in an
-// earlier or later year, `names`, `juns`, `seats` and `provs` below say so,
-// and a scenario shows what was true in its own year.
+// something else, or belonged to another commandery, in an earlier or later
+// year, `names`, `juns` and `seats` below say so, and a scenario shows what
+// was true in its own year. Provinces stay as of 220 in every scenario
+// (the user's decision): 사례 without 장안, 옹주 as 관중 and 롱우, 량주 west
+// of the river, 평원 in 기주.
 //
 // size (1-5) is a rough rank of registered population, raised a little where
 // a city stands for neighbours that were left out.
@@ -163,23 +165,6 @@
     wuchang: [[0, "악"], [221, "무창"]],
     xincheng: [[0, "상용"], [220, "방릉"]],
   };
-  // Which province a place belonged to from a given year on.
-  // why: there was no 옹주 before 194, and the 옹주 of 194-213 was the far
-  // side of the Yellow River (하서); 조조 folded 량주 into it in 213, and 조비
-  // split them again in 220 with 옹주 as 관중 and 롱우. 평원 was 청주's under
-  // the Han and 기주's under Wei.
-  const provs = {
-    jingzhao:  [[0, "sili"], [213, "yong"]],
-    zuopingyi: [[0, "sili"], [213, "yong"]],
-    youfufeng: [[0, "sili"], [213, "yong"]],
-    hanyang:   [[0, "liang"], [213, "yong"]],
-    longxi:    [[0, "liang"], [213, "yong"]],
-    jincheng:  [[0, "liang"], [213, "yong"], [220, "liang"]],
-    wuwei:     [[0, "liang"], [194, "yong"], [220, "liang"]],
-    zhangye:   [[0, "liang"], [194, "yong"], [220, "liang"]],
-    jiuquan:   [[0, "liang"], [194, "yong"], [220, "liang"]],
-    pingyuan:  [[0, "qing"], [220, "ji"]],
-  };
   const inYear = (list, year, fallback) => {
     let v = fallback;
     for (const [from, x] of list || []) if (year >= from) v = x;
@@ -190,7 +175,7 @@
   S.citySeat = (id, year) => inYear(S.MAP.seats[id], year, S.MAP.cities[id][2]);
   // 남양군 완현
   S.fullName = (c) => (c.jun ? `${c.jun} ${c.seat}${c.seat.endsWith("현") ? "" : "현"}` : c.name);
-  S.cityProv = (id, year) => inYear(S.MAP.provs[id], year, S.MAP.cities[id][1]);
+  S.cityProv = (id) => S.MAP.cities[id][1]; // fixed, as of 220
 
   // Map projection. The far west and the far south are squeezed so the
   // contested heartland gets most of the space. Used for the drawn outline;
@@ -423,7 +408,6 @@
     names,
     juns,
     seats,
-    provs,
     land: proj(land),
     islands: islands.map(proj),
     rivers: rivers.map(proj),
