@@ -539,3 +539,16 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 #collapsePop h2 { text-align: center; margin: 12px 0 2px; font-family: var(--serif); letter-spacing: 6px; color: var(--gold2); }
 #collapsePop .when { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
 #collapsePop p { margin: 6px 18px; line-height: 1.6; }
+
+/* The small map in the corner of the big one (js/ui/map.js renderMini). */
+#miniNav { position: absolute; right: 10px; bottom: 10px; z-index: 4; width: 196px; background: var(--panel); border: 1px solid #a8843c; box-shadow: 0 0 0 1px #000, 0 4px 14px rgba(0, 0, 0, 0.6); }
+#miniNav svg { display: block; width: 196px; height: 196px; cursor: crosshair; touch-action: none; }
+#miniNav .dots circle { stroke: rgba(0, 0, 0, 0.75); stroke-width: 6; }
+#miniNav .view { fill: rgba(255, 243, 196, 0.08); stroke: #fff3c4; stroke-width: 14; pointer-events: none; }
+#miniNav .fold { display: block; width: 100%; padding: 1px 6px; font-size: 11px; border: 0; border-bottom: 1px solid #6a5433; border-radius: 0; text-align: right; }
+#miniNav.folded { width: auto; }
+#miniNav.folded svg { display: none; }
+#miniNav.folded .fold { border-bottom: 0; }
+/* Leave the corner to it: the city window stops above it, the legend left of it. */
+#mapWrap.has-mini #cityWin { max-height: calc(100% - 248px); }
+#mapWrap.has-mini #logLegend { max-width: calc(100% - 226px); }

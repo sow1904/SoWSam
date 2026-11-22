@@ -52,6 +52,7 @@
       svg.classList.add("moving");
       svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
     }
+    miniBox();
     clearTimeout(settleTimer);
     settleTimer = setTimeout(applyView, 150);
   }
@@ -65,6 +66,60 @@
     Object.assign(shown, { x: view.x, y: view.y, w: view.w, h: view.h });
     for (const x of both()) x.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
     svg.classList.toggle("far", view.zoom < 0.75);
+    miniBox();
+  }
+
+  // ---------- the small map in the corner ----------
+  // The whole land at a glance (assets/map/mini.jpg), the cities in their
+  // owners' colours, and a box for what the big map shows. A press or drag
+  // on it moves the big map there. It folds away; the choice is remembered.
+  const MINI_KEY = "sowsam.minimap";
+  const miniOpen = () => { try { return localStorage.getItem(MINI_KEY) !== "0"; } catch (e) { return true; } };
+  function miniBox() {
+    const box = $("#miniNav .view");
+    if (!box) return;
+    box.setAttribute("x", view.x); box.setAttribute("y", view.y);
+    box.setAttribute("width", view.w); box.setAttribute("height", view.h);
+  }
+  function renderMini() {
+    const T = S.MAP && S.MAP.terrain;
+    let el = $("#miniNav");
+    if (!T || !T.mini) { if (el) el.remove(); $("#mapWrap").classList.remove("has-mini"); return; }
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "miniNav";
+      el.innerHTML = `<button class="fold" title="작은 지도 접기·펴기"></button>` +
+        `<svg viewBox="0 0 ${T.w} ${T.h}" preserveAspectRatio="none"><image href="${T.mini}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>` +
+        `<g class="dots"></g><rect class="view"/></svg>`;
+      $("#mapWrap").appendChild(el);
+      el.querySelector(".fold").addEventListener("click", () => {
+        const open = el.classList.contains("folded");
+        try { localStorage.setItem(MINI_KEY, open ? "1" : "0"); } catch (e) { /* ignore */ }
+        foldMini(open);
+      });
+      const pic = el.querySelector("svg");
+      let held = null;
+      const go = (ev) => {
+        const r = pic.getBoundingClientRect();
+        const x = ((ev.clientX - r.left) / r.width) * T.w, y = ((ev.clientY - r.top) / r.height) * T.h;
+        view.x = x - view.w / 2;
+        view.y = y - view.h / 2;
+        previewView();
+      };
+      pic.addEventListener("pointerdown", (ev) => { held = ev.pointerId; try { pic.setPointerCapture(ev.pointerId); } catch (e) { /* not a live pointer */ } go(ev); ev.stopPropagation(); });
+      pic.addEventListener("pointermove", (ev) => { if (held === ev.pointerId) go(ev); });
+      pic.addEventListener("pointerup", (ev) => { if (held === ev.pointerId) { held = null; applyView(); } });
+      foldMini(miniOpen());
+    }
+    UI.setHTML(el.querySelector(".dots"), S.cityList(state).map((c) =>
+      `<circle cx="${c.x}" cy="${c.y}" r="${18 + (c.size || 1) * 5}" fill="${UI.forceColor(c.owner)}"/>`).join(""));
+    miniBox();
+  }
+  function foldMini(open) {
+    const el = $("#miniNav");
+    el.classList.toggle("folded", !open);
+    el.querySelector(".fold").textContent = open ? "▾ 접기" : "▴ 작은 지도";
+    $("#mapWrap").classList.toggle("has-mini", open);
   }
   UI.applyView = applyView;
   UI.centerOn = function (c) {
@@ -217,6 +272,7 @@
       svg += `<text class="prov" x="${Math.round(x)}" y="${Math.round(y)}">${pname}</text>`;
     }
     UI.setHTML($("#provLayer"), svg);
+    renderMini();
 
     svg = "";
     const drawn = new Set();
