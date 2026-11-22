@@ -150,6 +150,7 @@
     for (const f of Object.values(state.forces)) if (f.war && f.war.foe === loser) f.war = null;
     L.alive = false;
     L.war = null;
+    S.noteFall(state, { fid: loser, foe: winner, ruler: lord.id, gone, how: "submit" });
     if (state.aiDays) delete state.aiDays[loser];
     S.officersMoved(state);
     S.capitalOf(state, winner);

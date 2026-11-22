@@ -530,3 +530,12 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 
 /* The season's map dissolving in over the last (js/ui/map.js); keep in step with UI.SEASON_FADE_MS. */
 .terrain-fade { transition: opacity 2s ease-in-out; pointer-events: none; }
+
+/* The fall of a force (js/ui/seasons.js UI.showCollapse). */
+#collapsePop { position: fixed; inset: 0; z-index: 61; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); cursor: pointer; }
+#collapsePop.hidden { display: none; }
+#collapsePop .card { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; background: var(--panel); border: 1px solid #a8843c; border-top: 4px solid var(--force, #a8843c); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); padding: 0 0 12px; text-align: center; }
+#collapsePop .collapse-img img { display: block; width: 100%; height: auto; filter: saturate(0.8); }
+#collapsePop h2 { text-align: center; margin: 12px 0 2px; font-family: var(--serif); letter-spacing: 6px; color: var(--gold2); }
+#collapsePop .when { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+#collapsePop p { margin: 6px 18px; line-height: 1.6; }

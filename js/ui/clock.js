@@ -10,7 +10,7 @@
   const SPEEDS = [8000, 4000, 2000, 500]; // milliseconds per month
   const CLOCK_KEY = "sowsam.clock";
   // v: settings version; v2 made pausing on the 1st the default.
-  const CLOCK_DEFAULTS = { v: 2, speed: 1, modal: true, threat: true, attacked: true, bad: true, court: true, captured: true, month: true };
+  const CLOCK_DEFAULTS = { v: 2, speed: 1, modal: true, threat: true, attacked: true, bad: true, court: true, captured: true, month: true, season: true };
   const CLOCK_LABELS = {
     modal: "명령 창이나 정보 창을 열면 멈춤",
     threat: "적 군단이 아군 도시로 진군을 시작하면 멈춤",
@@ -19,6 +19,7 @@
     court: "헌제의 청이나 선양 조서가 오면 멈추고 황실 창 열기",
     captured: "아군이 성을 빼앗으면 멈추고 그 도시를 보여 주기",
     month: "매달 1일마다 멈춤 (새 달의 명령을 내리기 좋음)",
+    season: "계절이 바뀌면 잠시 멈추고 지도가 바뀌는 모습 보여 주기 (끄면 계절 소식만)",
   };
   const clock = { running: false, resumeOnClose: false, acc: 0, last: 0, seenN: 0, pending: null, settings: loadSettings() };
   const battles = []; // finished battles, shown as cards until dismissed
@@ -41,7 +42,7 @@
   }
   function pause(reason) {
     clock.resumeOnClose = false;
-    clock.seasonResume = false;
+    clock.holds = null;
     if (!clock.running) return;
     setRunning(false);
     if (reason) UI.toast(`일시정지: ${reason}`);
@@ -50,16 +51,20 @@
   UI.holdClock = function () {
     if (clock.running && clock.settings.modal) { setRunning(false); clock.resumeOnClose = true; }
   };
-  // The season's news stops the clock while it is shown (js/ui/seasons.js).
-  UI.holdForSeason = function () {
-    if (!clock.running) return;
-    setRunning(false);
-    clock.seasonResume = true;
+  // Holds: a card over the map (the season's change and news, the fall of
+  // a force) stops the running clock until it is gone; when the last hold
+  // is let go the clock runs again. Any other pause in between keeps it
+  // stopped (pause() drops the holds).
+  UI.holdFor = function (name) {
+    if (clock.running) { setRunning(false); clock.holds = new Set([name]); }
+    else if (clock.holds && clock.holds.size) clock.holds.add(name);
   };
-  UI.releaseSeason = function () {
-    const go = clock.seasonResume && state && !state.over;
-    clock.seasonResume = false;
-    if (!go) return;
+  UI.releaseHold = function (name) {
+    if (!clock.holds || !clock.holds.has(name)) return;
+    clock.holds.delete(name);
+    if (clock.holds.size) return;
+    clock.holds = null;
+    if (!state || state.over) return;
     if (UI.modalOpen()) clock.resumeOnClose = clock.settings.modal; // a window is up: run when it closes
     else setRunning(true);
   };
@@ -79,6 +84,9 @@
   UI.resetClock = function () {
     clock.running = false;
     clock.resumeOnClose = false;
+    clock.holds = null;
+    clock.season = S.seasonOf(state.month);
+    clock.fallSeen = state.fallN || 0;
     clock.seenN = state.logN || 0;
     clock.pending = state.han && state.han.pending;
     clock.marchCount = (state.marches || []).length;
@@ -139,11 +147,23 @@
     if (big) { UI.renderMap(); UI.keepScroll(UI.renderPanel); }
     if (month) UI.saveGame(true);
     if (state.over) { setRunning(false); return UI.showEnd(); }
-    // A new season: its news, briefly (js/ui/seasons.js).
+    // A new season: the map dissolves into the new one while the clock
+    // waits (if so set; js/ui/map.js), then, the next day, the season's
+    // news comes (js/seasons.js) and stops the clock while it is shown.
+    const sea = S.seasonOf(state.month);
+    if (clock.season != null && sea !== clock.season && clock.settings.season) {
+      UI.holdFor("dissolve");
+      setTimeout(() => UI.releaseHold("dissolve"), (UI.SEASON_FADE_MS || 0) + 200);
+    }
+    clock.season = sea;
     if (state.seasonNews && clock.seasonSeen !== state.seasonNews.key) {
       clock.seasonSeen = state.seasonNews.key;
-      if (UI.showSeason) { UI.holdForSeason(); UI.showSeason(state.seasonNews, true); UI.renderPanel(); }
+      if (UI.showSeason) { UI.holdFor("season"); UI.showSeason(state.seasonNews, true); UI.renderPanel(); }
     }
+    // A force has fallen: its card, until closed (js/ui/seasons.js).
+    const falls = (state.fallNews || []).filter((x) => x.n > (clock.fallSeen || 0) && x.fid !== state.playerForce);
+    clock.fallSeen = state.fallN || clock.fallSeen;
+    if (falls.length && UI.showCollapse && !UI.handsOff()) { UI.holdFor("collapse"); UI.showCollapse(falls); }
     const s = clock.settings;
     // The player's character died: who carries on (js/ui/persona.js).
     if (state.heirPick) {
@@ -322,7 +342,7 @@
   };
 
   Object.assign(UI.actions, {
-    togglePause: () => { if (state && !state.over) { clock.resumeOnClose = false; clock.seasonResume = false; setRunning(!clock.running); } },
+    togglePause: () => { if (state && !state.over) { clock.resumeOnClose = false; clock.holds = null; setRunning(!clock.running); } },
     speed: (d) => { clock.settings.speed = +d.s; saveSettings(); UI.renderClock(); },
     clockSettings: () => state && UI.showClockSettings(),
     battleOpen: (d) => { const b = battles.find((x) => x.id === +d.b); if (b) UI.showReport(b.report); },

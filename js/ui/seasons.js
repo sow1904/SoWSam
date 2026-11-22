@@ -1,3 +1,4 @@
+// News cards over the map. The fall of a force: below (UI.showCollapse).
 // The season's news (js/seasons.js): on the first day of each season a card
 // over the map shows what the season brings and where, on the small map of
 // the land (UI.miniMap, js/ui/menu.js). It closes by itself after a while.
@@ -62,8 +63,48 @@
     clearTimeout(timer);
     const el = $("#seasonPop");
     if (el) el.classList.add("hidden");
-    if (UI.releaseSeason) UI.releaseSeason(); // the clock runs again if the news stopped it
+    if (UI.releaseHold) UI.releaseHold("season"); // the clock runs again if the news stopped it
   };
+
+  // The fall of a force (S.noteFall, js/engine.js): a card with the picture
+  // of a ruined city, one fall at a time, until the player closes it.
+  const fallQueue = [];
+  UI.showCollapse = function (list) {
+    fallQueue.push(...list);
+    if (!$("#collapsePop") || $("#collapsePop").classList.contains("hidden")) nextFall();
+  };
+  function nextFall() {
+    const x = fallQueue.shift();
+    let el = $("#collapsePop");
+    if (!x) {
+      if (el) el.classList.add("hidden");
+      if (UI.releaseHold) UI.releaseHold("collapse");
+      return;
+    }
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "collapsePop";
+      document.body.appendChild(el);
+      el.addEventListener("click", nextFall);
+    }
+    const f = state.forces[x.fid];
+    const r = state.officers[x.ruler];
+    const foe = x.foe && state.forces[x.foe];
+    const fate = !r ? "" : x.how === "submit" ? `${S.josa(r.name, "은", "는")} ${foe ? foe.name : ""}의 신하가 되었습니다.`
+      : r.status === "dead" ? `군주 ${S.josa(r.name, "은", "는")} 세상을 떠났습니다.`
+      : r.status === "captive" ? `군주 ${S.josa(r.name, "은", "는")} ${r.captor && state.forces[r.captor] ? state.forces[r.captor].name + "군에 " : ""}사로잡혔습니다.`
+      : r.status === "serving" ? `군주 ${S.josa(r.name, "은", "는")} ${r.force && state.forces[r.force] ? state.forces[r.force].name + "군을 섬기게 되었습니다." : "다른 주군을 섬기게 되었습니다."}`
+      : `군주 ${S.josa(r.name, "은", "는")} 재야로 떠돌게 되었습니다.`;
+    const how = x.how === "submit" ? `${f.name}군이 ${foe ? foe.name + "군에 " : ""}귀순하여 사라졌습니다.`
+      : foe ? `${f.name}군이 ${foe.name}군에게 마지막 성을 잃고 멸망했습니다.` : `${f.name}군이 멸망했습니다.`;
+    UI.setHTML(el, `<div class="card" style="--force:${f.color}">` +
+      `<div class="collapse-img"><img src="assets/ui/collapse.jpg" alt=""></div>` +
+      `<h2>${f.name}군 멸망</h2><p class="when">${x.year}년 ${x.month}월</p>` +
+      `<p>${how} ${fate}</p>` +
+      (x.gone && x.gone.length ? `<p class="hint">${S.josa(x.gone.join(", "), "은", "는")} ${x.how === "submit" ? "새 주군을 섬기지 않겠다며 떠났습니다." : "옛 주군을 기리며 세상을 등졌습니다."}</p>` : "") +
+      `<p class="hint">${fallQueue.length ? `누르면 다음 소식(${fallQueue.length})을 봅니다.` : "누르면 닫힙니다."}</p></div>`);
+    el.classList.remove("hidden");
+  }
   // The city panel: what weighs on it now.
   UI.woeLine = function (c) {
     const w = S.woesOf ? S.woesOf(state, c) : [];

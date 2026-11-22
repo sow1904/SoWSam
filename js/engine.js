@@ -1080,6 +1080,7 @@
       const msg = `${f.name}군이 멸망했습니다.` + (gone.length ? ` ${S.josa(gone.join(", "), "은", "는")} 옛 주군을 기리며 세상을 등졌습니다.` : "");
       if (report) report.lines.push(msg);
       S.addLog(state, msg, "fall");
+      S.noteFall(state, { fid, foe: foe || null, ruler: f.ruler, gone, how: "fall" });
       return;
     }
     if (ruler.status !== "serving" && ruler.status !== "captive") {
@@ -1474,6 +1475,14 @@
 
   // Battle arithmetic shared with js/battle.js.
   Object.assign(S, { power, sideStats, wallBonus, gentryDefense, loseTroops, returnManpower, forcePop, checkForce, freeCaptive });
+
+  // The fall of a force, for the news card shown to the player (js/ui/seasons.js).
+  S.noteFall = function (state, news) {
+    state.fallN = (state.fallN || 0) + 1;
+    const list = (state.fallNews = state.fallNews || []);
+    list.push(Object.assign({ n: state.fallN, year: state.year, month: state.month }, news));
+    if (list.length > 12) list.splice(0, list.length - 12);
+  };
 
   S.checkOver = function (state) {
     if (state.over) return state.over;
