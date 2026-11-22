@@ -42,6 +42,7 @@
   // Does fid want to take t (a city or a stronghold)?
   S.wantsTarget = function (state, fid, t, dom) {
     if (t.lost && t.lost.fid === fid && S.monthsElapsed(state) - t.lost.at < S.AMBITION.retake) return true;
+    if (S.titlePull && S.titlePull(state, fid, t)) return true; // the province his 주목 is named for
     if (dom === undefined) dom = S.domainOf(state, fid);
     if (!dom) return true;
     if (!dom.key) return false;
@@ -196,7 +197,7 @@
     for (const c of S.citiesOf(state, fid)) {
       for (const t of attackable(state, c)) {
         const defense = t.troops * (1 + t.wall / 2000) + 500;
-        const score = c.troops / defense + (t.owner ? 0 : 0.3) + S.courtPull(state, fid, t);
+        const score = c.troops / defense + (t.owner ? 0 : 0.3) + S.courtPull(state, fid, t) + S.titlePull(state, fid, t);
         if (!best || score > best.score) best = { target: t.id, stage: c.id, score };
       }
     }
@@ -229,7 +230,7 @@
       const est = S.estimate(state, c.id, t.id, ids, land ? land.left : troops, unit);
       if (land && land.lostD) est.ratio *= t.troops / Math.max(1, t.troops - land.lostD);
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
-      const bonus = (t.owner ? 0 : 0.2) + pull; // vacant cities are easy pickings
+      const bonus = (t.owner ? 0 : 0.2) + pull + S.titlePull(state, c.owner, t); // vacant cities are easy pickings
       // A fierce officer inside who may sortie makes the place look harder.
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       const risk = threat ? threat.pct / 50 : 0;

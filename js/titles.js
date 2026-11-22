@@ -23,8 +23,11 @@
 //   공    a realm name from S.REALMS + 공 (위(魏)공): the computer takes the
 //         first free one for its capital, the player chooses
 //   왕    the realm + 왕, or a man's own (한중왕 유비, 사(士)왕 사섭, ...)
-//   황제  the realm, or a man's own (중(仲) 원술, 위(魏) 조조, ...); one who
-//         holds the Han dear carries on the Han (한(漢)) once it has ended
+//   황제  the realm, or a man's own (중(仲) 원술, 위(魏) 조조, ..., 진(晉)
+//         for the whole 사마 house); one who holds the Han dear carries on
+//         the Han (한(漢)) once it has ended
+// Many may hold the same 주목 (one who lost his province keeps the name); a
+// computer 주목 without his province makes winning it back his first aim.
 // A realm name is one ruler's alone, a man's own included (if taken, he
 // goes by his realm); only heirs of the Han may share 한(漢).
 // While the Han stands, 표기장군, 대장군 and 승상 are one man's each: a
@@ -46,7 +49,7 @@
   S.TITLES = [
     { key: "noble", name: "제후", need: "처음 작위", named: "제후" },
     { key: "lord", name: "열후", need: `온전한 주 없이 성 ${T.lord.cities}개 이상`, named: "수도의 현 + 후 (신야후). 수도가 윤이면 그 윤 (하남윤)" },
-    { key: "governor", name: "주목", need: "주 하나를 온전히", named: "그 주 + 목 (서주목). 형남·형북은 형주목, 남중은 익주목, 요동은 유주목, 사례는 사례교위" },
+    { key: "governor", name: "주목", need: "주 하나를 온전히", named: "그 주 + 목 (서주목). 형남·형북은 형주목, 남중은 익주목, 요동은 유주목, 사례는 사례교위. 여러 군주가 같은 주목일 수 있고, 그 주를 잃은 컴퓨터 주목은 그 주를 되찾으려 함" },
     { key: "general", name: "표기장군", need: `주 ${T.general.provs}개를 온전히, 또는 성 ${T.general.cities}개 이상`, named: "한 왕조가 있는 동안 이미 받은 세력이 있으면 도독이주제군사" },
     { key: "marshal", name: "대장군", need: `주 ${T.marshal.provs}개를 온전히, 또는 성 ${T.marshal.cities}개 이상`, named: "한 왕조가 있는 동안 이미 받은 세력이 있으면 도독삼주제군사" },
     { key: "chancellor", name: "승상", need: `주 ${T.chancellor.provs}개를 온전히, 또는 성 ${T.chancellor.cities}개 이상`, named: "한 왕조가 있는 동안 이미 받은 세력이 있으면 도독사주제군사" },
@@ -63,6 +66,7 @@
   const KING_OF = { 유비: "한중", 사섭: "사(士)", 맹획: "남만", 엄백호: "덕(德)" };
   const KING_CLAN = [["공손도", "요동"], ["사마의", "진(晉)"]]; // the whole house
   const EMPEROR_OF = { 원술: "중(仲)", 조조: "위(魏)", 손권: "오(吳)", 유비: "촉한" };
+  const EMPEROR_CLAN = [["사마의", "진(晉)"]]; // the whole house, as for 왕
   const HAN = "한(漢)";
 
   // Realm names (나라 이름) for 공, 왕 and 황제: the Warring States, the
@@ -102,7 +106,7 @@
     { name: "고구려", home: [], near: [] },
   ];
   S.REALMS = REALMS;
-  S.TITLE_NAMES = { PROV_TITLE, DUDU, KING_OF, KING_CLAN, EMPEROR_OF, HAN };
+  S.TITLE_NAMES = { PROV_TITLE, DUDU, KING_OF, KING_CLAN, EMPEROR_OF, EMPEROR_CLAN, HAN };
 
   // Whole provinces and regions a force holds (only cities in this scenario count).
   function wholeOf(state, fid) {
@@ -158,15 +162,38 @@
     return own && !S.realmTaken(state, fid, own) ? own : null;
   }
 
+  // A man's own name for his dynasty: his (위(魏) 조조) or his house's (진(晉) 사마씨).
+  function ownDynasty(r) {
+    const house = EMPEROR_CLAN.find(([head]) => head === r.name || (clanOf(r.name) && clanOf(r.name) === clanOf(head)));
+    return EMPEROR_OF[r.name] || (house && house[1]) || null;
+  }
   // The emperor's dynasty: a man's own, the Han for its loyal heir, else the realm.
   S.dynastyName = function (state, fid) {
     const f = state.forces[fid];
-    const own = EMPEROR_OF[rulerOf(state, f).name];
+    const own = ownDynasty(rulerOf(state, f));
     if (own && !S.realmTaken(state, fid, own)) return own;
     if (f.hanHeir) return HAN;
     return realmNow(state, fid);
   };
   S.titleKey = (state, fid) => (state.forces[fid].title || "noble");
+  // The provinces a 주목 is named for (형주목: 형남 and 형북). Many may hold
+  // the same 주목: one who has lost his province keeps the name.
+  S.governorProvs = function (state, fid) {
+    const f = state.forces[fid];
+    if (!f || f.emperor || f.title !== "governor") return [];
+    return Object.keys(S.PROVINCES).filter((p) => (PROV_TITLE[p] || `${S.PROVINCES[p]}목`) === f.titleName);
+  };
+  // A computer 주목 who no longer holds the province he is named for means
+  // to win it back before anything else: a pull on its cities (js/ai.js).
+  S.TITLE_PULL = { governor: 0.35 };
+  S.titlePull = function (state, fid, t) {
+    if (fid === state.playerForce) return 0;
+    const provs = S.governorProvs(state, fid);
+    if (!provs.length || t.owner === fid) return 0;
+    if (wholeOf(state, fid).provs.some((p) => provs.includes(p))) return 0;
+    const ids = t.road ? t.road : [t.id];
+    return ids.some((id) => state.cities[id] && provs.includes(state.cities[id].prov)) ? S.TITLE_PULL.governor : 0;
+  };
   S.titleName = function (state, fid) {
     const f = state.forces[fid];
     if (f.emperor) return `${f.dynasty || S.dynastyName(state, fid)} 황제`;
@@ -251,7 +278,7 @@
   // 공·왕, his own (위(魏) 조조, ...) and the Han for its heir. {name, fit, free}.
   S.dynastyChoices = function (state, fid) {
     const f = state.forces[fid];
-    const extra = [[f.dynasty, "now"], [EMPEROR_OF[rulerOf(state, f).name], "own"], [f.hanHeir ? HAN : null, "han"], [f.realm, "realm"]]
+    const extra = [[f.dynasty, "now"], [ownDynasty(rulerOf(state, f)), "own"], [f.hanHeir ? HAN : null, "han"], [f.realm, "realm"]]
       .filter(([n], i, all) => n && all.findIndex(([m]) => m === n) === i)
       .map(([name, fit]) => ({ name, fit, free: !S.realmTaken(state, fid, name) }));
     return extra.concat(S.realmChoices(state, fid).filter((r) => !extra.some((x) => x.name === r.name)));
