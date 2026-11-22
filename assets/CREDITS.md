@@ -10,8 +10,8 @@
 
 ## Terrain maps (`assets/map/terrain_spring/summer/autumn/winter.jpg`, `assets/map/mini.jpg`)
 
-- Made by the game's author with ChatGPT and Gemini, for this game: one map for each season, and a plainer one for the small maps. Saved as JPEG from the original 2048 x 2048 PNGs (`resources/map_*.png`, kept out of the repository); the small map is scaled to 1024 x 1024.
+- Made by the game's author with ChatGPT and Gemini, for this game: one map for each season, and a plainer one for the small maps. Saved as JPEG from the original 2048 x 2048 PNGs (`resources/map_*.png`, kept out of the repository; the generator's corner mark taken out in `resources/clean/`); the small map is scaled to 1024 x 1024.
 
 ## Fallen city (`assets/ui/collapse.jpg`)
 
-- Made by the game's author for this game; shown when a force falls. Saved as JPEG (1280 px wide) from the original PNG (`resources/img_collapse.png`, kept out of the repository).
+- Made by the game's author for this game; shown when a force falls. Saved as JPEG (1280 px wide) from the original PNG (`resources/img_collapse.png`, kept out of the repository), cropped at the right and bottom to leave out the generator's corner mark (`resources/clean/`).
