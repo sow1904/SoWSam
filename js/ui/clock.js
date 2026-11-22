@@ -163,7 +163,7 @@
     // A force has fallen: its card, until closed (js/ui/seasons.js).
     const falls = (state.fallNews || []).filter((x) => x.n > (clock.fallSeen || 0) && x.fid !== state.playerForce);
     clock.fallSeen = state.fallN || clock.fallSeen;
-    if (falls.length && UI.showCollapse && !UI.handsOff()) { UI.holdFor("collapse"); UI.showCollapse(falls); }
+    if (falls.length && UI.showCollapse) { UI.holdFor("collapse"); UI.showCollapse(falls); } // shown when watching too
     const s = clock.settings;
     // The player's character died: who carries on (js/ui/persona.js).
     if (state.heirPick) {
