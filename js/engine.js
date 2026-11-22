@@ -149,7 +149,8 @@
     for (const f of scenario.forces) {
       const ids = f.officers.map((line, i) => addOfficer(line, f.id, i === 0 ? 100 : 80 + Math.floor(n % 5) * 4));
       if (state.officers[ids[0]].status !== "serving") throw new Error("ruler of " + f.id + " is too young");
-      state.forces[f.id] = { id: f.id, name: f.name, color: f.color, ruler: ids[0], alive: true, weariness: 0 };
+      // A scenario may start a force already tired of war (f.weariness).
+      state.forces[f.id] = { id: f.id, name: f.name, color: f.color, ruler: ids[0], alive: true, weariness: f.weariness || 0 };
       // A scenario may name the capital and the technology a force starts with.
       if (f.capital) state.forces[f.id].capital = f.capital;
       if (f.tech) state.forces[f.id].tech = Object.fromEntries(Object.entries(f.tech).map(([k, lv]) => [k, { lv, pts: 0 }]));
@@ -167,10 +168,17 @@
         // A number shifts every city; an object sets named cities.
         const g = typeof f.gentry === "object" ? f.gentry[cid] : f.gentry ? c.gentry + f.gentry : null;
         if (g != null) c.gentry = c.gentryBase = Math.max(5, Math.min(95, g));
-        // A scenario may start its held cities better developed.
-        if (scenario.develop) {
-          c.farm = Math.round(c.farmMax * scenario.develop);
-          c.trade = Math.round(c.tradeMax * scenario.develop);
+        // A scenario may start its held cities better developed, a force's
+        // own (f.develop) over the scenario's; and a force's land may be
+        // emptier than the map's numbers (f.pop, a share).
+        const dev = f.develop != null ? f.develop : scenario.develop;
+        if (dev) {
+          c.farm = Math.round(c.farmMax * dev);
+          c.trade = Math.round(c.tradeMax * dev);
+        }
+        if (f.pop) {
+          c.pop = Math.round(c.pop * f.pop);
+          c.manpower = Math.round(S.manpowerMax(c) * 0.6);
         }
         c.retainers = Math.round(troops * (c.gentry / 100) * (1 - c.consent / 100));
         // Existing administration: low-grade clerks in every development post.

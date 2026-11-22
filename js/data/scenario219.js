@@ -84,6 +84,12 @@
         // why: thirty years of 둔전 and soldier households (병호) had put the
         // land and the armies in the state's hands: 중앙집권형.
         gentry: -25,
+        // why: ten years of war on every side (적벽 208, 동관 211, 유수 213·217,
+        // 합비 215, 한중 217-219) had worn the realm out, and the north was
+        // still thinly peopled after the wars of the 190s. Without this the
+        // corps on three fronts (js/corps.js) let 조조 take everything in a
+        // third of the 15-year runs; with it, in about one in seven.
+        weariness: 60, develop: 0.5, pop: 0.75,
         tech: { spear: 2, sword: 2, bow: 2, horse: 2, siege: 2, irrigation: 2, census: 2 },
         cities: {
           // 사례
