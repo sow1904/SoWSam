@@ -20,9 +20,24 @@
   // The still picture below and the live map above share one view.
   const both = () => [$("#mapBase"), $("#map")].filter(Boolean);
 
+  // Zoom limits; with a painted map the view never goes past its edges, so
+  // the farthest zoom out is the one at which the picture just fills the
+  // screen (on a screen of another shape, part of the land is then off it).
+  const ZOOM = { min: 0.35, max: 2.5 };
+  const minZoom = (r) => {
+    const T = S.MAP && S.MAP.terrain;
+    return T && r.width && r.height ? Math.max(ZOOM.min, r.width / T.w, r.height / T.h) : ZOOM.min;
+  };
   function fitView(r) {
-    view.w = Math.max(200, r.width / view.zoom);
-    view.h = Math.max(200, r.height / view.zoom);
+    const T = r.width > 0 && r.height > 0 && S.MAP && S.MAP.terrain; // (a hidden map has no size)
+    if (T) view.zoom = Math.min(Math.max(view.zoom, minZoom(r)), Math.max(ZOOM.max, minZoom(r)));
+    view.w = T ? r.width / view.zoom : Math.max(200, r.width / view.zoom);
+    view.h = T ? r.height / view.zoom : Math.max(200, r.height / view.zoom);
+    if (T) {
+      view.x = Math.min(Math.max(view.x, 0), T.w - view.w);
+      view.y = Math.min(Math.max(view.y, 0), T.h - view.h);
+      return;
+    }
     const W = S.MAP_SIZE.w, H = S.MAP_SIZE.h;
     view.x = Math.min(Math.max(view.x, -view.w * 0.3), W - view.w * 0.7);
     view.y = Math.min(Math.max(view.y, -view.h * 0.3), H - view.h * 0.7);
@@ -62,7 +77,7 @@
     const r = mapRect();
     const px = view.x + ((cx - r.left) / r.width) * view.w;
     const py = view.y + ((cy - r.top) / r.height) * view.h;
-    view.zoom = Math.min(2.5, Math.max(0.35, view.zoom * factor));
+    view.zoom = Math.min(Math.max(ZOOM.max, minZoom(r)), Math.max(minZoom(r), view.zoom * factor));
     view.x = px - ((cx - r.left) / r.width) * (r.width / view.zoom);
     view.y = py - ((cy - r.top) / r.height) * (r.height / view.zoom);
     previewView();
