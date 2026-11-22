@@ -41,6 +41,7 @@
   }
   function pause(reason) {
     clock.resumeOnClose = false;
+    clock.seasonResume = false;
     if (!clock.running) return;
     setRunning(false);
     if (reason) UI.toast(`일시정지: ${reason}`);
@@ -48,6 +49,19 @@
   // A window opening stops the clock; when the last one closes it runs again.
   UI.holdClock = function () {
     if (clock.running && clock.settings.modal) { setRunning(false); clock.resumeOnClose = true; }
+  };
+  // The season's news stops the clock while it is shown (js/ui/seasons.js).
+  UI.holdForSeason = function () {
+    if (!clock.running) return;
+    setRunning(false);
+    clock.seasonResume = true;
+  };
+  UI.releaseSeason = function () {
+    const go = clock.seasonResume && state && !state.over;
+    clock.seasonResume = false;
+    if (!go) return;
+    if (UI.modalOpen()) clock.resumeOnClose = clock.settings.modal; // a window is up: run when it closes
+    else setRunning(true);
   };
   UI.releaseClock = function () {
     if (clock.resumeOnClose && state && !state.over) setRunning(true);
@@ -128,7 +142,7 @@
     // A new season: its news, briefly (js/ui/seasons.js).
     if (state.seasonNews && clock.seasonSeen !== state.seasonNews.key) {
       clock.seasonSeen = state.seasonNews.key;
-      if (UI.showSeason) { UI.showSeason(state.seasonNews, true); UI.renderPanel(); }
+      if (UI.showSeason) { UI.holdForSeason(); UI.showSeason(state.seasonNews, true); UI.renderPanel(); }
     }
     const s = clock.settings;
     // The player's character died: who carries on (js/ui/persona.js).
@@ -308,7 +322,7 @@
   };
 
   Object.assign(UI.actions, {
-    togglePause: () => { if (state && !state.over) { clock.resumeOnClose = false; setRunning(!clock.running); } },
+    togglePause: () => { if (state && !state.over) { clock.resumeOnClose = false; clock.seasonResume = false; setRunning(!clock.running); } },
     speed: (d) => { clock.settings.speed = +d.s; saveSettings(); UI.renderClock(); },
     clockSettings: () => state && UI.showClockSettings(),
     battleOpen: (d) => { const b = battles.find((x) => x.id === +d.b); if (b) UI.showReport(b.report); },

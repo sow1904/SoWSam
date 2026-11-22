@@ -141,6 +141,7 @@
     layer.__list = list;
   }
 
+  UI.SEASON_FADE_MS = 2000; // css .terrain-fade
   UI.renderMap = function () {
     const sel = UI.selected && S.place(state, UI.selected);
     const targets = new Set(sel && UI.mine(sel) ? S.attackTargets(state, sel.id).map((t) => t.id) : []);
@@ -164,11 +165,34 @@
           M.islands.map((i) => `<polygon class="land" points="${pts(i)}"/>`).join("") +
           M.rivers.map((r) => `<polyline class="river" points="${pts(r)}"/>`).join("");
       baseSvg.innerHTML = base;
+      baseSvg.__fadeTo = null;
       map.innerHTML = LAYERS.map((id) => `<g id="${id}"></g>`).join("");
       map.dataset.base = baseKey;
     }
+    // A new season dissolves in: the new picture fades in over the old one,
+    // which then takes its place.
     const pic = T && baseSvg.querySelector(".terrain-img");
-    if (pic && pic.getAttribute("href") !== img) pic.setAttribute("href", img);
+    const want = pic && (baseSvg.__fadeTo || pic.getAttribute("href"));
+    if (pic && want !== img) {
+      const old = baseSvg.querySelector(".terrain-fade");
+      if (old) { pic.setAttribute("href", old.getAttribute("href")); old.remove(); }
+      const fade = pic.cloneNode();
+      fade.setAttribute("class", "terrain-fade");
+      fade.setAttribute("href", img);
+      fade.style.opacity = "0";
+      pic.after(fade);
+      baseSvg.__fadeTo = img;
+      const done = () => {
+        if (!fade.isConnected) return;
+        pic.setAttribute("href", img);
+        fade.remove();
+        baseSvg.__fadeTo = null;
+      };
+      getComputedStyle(fade).opacity; // take the 0 first, so the change to 1 is a transition
+      fade.style.opacity = "1";
+      fade.addEventListener("transitionend", done);
+      setTimeout(done, UI.SEASON_FADE_MS + 500); // in case the transition never ends (hidden tab)
+    }
     // Province names at the centre of their cities.
     let svg = "";
     for (const [pid, pname] of Object.entries(S.PROVINCES)) {

@@ -62,6 +62,7 @@
     clearTimeout(timer);
     const el = $("#seasonPop");
     if (el) el.classList.add("hidden");
+    if (UI.releaseSeason) UI.releaseSeason(); // the clock runs again if the news stopped it
   };
   // The city panel: what weighs on it now.
   UI.woeLine = function (c) {

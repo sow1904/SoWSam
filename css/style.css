@@ -527,3 +527,6 @@ button.big { padding: 10px 26px; font-size: 16px; font-family: var(--serif); let
 .advice { margin: 10px 0 4px; padding: 6px 10px; border-left: 3px solid var(--gold); background: var(--panel2); line-height: 1.6; }
 .advice b { color: var(--gold2); margin-right: 4px; }
 .advice button { margin-left: 6px; }
+
+/* The season's map dissolving in over the last (js/ui/map.js); keep in step with UI.SEASON_FADE_MS. */
+.terrain-fade { transition: opacity 2s ease-in-out; pointer-events: none; }
