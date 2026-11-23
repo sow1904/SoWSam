@@ -87,6 +87,19 @@
     return Math.round(greatCircle(la1, lo1, la2, lo2) * S.ROAD_FACTOR);
   };
   S.travelDays = (km, kind) => Math.max(1, Math.ceil(km / S.SPEED[kind]));
+  // 육로 보급: food hauled overland is eaten on the way by those who haul it,
+  // more the farther it goes. Beyond free days on land roads, each day costs
+  // more by 1/grow; voyages (port to port) do not count.
+  // why: the user's design, after the histories: of thirty 종 sent to the
+  // northern frontier one 석 arrived (주보언). Water carried armies far.
+  S.HAUL = { free: 15, grow: 20 };
+  S.landDays = function (state, path, kind) {
+    let km = 0;
+    for (let i = 1; i < (path || []).length; i++) if (!S.isPortLink(path[i - 1], path[i])) km += S.legKm(state, path[i - 1], path[i]);
+    return km ? S.travelDays(km, kind || "army") : 0;
+  };
+  // How much dearer a day's food is at the end of land days of road.
+  S.haulMul = (land) => 1 + Math.max(0, (land || 0) - S.HAUL.free) / S.HAUL.grow;
 
   // Absolute day count since the game began (30 days a month).
   S.today = (state) => S.monthsElapsed(state) * S.DAYS_PER_MONTH + (state.day || 1) - 1;

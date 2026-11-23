@@ -229,8 +229,10 @@
   // Besiegers eat from the depot, which is refilled from home while the line holds.
   function feedBesiegers(state, b) {
     const A = b.att;
-    // A day's food, dearer the rougher the road it comes by.
-    const need = S.fieldFood(A.troops, 1, A.path ? S.pathRough(state, A.path) : 1) * (1 - S.AID.ox * S.aidOf(A.unit).ox);
+    // A day's food, dearer the rougher the road it comes by and the farther
+    // it is hauled overland from where the army set out (S.HAUL).
+    if (A.haul == null) A.haul = S.haulMul(S.landDays(state, A.path));
+    const need = S.fieldFood(A.troops, 1, A.path ? S.pathRough(state, A.path) : 1) * A.haul * (1 - S.AID.ox * S.aidOf(A.unit).ox);
     // Fed from the supply base: the last own city on the road (js/war.js).
     const home = S.place(state, A.base || A.origin);
     if (A.supply.line && home && home.owner === A.force) {
@@ -999,7 +1001,7 @@
     if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
     const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
-    const food = S.marchFood(troops, days, S.pathRough(state, way.path));
+    const food = S.marchFood(troops, days, S.pathRough(state, way.path), S.landDays(state, way.path, speed));
     if (c.food < food) return fail(`군량이 부족합니다. (필요 ${food})`);
     unit = S.takeTroops(c, counts);
     c.food -= food;

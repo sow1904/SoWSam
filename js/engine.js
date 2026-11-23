@@ -1058,7 +1058,7 @@
     }
     const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
-    const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path));
+    const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path), S.landDays(state, way.path, speed));
     // The cities on the way supply what they can, the border first (js/war.js).
     const fromHere = S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed, true) : foodNeed;
     if (c.food < fromHere) return fail(`군량이 부족합니다. (필요 ${foodNeed}, 지나는 성에서 ${foodNeed - fromHere}, 출발지에서 ${fromHere})`);
@@ -1080,8 +1080,12 @@
   S.FIELD_FOOD = 400;
   S.fieldFood = (troops, days, rough) => (troops * days * (rough || 1)) / S.FIELD_FOOD;
   // Rations for the march: a tenth of the men up front (the siege depot),
-  // plus the days on the road.
-  S.marchFood = (troops, days, rough) => Math.ceil(troops / 10 + S.fieldFood(troops, days, rough));
+  // plus the days on the road, the days beyond S.HAUL.free on land dearer
+  // day by day (land: the days on land roads, js/march.js).
+  S.marchFood = (troops, days, rough, land) => {
+    const e = Math.max(0, Math.min(land || 0, days) - S.HAUL.free);
+    return Math.ceil(troops / 10 + S.fieldFood(troops, days, rough) + S.fieldFood(troops, (e * (e + 1)) / 2 / S.HAUL.grow, rough));
+  };
   // What a convoy costs in food: its escort eats on the way, and of the food
   // it carries one part in a hundred is eaten by its carriers each day (more
   // on rough roads, and never more than six parts in ten).

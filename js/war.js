@@ -314,7 +314,7 @@
     const team = idle.slice(0, Math.min(S.MAX_SORTIE_OFFICERS, Math.max(1, idle.length - 1)));
     const counts = S.pickTroops(cap, send, (k) => (S.unitOf(k).gear ? 0.2 : Math.pow(S.unitEdge(k, m.unit, "field", 1), 2)));
     const total = S.countsTotal(counts);
-    const food = S.marchFood(total, route.days, S.pathRough(state, route.path));
+    const food = S.marchFood(total, route.days, S.pathRough(state, route.path), S.landDays(state, route.path));
     const fromCap = S.drawFood(state, route.path.concat([t.id]), fid, food, true);
     if (cap.food < fromCap) return note("answer: no food");
     const unit = S.takeTroops(cap, counts);
