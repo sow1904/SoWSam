@@ -14,7 +14,12 @@
     fort: { wallMax: 1200, troops: 2000 }, // high walls and deep stores
     port: { wallMax: 500, troops: 2000 }, // a stockade on the shore
   };
-  // Ports (항구): strongholds on a great river where ships are built and kept.
+  // Ports (항구): strongholds on a great river or the sea where ships are
+  // built and kept. A port stands by its city (a road on land) and reaches
+  // every other port of its waters (S.PORT_WATERS) by ship: the great river
+  // and the coast are crossed only from port to port.
+  // why: the user's design (항구망). Ports joined as a mesh, not city to city;
+  // the routes between ports are not drawn on the map.
   // An army crosses from an own port to an enemy port, as many men as the
   // port has ships for (ships are counted in the men they carry). Ships lost
   // on the water are gone; the rest sail home. The defenders of a port meet
@@ -25,6 +30,17 @@
   //   can hold per level of 조선; build: ships built a month per level;
   //   cost: gold per ship (from the port's city); start: ships at the start, of what it can hold
   S.PORT = { cap: 3000, per: 10000, build: 1000, cost: 0.2, start: 0.5 };
+  // The waters: every port reaches every other port of the same waters.
+  // 누현 at the river's mouth belongs to both.
+  S.PORT_WATERS = {
+    river: ["wulin", "chanling", "baqiu", "shiyang", "chibi", "wankou", "ruxu", "niuzhu", "guabu", "louxian"],
+    sea: ["louxian", "shangyu", "changyang", "tajin", "liekou"],
+  };
+  const WATERS_OF = {};
+  for (const [w, ids] of Object.entries(S.PORT_WATERS)) for (const id of ids) (WATERS_OF[id] = WATERS_OF[id] || []).push(w);
+  // Do two ports share waters (and which)?
+  S.portWaters = (a, b) => (WATERS_OF[a] || []).find((w) => (WATERS_OF[b] || []).includes(w)) || null;
+  S.isPortLink = (a, b) => a !== b && !!S.portWaters(a, b);
   S.isPort = (state, id) => !!(state.forts && state.forts[id] && state.forts[id].kind === "port");
   S.portMax = (state, f) => S.PORT.per * (f.owner && S.lineLevel ? S.lineLevel(state, f.owner, "navy") : 1);
   S.BUILD_COST = 1500;
@@ -46,26 +62,24 @@
       yiling: ["이릉", "fort", "badong", "nanjun", "nanjun", 30.7, 111.3, true], // 삼협이 끝나는 곳
       yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
-      // Ports (trial): 강하 and 서릉 meet only across the river.
-      shiyang: ["석양항", "port", "jiangxia", "wuchang", "jiangxia", 30.62, 114.28, true],
-      chibi: ["적벽항", "port", "jiangxia", "wuchang", "wuchang", 29.95, 113.95, true],
-      // The ports of the 장강 and the sea, not yet on the network (no road
-      // end b): they stand on the map and follow their city, but no road or
-      // waterway reaches them until the network between ports is decided.
-      // Places are rough; the user sets them.
-      // TODO(항구망): how ports link to each other (a mesh, or along the
-      // river past an enemy port?) and what they cost the ships that pass.
-      wulin: ["오림항", "port", "nanjun", null, "nanjun", 29.93, 113.55, true],
-      chanling: ["잔릉항", "port", "wuling", null, "wuling", 30.05, 112.2, true],
-      baqiu: ["파구항", "port", "changsha", null, "changsha", 29.37, 113.1, true],
-      hanjin: ["한진항", "port", "xiangyang", null, "xiangyang", 30.85, 112.9, true],
-      wankou: ["환구항", "port", "lujiang", null, "lujiang", 30.5, 117.05, true],
-      niuzhu: ["우저항", "port", "danyang", null, "danyang", 31.6, 118.45, true],
-      louxian: ["누현항", "port", "wujun", null, "wujun", 31.4, 121.0, true],
-      shangyu: ["상우항", "port", "kuaiji", null, "kuaiji", 30.03, 120.87, true],
-      changyang: ["창양항", "port", "donglai", null, "donglai", 36.95, 120.7, true],
-      tajin: ["답진항", "port", "liaodong", null, "liaodong", 38.9, 121.4, true],
-      liekou: ["열구항", "port", "daifang", null, "daifang", 38.5, 125.2, true],
+      // Ports: a port's road is its city alone (road end b null); the waters
+      // join it to the other ports (S.PORT_WATERS).
+      // TODO(항구망): ships passing an enemy port, the current (downstream
+      // faster), and what the long voyages cost.
+      wulin: ["오림", "port", "nanjun", null, "nanjun", 29.93, 113.55, true],
+      chanling: ["잔릉", "port", "wuling", null, "wuling", 30.05, 112.2, true],
+      baqiu: ["파구", "port", "changsha", null, "changsha", 29.37, 113.1, true],
+      shiyang: ["석양", "port", "jiangxia", null, "jiangxia", 30.62, 114.28, true],
+      chibi: ["적벽", "port", "wuchang", null, "wuchang", 29.95, 113.95, true],
+      wankou: ["환구", "port", "lujiang", null, "lujiang", 30.5, 117.05, true],
+      ruxu: ["유수", "port", "jiujiang", null, "jiujiang", 31.35, 117.9, true], // 유수구: by land to 합비
+      niuzhu: ["우저", "port", "danyang", null, "danyang", 31.6, 118.45, true],
+      guabu: ["과보", "port", "guangling", null, "guangling", 32.3, 118.9, true],
+      louxian: ["누현", "port", "wujun", null, "wujun", 31.4, 121.0, true],
+      shangyu: ["상우", "port", "kuaiji", null, "kuaiji", 30.03, 120.87, true],
+      changyang: ["창양", "port", "donglai", null, "donglai", 36.95, 120.7, true],
+      tajin: ["답진", "port", "liaodong", null, "liaodong", 38.9, 121.4, true],
+      liekou: ["열구", "port", "daifang", null, "daifang", 38.5, 125.2, true],
     },
   };
 
@@ -74,10 +88,9 @@
     const [x, y] = S.placeXY(id, lat, lon);
     const st = S.FORT_STATS[kind];
     const owner = built ? state.cities[home].owner : null;
-    const off = site[3] == null; // not yet on the network: holds nothing
     return {
       id, name, kind, road: S.siteRoad(site), home, lat, lon, x, y, built, owner, building: null,
-      troops: owner && !off ? st.troops : 0, train: owner ? state.cities[home].train : 40, food: owner && !off ? 3000 : 0,
+      troops: owner ? st.troops : 0, train: owner ? state.cities[home].train : 40, food: owner ? 3000 : 0,
       wall: built ? st.wallMax : 0, wallMax: st.wallMax,
       // So the battle rules can treat a stronghold like a city.
       retainers: 0, gentry: 0, consent: 100, order: 100, gold: 0, pop: 0, manpower: 0, size: 1,
@@ -87,22 +100,25 @@
   // A port's ships at the start: a share of what it can hold.
   function stockPort(state, f) {
     if (f.kind !== "port") return;
-    f.ships = f.owner && !S.offNet(f) ? Math.round(S.portMax(state, f) * S.PORT.start) : 0;
+    f.ships = f.owner ? Math.round(S.portMax(state, f) * S.PORT.start) : 0;
     f.shipsOf = f.owner;
   }
   // The places a stronghold's roads join: [a, b] or [a, b1, b2, ...].
   S.siteRoad = (site) => [site[2], ...[].concat(site[3] == null ? [] : site[3])];
-  // A port not yet on the network (no road beyond its city).
-  S.offNet = (f) => f.road.length < 2;
   S.initForts = function (state) {
     state.forts = {};
     for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) stockPort(state, state.forts[id] = newFort(state, id, site));
     state.fortVer = 1;
   };
-  // A save from before a site was added to the map gets it now.
+  // A save from before a site was added to the map gets it now (and loses
+  // a port taken off the map; names and roads follow the map).
   S.addMissingForts = function (state) {
-    for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) {
-      if (state.forts[id]) { state.forts[id].road = S.siteRoad(site); continue; }
+    const sites = S.FORT_SITES[state.map] || {};
+    for (const id of Object.keys(state.forts)) {
+      if (!sites[id] && state.forts[id].kind === "port") { delete state.forts[id]; state.fortVer = (state.fortVer || 0) + 1; }
+    }
+    for (const [id, site] of Object.entries(sites)) {
+      if (state.forts[id]) { state.forts[id].road = S.siteRoad(site); state.forts[id].name = site[0]; continue; }
       stockPort(state, state.forts[id] = newFort(state, id, site));
       state.fortVer = (state.fortVer || 0) + 1;
     }
@@ -158,13 +174,6 @@
   S.runForts = function (state) {
     for (const f of Object.values(state.forts || {})) {
       if (!f.built) continue;
-      if (S.offNet(f)) {
-        // It only follows its city until the network reaches it.
-        const home = state.cities[f.home];
-        f.owner = home ? home.owner : null;
-        f.shipsOf = f.owner;
-        continue;
-      }
       if (f.kind === "port") runPort(state, f);
       if (f.wall < f.wallMax) f.wall = Math.min(f.wallMax, f.wall + 20);
       if (!f.owner || f.troops <= 0) continue;

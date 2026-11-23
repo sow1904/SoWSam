@@ -281,6 +281,7 @@
         const k = S.roadKey(a, b);
         if (drawn.has(k)) continue;
         drawn.add(k);
+        if (S.isPortLink(a, b)) continue; // the waters between ports are not drawn (the user's choice)
         const A = S.place(state, a), B = S.place(state, b);
         const hl = sel && (a === sel.id || b === sel.id) ? " hl" : "";
         const sea = S.isSea(a, b) ? " sea-road" : "";
@@ -312,13 +313,13 @@
 
   // A stronghold on the map: a gatehouse for a pass, a walled square for a
   // fort. Unbuilt sites are drawn faintly.
-  const FORT_ICONS = { pass: [28, 26], fort: [30, 22], site: [26, 15], fort_ruin: [26, 24] }; // display sizes
+  const FORT_ICONS = { pass: [28, 26], fort: [30, 22], port: [30, 22], site: [26, 15], fort_ruin: [26, 24] }; // display sizes
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
-    const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind === "port" ? "fort" : f.kind; // ports: no picture of their own yet
+    const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind;
     const [iw, ih] = FORT_ICONS[icon];
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      `<image class="ficon" href="assets/forts/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
+      `<image class="ficon" href="assets/${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +

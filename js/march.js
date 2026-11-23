@@ -118,6 +118,13 @@
       const chain = [a, ...forts.map((f) => f.id), b];
       for (let i = 1; i < chain.length; i++) link(chain[i - 1], chain[i], r);
     }
+    // Ports (js/forts.js): a land road to the port's city, and the waters to
+    // every other port they share.
+    const ports = Object.values(state.forts || {}).filter((f) => f.built && f.kind === "port" && f.road.length === 1);
+    for (const p of ports) {
+      link(p.road[0], p.id, 1);
+      for (const q of ports) if (p.id < q.id && S.isPortLink(p.id, q.id)) link(p.id, q.id, 1);
+    }
     net = { state, ver: state.fortVer || 0, map: S.MAP, links, rough, km };
     return net;
   }

@@ -28,23 +28,13 @@
   // listed by its pieces.
   const WATER = {};
   for (const [a, b] of [
-    // 장강
-    ["jiujiang", "danyang"], ["lujiang", "danyang"], ["guangling", "danyang"], ["guangling", "wujun"], ["wujun", "kuaiji"],
-    ["nanjun", "wuchang"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["wuchang", "changsha"], ["wuchang", "yuzhang"],
-    ["wuchang", "lujiang"], ["lujiang", "yuzhang"], ["danyang", "hefei"], // 유수구
-    ["shiyang", "chibi"], // 강하와 서릉 사이: 항구에서 항구로 (js/forts.js)
-    // 황하
-    ["henan", "henei"], ["henan", "hedong"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
-    ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["pingyuan", "jinan"],
+    // 장강과 바다는 항구에서 항구로만 건넌다 (js/forts.js, S.PORT_WATERS).
     // 한수: 번성에서 양양으로 건넌다
     ["xinye", "xiangyang"],
-    // 바닷길
-    ["donglai", "liaodong"], ["donglai", "daifang"], ["donglai", "wujun"],
   ]) WATER[S.roadKey(a, b)] = true;
-  S.isWater = (a, b) => !!WATER[S.roadKey(a, b)];
-  // Sea routes, drawn differently on the map.
-  const SEA = { [S.roadKey("donglai", "liaodong")]: true, [S.roadKey("donglai", "daifang")]: true, [S.roadKey("donglai", "wujun")]: true };
-  S.isSea = (a, b) => !!SEA[S.roadKey(a, b)];
+  S.isWater = (a, b) => !!WATER[S.roadKey(a, b)] || S.isPortLink(a, b);
+  // Sea routes.
+  S.isSea = (a, b) => S.portWaters(a, b) === "sea";
   S.waterLink = (state, a, b) => S.isWater(a, b);
 
   const crewOf = (state, ids, force) => ids.map((id) => state.officers[id]).filter((o) => o && o.status === "serving" && o.force === force);

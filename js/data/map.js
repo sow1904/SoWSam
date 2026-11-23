@@ -313,18 +313,15 @@
     ["pengcheng", "xiapi"], ["pengcheng", "donghai"], ["donghai", "xiapi"], ["donghai", "guangling"], ["donghai", "beihai"],
     ["xiapi", "guangling"], ["xiapi", "jiujiang"], ["guangling", "jiujiang"],
     ["taishan", "jinan"], ["jinan", "pingyuan"], ["jinan", "qiguo"], ["qiguo", "beihai"], ["qiguo", "bohai"], ["beihai", "donglai"],
-    // 바닷길
-    ["donglai", "liaodong"], ["donglai", "daifang"], ["donglai", "wujun"],
     // 형북, 형남
     ["nanyang", "xinye"], ["xinye", "xiangyang"], ["xiangyang", "nanjun"], ["xiangyang", "xincheng"], ["xiangyang", "jiangxia"],
-    ["xincheng", "hanzhong"], ["jiangxia", "wuchang"],
-    ["nanjun", "wuchang"], ["nanjun", "wuling"], ["nanjun", "changsha"], ["nanjun", "badong"],
-    ["wuchang", "changsha"], ["wuchang", "lujiang"], ["wuchang", "yuzhang"],
+    ["xincheng", "hanzhong"],
+    ["nanjun", "badong"],
     ["changsha", "wuling"], ["changsha", "lingling"], ["changsha", "guiyang"], ["changsha", "yuzhang"],
     ["wuling", "lingling"], ["lingling", "guiyang"], ["lingling", "cangwu"], ["guiyang", "nanhai"], ["guiyang", "cangwu"],
     // 양주
-    ["jiujiang", "danyang"], ["jiujiang", "lujiang"], ["danyang", "lujiang"], ["danyang", "wujun"], ["danyang", "guangling"],
-    ["lujiang", "yuzhang"], ["kuaiji", "wujun"], ["wujun", "guangling"],
+    ["jiujiang", "lujiang"], ["danyang", "wujun"],
+    ["kuaiji", "wujun"],
     // 익주, 남중
     ["hanzhong", "guanghan"], // 금우도: 가맹관, 검각
     ["guanghan", "shujun"], ["bajun", "guanghan"], ["bajun", "shujun"], ["bajun", "badong"],
@@ -333,7 +330,7 @@
     // 교주
     ["nanhai", "cangwu"], ["cangwu", "jiaozhi"], ["jiaozhi", "rinan"],
     // Roads that end at a stronghold: the stronghold guards them as well.
-    ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"], ["danyang", "hefei"],
+    ["zuopingyi", "tongguan"], ["yingchuan", "hulao"], ["bajun", "jiameng"], ["hefei", "ruxu"], // 합비에서 유수구로
   ];
 
   // The painted terrain map (assets/map/terrain_*.jpg, 2048 x 2048, one for
@@ -399,6 +396,11 @@
       rinan: [774, 1997], hulao: [1175, 630], hangu: [1101, 627], tongguan: [1021, 642],
       chencang: [844, 675], yangping: [711, 761], jiameng: [703, 833], jiange: [673, 868],
       yiling: [1115, 1015], yijing: [1317, 306], hefei: [1475, 883],
+      // Ports, as the user placed them (tools/map-editor.html).
+      chibi: [1293, 1036], wulin: [1258, 1048], chanling: [1169, 1094], baqiu: [1216, 1178],
+      niuzhu: [1585, 876], louxian: [1777, 879], shangyu: [1852, 961],
+      changyang: [1682, 381], tajin: [1731, 292], liekou: [1923, 372],
+      ruxu: [1532, 905], guabu: [1592, 838],
     },
   };
 

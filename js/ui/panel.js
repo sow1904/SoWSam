@@ -298,7 +298,7 @@
   }
   function fortSummary(f) {
     const ends = f.road.map((id) => state.cities[id].name);
-    const between = ends.length > 2 ? `${ends[0]}에서 ${S.ro(ends.slice(1).join("·"))} 가는 길` : `${ends.join("–")} 사이 길`;
+    const between = ends.length > 2 ? `${ends[0]}에서 ${S.ro(ends.slice(1).join("·"))} 가는 길` : ends.length === 1 ? `${ends[0]} 곁` : `${ends.join("–")} 사이 길`;
     const ally = f.owner && S.allied(state, state.playerForce, f.owner) ? " · 동맹" : "";
     let html = `<h2>${f.name}<span class="badge" style="--force:${UI.forceColor(f.owner)}">${f.built ? (f.owner ? S.forceName(state, f.owner) : "비어 있음") : "터"}${ally}</span>${f.built ? UI.corpsFlagOf(f) : ""}</h2>` +
       `<div class="cinfo"><div>${S.FORT_KINDS[f.kind]} · ${between}</div><div>소속: ${state.cities[f.home].name}</div></div>`;
