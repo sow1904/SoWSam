@@ -23,16 +23,11 @@
   S.SIEGE_BREAK = { troops: 0.5, morale: 30 };
   S.HOME_GROUND = 1.15; // a relief army fights on ground it knows
 
-  // Links of the network that cross or follow a great river, or the sea: an
-  // army that comes this way must land (상륙). A road split by a fort is
-  // listed by its pieces.
-  const WATER = {};
-  for (const [a, b] of [
-    // 장강과 바다는 항구에서 항구로만 건넌다 (js/forts.js, S.PORT_WATERS).
-    // 한수: 번성에서 양양으로 건넌다
-    ["xinye", "xiangyang"],
-  ]) WATER[S.roadKey(a, b)] = true;
-  S.isWater = (a, b) => !!WATER[S.roadKey(a, b)] || S.isPortLink(a, b);
+  // Links of the network on the water: an army that comes this way must land
+  // (상륙). The great river and the sea are crossed only from port to port
+  // (js/forts.js, S.PORT_WATERS); every other road is on land (the 한수 at
+  // 번성 included, by the user's choice).
+  S.isWater = (a, b) => S.isPortLink(a, b);
   // Sea routes.
   S.isSea = (a, b) => S.portWaters(a, b) === "sea";
   S.waterLink = (state, a, b) => S.isWater(a, b);
