@@ -1057,7 +1057,10 @@
       }
     }
     const speed = S.unitSpeed(counts);
-    const days = S.travelDays(way.km, speed);
+    // On a voyage the ships set the pace (js/ships.js): 몽충 quick, 누선 slow.
+    const sail = portId ? S.fleetTrait(S.shipMix(state.forts[portId]), "speed") : 1;
+    const wet = portId ? way.path.slice(1).reduce((s, id, i) => s + (S.isPortLink(way.path[i], id) ? S.legKm(state, way.path[i], id) : 0), 0) : 0;
+    const days = S.travelDays(way.km - wet + wet * sail, speed);
     const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path), S.landDays(state, way.path, speed));
     // The cities on the way supply what they can, the border first (js/war.js).
     const fromHere = S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed, true) : foodNeed;

@@ -373,7 +373,8 @@
     const g = shoreGuard(state, p);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     const aPow = navalPower(state, m.force, m.troops, crew, 30, m.train || 50, odds.aFleet, odds.dFleet, 100);
-    const dPow = navalPower(state, p.owner, odds.dTroops, g.defs, 40, p.train, odds.dFleet, odds.aFleet, 100);
+    // 몽충 hunt down a fleet going by; 누선 are slow to come about.
+    const dPow = navalPower(state, p.owner, odds.dTroops, g.defs, 40, p.train, odds.dFleet, odds.aFleet, 100) * (1 + S.fleetTrait(odds.dFleet, "chase"));
     const I = S.INTERCEPT;
     const lossA = Math.min(Math.floor(m.troops * I.most), Math.round(dPow * S.LANDING.rate * I.days * rnd()));
     const lossD = Math.min(odds.dTroops, Math.round(aPow * S.LANDING.rate * I.days * rnd()));

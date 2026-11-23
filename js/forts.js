@@ -130,7 +130,7 @@
     f.shipsOf = f.owner;
     if (!f.owner) return;
     const kind = ["louchuan", "douhan", "mengchong"].find((k) => S.canBuildShip(state, f, k)) || "mengchong";
-    S.addShips(state, f, kind, Math.round(S.portMax(state, f) * S.PORT.start));
+    S.addShips(state, f, kind, Math.round(S.portMax(state, f) * S.PORT.start / S.SHIPS[kind].room));
   }
   // The places a stronghold's roads join: [a, b] or [a, b1, b2, ...].
   S.siteRoad = (site) => [site[2], ...[].concat(site[3] == null ? [] : site[3])];

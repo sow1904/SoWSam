@@ -136,11 +136,11 @@
     const ai = S.corpsRunsItself && S.corpsRunsItself(state, f.owner, S.placeCorps(state, f));
     const cur = o ? `${S.unitName(o.kind)} 병사 ${fmt(Math.ceil(o.left))}명분 남음 (한 달에 최대 ${fmt(S.shipRate(state, f, o.kind))}명분)` : "없음";
     return `<h3>함선 건조${helpTip(H.ships)}</h3>` +
-      `<div class="row"><label>함대</label><span>${UI.fleetText(f)} <span class="hint">(${fmt(f.ships || 0)} / ${fmt(S.portMax(state, f))}명분, 유지비 매달 금 ${S.shipUpkeep(f)})</span></span></div>` +
+      `<div class="row"><label>함대</label><span>${UI.fleetText(f)} <span class="hint">(병사 ${fmt(f.ships || 0)}명, 자리 ${fmt(Math.round(S.roomUsed(f)))} / ${fmt(S.portMax(state, f))}, 유지비 매달 금 ${S.shipUpkeep(f)})</span></span></div>` +
       `<div class="row"><label>건조 중</label><span>${cur}${o && !ai ? ` <button data-action="stopShips">멈춤</button>` : ""}</span></div>` +
       (ai ? `<p class="hint">도독에게 맡긴 군단의 항구는 도독이 알아서 짓습니다.</p>` :
         `<div class="row"><label>새 건조</label><span><select id="shipKind">${kinds.map((k) => `<option value="${k}">${S.unitName(k)} (100명분에 ${S.shipCostText(k, 100)})</option>`).join("")}</select> ` +
-        `<input id="shipN" type="number" min="100" step="500" value="${Math.max(500, S.portMax(state, f) - (f.ships || 0))}" style="width:6em"> 명분 <button data-action="orderShips">건조</button></span></div>`);
+        `<input id="shipN" type="number" min="100" step="500" value="${Math.max(500, Math.round(S.roomFree(state, f)))}" style="width:6em"> 명분 <button data-action="orderShips">건조</button></span></div>`);
   }
   // Moving the force capital here.
   function capitalRow(c) {
@@ -325,7 +325,7 @@
     }
     html += `<div class="stats">` + stat("병력", UI.troopsText(f)) + stat("훈련", f.train) +
       stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) +
-      (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 / ${S.portMax(state, f).toLocaleString()}`) : "") + `</div>` +
+      (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 (자리 ${Math.round(S.roomUsed(f)).toLocaleString()} / ${S.portMax(state, f).toLocaleString()})`) : "") + `</div>` +
       (f.kind === "port" && f.owner && (UI.mine(f) || !UI.guess(f)) ? `<p class="hint">함대: ${UI.fleetText(f)}</p>` : "");
     const why = f.kind === "pass" ? "지형이 험해 지키기 쉽습니다."
       : f.kind === "port" ? `강 건너 항구로 출진할 때는 이 항구의 배에 태울 수 있는 만큼만 건넙니다. 배는 건조 명령에 따라 ${state.cities[f.home].name}의 금과 목재로 짓고, 유지비도 그 도시가 냅니다(최대 조선 1단계마다 ${S.PORT.per.toLocaleString()}명분). ` +
