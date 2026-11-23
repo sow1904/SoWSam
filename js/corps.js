@@ -240,7 +240,7 @@
     return m.troops;
   }
   // The cap the seat will have once it is a seat no longer.
-  S.garrisonCapOf = (state, c) => Math.round(S.WAR.cap.base + c.pop * S.WAR.cap.pop);
+  S.garrisonCapOf = (state, c) => S.garrisonNeed(state, c);
 
   S.dissolveCorps = function (state, fid, n, quiet) {
     const f = state.forces[fid];

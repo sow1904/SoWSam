@@ -22,7 +22,20 @@
 (function (S) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const W = S.WAR = {
-    cap: { base: 1000, pop: 0.02 }, // garrison cap: base + people x pop
+    // The garrison a computer city keeps (S.garrisonNeed): an inner city only
+    // keeps order (base + people x pop, more where order is low); a border city
+    // also matches what it sees across the border: top x the largest foe's
+    // garrison, rest x the others, a main army counting seat x; at least min,
+    // at most max. Friendly neighbours (rel) count half.
+    need: { base: 600, pop: 0.004, unrest: 40, unrestMul: 1.5, top: 0.7, rest: 0.15, seat: 0.15, min: 3000, max: 15000, rel: 70 },
+    // Men the seat sends to a border city short of its garrison: when it has
+    // less than short x the need, at most share of what the seat can spare,
+    // at least min men, at most days away.
+    reinforce: { short: 0.8, share: 0.3, min: 1000, days: 30 },
+    // 귀농: a computer corps keeping more men than its gold and harvest can
+    // pay for (over x what it can keep) sends share of the excess home each
+    // month, from the main army; they go back to the fields and the rolls.
+    discharge: { over: 1.1, share: 0.3, min: 500 },
     gold: { keep: 300, perSize: 100 }, // gold a city keeps back
     food: { months: 6, plus: 2000, borderMonths: 24, borderPlus: 15000 }, // food a city keeps back (garrison months + a store)
     camp: 30, // days an army may stay in a city beyond its cap (staging, a city just taken)
@@ -47,7 +60,32 @@
 
   // ---------- garrisons and the main army ----------
   S.isCapitalCity = (state, c) => !!(c && c.owner && S.capitalOf(state, c.owner) === c.id);
-  S.garrisonCap = (state, c) => (S.isSeatCity(state, c) ? Infinity : Math.round(W.cap.base + c.pop * W.cap.pop));
+  S.garrisonCap = (state, c) => (S.isSeatCity(state, c) ? Infinity : S.garrisonNeed(state, c));
+  // The garrison a city needs: to keep order inside, to hold the walls on the
+  // border. The main army answers invasions (S.answerArmy); a garrison only
+  // holds out until it comes.
+  // why: the user's design, after 魏 under 曹操: about 1,000 in an inner
+  // county, 5,000-10,000 on a front, the rest in the central armies.
+  S.garrisonNeed = function (state, c) {
+    const N = W.need;
+    let need = N.base + c.pop * N.pop;
+    if (c.order < N.unrest) need *= N.unrestMul;
+    const seen = [];
+    for (const id of S.links(state, c.id)) {
+      const p = S.place(state, id);
+      if (!p || !p.owner || p.owner === c.owner || S.allied(state, c.owner, p.owner)) continue;
+      let n = Math.max(0, (S.seenTroops ? S.seenTroops(state, c.owner, p) : p.troops) - (p.retainers || 0));
+      if (S.isSeatCity(state, p)) n *= N.seat;
+      if (S.truceLeft(state, c.owner, p.owner) || (S.rel(state, c.owner, p.owner) >= N.rel && !S.atWarWith(state, c.owner, p.owner))) n *= 0.5;
+      seen.push(n);
+    }
+    if (seen.length) {
+      seen.sort((a, b) => b - a);
+      const guard = seen[0] * N.top + seen.slice(1).reduce((s, n) => s + n, 0) * N.rest;
+      need += Math.min(N.max, Math.max(N.min, guard));
+    }
+    return Math.round(need);
+  };
   // A city next to a place of another force (not an ally).
   S.isBorder = (state, c) => S.links(state, c.id).some((n) => {
     const p = S.place(state, n);
@@ -321,6 +359,62 @@
       S.addLog(state, `경계 태세: ${S.corpsLabel(state, fid, k)} 병사 ${m.troops}명이 ${S.forceName(state, th.foe)}의 도강에 대비해 ${S.ro(dest.name)} 향합니다.`,
         fid === state.playerForce ? "sys" : th.foe === state.playerForce ? "threat" : "info");
     }
+  };
+
+  // Each month a computer corps fills border garrisons that are short from
+  // its seat, and sends home the men it cannot pay for (귀농).
+  S.runGarrisons = function (state) {
+    const today = S.today(state);
+    for (const f of Object.values(state.forces)) {
+      if (!f.alive) continue;
+      for (const k of S.corpsList(state, f.id)) {
+        if (!S.corpsRunsItself(state, f.id, k.n)) continue;
+        const seat = k.seat && state.cities[k.seat];
+        if (!seat || seat.owner !== f.id || S.besieged(state, seat.id)) continue;
+        const realm = S.corpsCities(state, f.id, k.n);
+        // Border garrisons short of men.
+        const R = W.reinforce;
+        for (const c of realm) {
+          if (c === seat || S.besieged(state, c.id)) continue;
+          const need = S.garrisonNeed(state, c);
+          const coming = (state.marches || []).filter((m) => m.force === f.id && m.target === c.id && m.kind === "move").reduce((s, m) => s + m.troops, 0);
+          if (c.troops + coming >= need * R.short) continue;
+          const spare = Math.floor(S.marchable(seat) - Math.max(W.expedition.guardMin, seat.troops * W.expedition.guard));
+          const send = Math.min(need - c.troops - coming, Math.floor(spare * R.share));
+          if (send < R.min) continue;
+          const route = S.route(state, seat.id, c.id, "army");
+          if (!route || route.days > R.days) continue;
+          const counts = S.mixCounts(S.garrisonUnit(seat), send);
+          const unit = S.takeTroops(seat, counts);
+          if (!unit) continue;
+          S.launch(state, { kind: "move", force: f.id, path: route.path, km: route.km, speed: S.unitSpeed(counts),
+            officers: [], troops: S.countsTotal(counts), unit, train: seat.train, origin: seat.id, target: c.id, corps: k.n });
+          c.campUntil = Math.max(c.campUntil || 0, today + route.days + 5); // not sent back before it arrives
+          note("REINFORCE");
+        }
+        // 귀농: more men than the corps can pay for.
+        const D = W.discharge;
+        const keep = S.armyKeep(state, realm);
+        const men = realm.reduce((s, c) => s + c.troops, 0) +
+          (state.marches || []).filter((m) => m.force === f.id && (m.corps || 1) === k.n && m.troops).reduce((s, m) => s + m.troops, 0);
+        if (men <= keep * D.over) continue;
+        const n = Math.floor(Math.min((men - keep) * D.share, S.marchable(seat) - W.expedition.guardMin));
+        if (n < D.min) continue;
+        S.loseTroops(seat, n);
+        seat.pop += n;
+        seat.manpower = Math.min(S.manpowerMax(seat), seat.manpower + n);
+        note("DISCHARGE");
+        if (f.id === state.playerForce) S.addLog(state, `${S.corpsName(k.n)}이 군량과 금으로 먹일 수 없는 병사 ${n}명을 고향으로 돌려보냈습니다.`, "warn");
+      }
+    }
+  };
+  // How many soldiers these cities can keep for years: the fewer of what
+  // their harvest (and a share of the stores) feeds and what their gold
+  // (and a share of the seat's treasury) pays.
+  S.armyKeep = function (state, cities) {
+    const grain = cities.reduce((s, c) => s + S.harvestOf(state, c) + c.food / S.ECON.stores, 0);
+    const gold = cities.reduce((s, c) => s + S.income(c) - S.salaries(c) + (S.isSeatCity(state, c) ? c.gold / (S.ECON.stores * 12) : 0), 0);
+    return Math.max(0, Math.min(grain * 25 / 12, (gold - 15) * S.ECON.upkeep));
   };
 
   // Is the corps (1군단 if none named) already at war with its main army?

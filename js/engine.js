@@ -1132,16 +1132,16 @@
   // why: the user's design. Under 曹操 魏 kept about 100,000 in the central
   // armies, 5,000-10,000 on each front and about 1,000 in an inner county;
   // the old rates paid for some 10% of the people and the armies grew every year.
-  S.ECON = { upkeep: 50, harvest: 0.5 };
+  S.ECON = { upkeep: 50, harvest: 0.5, stores: 10 }; // stores: years the stores are spread over
   S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold") * S.houseGold(c) * (S.techMul ? S.techMul(c, "salt") : 1));
   S.upkeep = (c) => Math.ceil(c.troops / S.ECON.upkeep);
   // The autumn harvest of a city (state: for the year's crop and locusts).
   S.harvestOf = (state, c) => Math.round((c.farm * 9 + c.pop / 50) * (0.5 + c.order / 200) * S.ECON.harvest * S.regionMul(c, "food") *
     S.techMul(c, "irrigation", state) * (S.harvestMul ? S.harvestMul(state, c) : 1));
   // Can the land of these cities feed n more soldiers for years to come:
-  // a year's harvest and a third of the stores against a year's eating.
+  // a year's harvest and a share of the stores against a year's eating.
   S.canFeed = (state, cities, n) => {
-    const grain = cities.reduce((s, c) => s + S.harvestOf(state, c) + c.food / 3, 0);
+    const grain = cities.reduce((s, c) => s + S.harvestOf(state, c) + c.food / S.ECON.stores, 0);
     const eat = cities.reduce((s, c) => s + S.foodUse(c.troops), 0) * 12 + S.foodUse(n) * 12;
     return grain >= eat;
   };
@@ -1191,6 +1191,7 @@
     }
     if (S.runIntel) S.runIntel(state); // what each force believes of the others (js/intel.js)
     if (S.runAlert) S.runAlert(state); // men sent ahead to the river bank (js/war.js)
+    if (S.runGarrisons) S.runGarrisons(state); // border garrisons filled, men the realm cannot pay for sent home (js/war.js)
     if (S.runTribute) S.runTribute(state); // surplus to the capital (js/war.js)
     if (S.runCorps) S.runCorps(state); // corps keep seats and heads; computer forces cut new ones (js/corps.js)
     if (S.runPeace) S.runPeace(state); // wars that both sides would end (js/war.js)
