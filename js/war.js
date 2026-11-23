@@ -56,7 +56,10 @@
     capitalPull: 0.25, // a campaign leans toward the enemy capital: taking it shakes the realm
     newsKm: 80, // km a day that news of an army travels
     answer: { days: 25, over: 1.3 }, // an army sent to meet an invader: at most this far, this much stronger
-    expedition: { min: 5000, guard: 0.25, guardMin: 3000, chance: 50 },
+    // A main army marches with at least min men and leaves guard of the seat's
+    // (at least guardMin) at home. why: lowered from 5000/3000 when armies
+    // became as small as the economy keeps them (the user's design).
+    expedition: { min: 3000, guard: 0.25, guardMin: 2000, chance: 50 },
     press: { base: 75, weary: 0.8, perCity: 10, morale: 0.8, min: 10, max: 90, troops: 3000, odds: 1.0 }, // % an army goes on after taking a city
     // 경계 태세 (S.runAlert): a main army across the water that could cross
     // within days (in days) is met by men sent ahead to the bank, from a seat
