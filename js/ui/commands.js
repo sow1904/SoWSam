@@ -340,7 +340,7 @@
         `군단은 하루 ${S.SPEED.army}km(기병만이면 ${S.SPEED.cavalry}km, 공성 병기가 섞이면 ${S.SPEED.siege}km)를 행군하고, 도착한 날 그 도시의 병력과 싸웁니다. 군량은 병사 10명당 1에 행군 일수만큼 더 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
           const t = S.place(state, d);
-          return `<option value="${d}">${UI.placeLabel(d)} (${t.owner || t.troops > 0 ? S.forceName(state, t.owner) : "비어 있음"}, ${S.unitName(S.garrisonUnit(t))} ${t.troops})</option>`;
+          return `<option value="${d}">${UI.placeLabel(d)} (${t.owner || t.troops > 0 ? S.forceName(state, t.owner) : "비어 있음"}, ${UI.guess(t) ? UI.troopsText(t) : `${S.unitName(S.garrisonUnit(t))} ${t.troops}`})</option>`;
         }).join("")}</select></div>` +
         `<p class="hint">${UNIT_HINT}</p>` +
         checkList(idle, S.MAX_SORTIE_OFFICERS) +

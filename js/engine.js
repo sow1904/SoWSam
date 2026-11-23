@@ -985,10 +985,12 @@
   S.ruseAttempt = (p) => clamp(p.plot - 40, 0, 60);
   S.ruseChance = (p, w) => clamp(Math.round(40 + (p.plot - (w ? w.wit : 30)) * 1.5), 10, 90);
 
-  // Rough strength comparison used by the UI and the AI.
+  // Rough strength comparison used by the UI and the AI. The defenders are
+  // counted as the attacker believes them to be (js/intel.js).
   S.estimate = function (state, fromCid, targetCid, oids, troops, unit) {
     const from = S.place(state, fromCid);
     const t = S.place(state, targetCid);
+    const seen = S.seenTroops ? S.seenTroops(state, from.owner, t) : t.troops;
     const att = sideStats(oids.map((id) => state.officers[id]), 30);
     const def = sideStats(S.serving(state, targetCid).filter((o) => o.force === t.owner), t.owner ? 40 : 35);
     const gu = S.garrisonUnit(t);
@@ -996,7 +998,7 @@
     const gear = S.gearOf(unit);
     const wb = S.gearWall((1 + Math.max(0, t.wall - S.gearBatter(gear) * 15) / 2000) * gentryDefense(t), gear);
     const a = power(troops, att, from.train, 1) * S.unitMul(unit, gu, "siegeA", 1) * S.gearKill(gear) * (t.stakes > 0 && S.STAKES ? S.STAKES.blunt : 1);
-    const d = power(t.troops, def, t.train, wb) * S.unitMul(gu, unit, "siegeD", 1) * S.houseDefense(t, state) * S.gearSuppress(gear);
+    const d = power(seen, def, t.train, wb) * S.unitMul(gu, unit, "siegeD", 1) * S.houseDefense(t, state) * S.gearSuppress(gear);
     return { att: Math.round(a), def: Math.round(d), ratio: d > 0 ? a / d : 99 };
   };
 
@@ -1170,6 +1172,7 @@
       returnManpower(c, S.manpowerRegen(c));
       S.produceRes(c);
     }
+    if (S.runIntel) S.runIntel(state); // what each force believes of the others (js/intel.js)
     if (S.runTribute) S.runTribute(state); // surplus to the capital (js/war.js)
     if (S.runCorps) S.runCorps(state); // corps keep seats and heads; computer forces cut new ones (js/corps.js)
     if (S.runPeace) S.runPeace(state); // wars that both sides would end (js/war.js)

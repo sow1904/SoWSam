@@ -124,7 +124,7 @@
     const p = S.place(state, id);
     const tip = helpTip(H.garrison);
     const pools = Object.entries(p.wounded || {}).filter(([, w]) => w && w.n > 0);
-    return `<div class="row"><label>수비 병력${tip}</label><span>${S.mixText(S.garrisonUnit(p), p.troops)}</span></div>` +
+    return `<div class="row"><label>수비 병력${tip}</label><span>${UI.guess(p) ? `${UI.troopsText(p)} <span class="hint">(추정)</span>` : S.mixText(S.garrisonUnit(p), p.troops)}</span></div>` +
       (pools.length ? `<div class="row"><label>부상병${helpTip(H.wounded)}</label><span>${pools.map(([k, w]) => `${S.WOUND_CARE[k]} ${fmt(w.n)}`).join(" · ")}</span></div>` : "");
   }
   // Moving the force capital here.
@@ -177,7 +177,7 @@
   function neighbours(p) {
     return `<h3>길로 이어진 곳</h3><div class="links">${S.links(state, p.id).map((n) => {
       const nc = S.place(state, n);
-      return `<button data-action="select" data-city="${n}" style="border-left:4px solid ${UI.forceColor(nc.owner)}">${nc.name}${S.isFort(state, n) ? " (" + S.FORT_KINDS[nc.kind] + ")" : ""} ${fmt(nc.troops)}</button>`;
+      return `<button data-action="select" data-city="${n}" style="border-left:4px solid ${UI.forceColor(nc.owner)}">${nc.name}${S.isFort(state, n) ? " (" + S.FORT_KINDS[nc.kind] + ")" : ""} ${UI.troopsText(nc, true)}</button>`;
     }).join("")}</div>`;
   }
   function situation(p) {
@@ -272,8 +272,8 @@
     return `<h2>${c.name}${cap}<span class="badge" style="--force:${UI.forceColor(c.owner)}">${S.forceName(state, c.owner)}${ally}</span>${UI.corpsFlagOf(c)}</h2>` +
       `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
       `<div class="stats">` +
-      (S.isSeatCity(state, c) ? stat("주력군", c.troops.toLocaleString())
-        : stat("수비대", `${c.troops.toLocaleString()}/${S.garrisonCap(state, c).toLocaleString()}`)) + stat("훈련", c.train) +
+      (S.isSeatCity(state, c) ? stat("주력군", UI.troopsText(c))
+        : stat("수비대", UI.guess(c) ? UI.troopsText(c) : `${c.troops.toLocaleString()}/${S.garrisonCap(state, c).toLocaleString()}`)) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
       (own && c.sent ? stat("지난달 상납", `금 ${fmt(c.sent.gold)} · 군량 ${fmt(c.sent.food)}`) : "") +
       stat("인구", c.pop.toLocaleString()) + stat("치안", c.order) +
@@ -289,7 +289,7 @@
       `</div>` +
       `<h3>호족${own ? helpTip(`${H.gentry} 협력 목표치 ${Math.round(S.consentTarget(state, c))}.`) : ""}</h3><div class="stats">` +
       stat("호족 세력", Math.round(c.gentry)) + stat("호족 협력", Math.round(c.consent)) +
-      stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString()) +
+      (UI.guess(c) ? "" : stat("호족 사병", c.retainers.toLocaleString()) + stat("출진 가능", S.marchable(c).toLocaleString())) +
       (own && c.cut > 0.05 ? stat("반발 위험", `월 ${S.unrestChance(c).toFixed(1)}%`) : "") +
       (own && S.cityHead(state, c) && S.rebelChance(state, S.cityHead(state, c), c) >= 0.1 ? stat("태수 반란", `월 ${S.rebelChance(state, S.cityHead(state, c), c)}%`) : "") +
       `</div>` +
@@ -307,7 +307,7 @@
         `축성 특기가 있는 무장이 ${ends.join(", ")} 중 한 곳에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>` +
         `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
     }
-    html += `<div class="stats">` + stat("병력", f.troops.toLocaleString()) + stat("훈련", f.train) +
+    html += `<div class="stats">` + stat("병력", UI.troopsText(f)) + stat("훈련", f.train) +
       stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) +
       (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 / ${S.portMax(state, f).toLocaleString()}`) : "") + `</div>`;
     const why = f.kind === "pass" ? "지형이 험해 지키기 쉽습니다."

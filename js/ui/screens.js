@@ -54,7 +54,7 @@
       ["체제", (r) => S.regime(state, r.f.id).label],
       ["수도", (r) => (state.cities[S.capitalOf(state, r.f.id)] || {}).name || "-"],
       ["도시", (r) => r.t.cities], ["무장", (r) => r.t.officers],
-      ["병력", (r) => r.t.troops, (r) => fmt(r.t.troops)], ["병역 인구", (r) => r.t.manpower, (r) => fmt(r.t.manpower)],
+      ["병력", (r) => UI.forceTroops(r.f.id, r.t.troops).n, (r) => UI.forceTroops(r.f.id, r.t.troops).text], ["병역 인구", (r) => r.t.manpower, (r) => fmt(r.t.manpower)],
       ["전쟁 피로", (r) => Math.round(r.f.weariness), (r) => `${Math.round(r.f.weariness)} ${S.wearinessLabel(r.f.weariness)}`],
       ["금", (r) => r.t.gold, (r) => fmt(r.t.gold)], ["군량", (r) => r.t.food, (r) => fmt(r.t.food)],
       ["기술", (r) => techText(r.f.id)],
@@ -115,7 +115,7 @@
         const cd = S.pactCooldown(state, me, f.id);
         const sw = S.swappable(state, me, f.id);
         return `<tr><td>${swatch(f)}${f.name}군${f.emperor ? " (황제)" : ""}</td><td>${state.officers[f.ruler].name}</td>` +
-          `<td>${t.cities}</td><td>${fmt(t.troops)}</td><td>${relCell(S.rel(state, me, f.id))}</td>` +
+          `<td>${t.cities}</td><td>${UI.forceTroops(f.id, t.troops).text}</td><td>${relCell(S.rel(state, me, f.id))}</td>` +
           `<td>${S.allied(state, me, f.id) ? `<span class="good">동맹</span> <span class="hint">${S.pactLeft(state, me, f.id)}개월 남음</span>`
             : S.truceLeft(state, me, f.id) ? `휴전 <span class="hint">${S.truceLeft(state, me, f.id)}개월 남음</span>`
             : S.warRecordOf(state, me, f.id) ? `<span class="bad">교전 중</span>` : cd ? `<span class="hint">파기 후 ${cd}개월</span>` : "-"}</td>` +
@@ -223,7 +223,7 @@
       ["도시", (c) => c.name, (c) => `${S.isCapital(state, c.id) ? `<span class="capstar">★</span>` : ""}<b>${c.name}</b>`],
       ...(scope === "all" ? [["세력", (c) => (c.owner ? state.forces[c.owner].name : ""), (c) => ownerCell(c.owner)]] : []),
       ["주", (c) => S.PROVINCES[c.prov]], ["군현", (c) => S.fullName(c)],
-      ["병력", (c) => c.troops, (c) => fmt(c.troops)], ["훈련", (c) => c.train],
+      ["병력", (c) => UI.seen(c), (c) => UI.troopsText(c, true)], ["훈련", (c) => c.train],
       ["금", (c) => c.gold, (c) => fmt(c.gold)], ["군량", (c) => c.food, (c) => fmt(c.food)],
       ["월 수지", (c) => (c.owner ? S.balance(c) : 0), (c) => (c.owner ? UI.signed(S.balance(c)) : "-")],
       ["인구", (c) => c.pop, (c) => fmt(c.pop)], ["치안", (c) => c.order],

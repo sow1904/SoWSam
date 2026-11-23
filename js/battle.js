@@ -291,6 +291,7 @@
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
+    if (S.intelReveal) S.intelReveal(state, m.force, m.target); // the walls are in plain sight now
     b.att.fortune = fortune(state);
     say(b, `${S.forceName(state, m.force)} ${S.unitName(m.unit)} ${m.troops}명이 ${t.name}(${S.forceName(state, t.owner)}, 수비 ${S.unitName(S.garrisonUnit(t))} ${t.troops}명)${S.landingLink(m.path) ? "에 물길로 다다랐습니다" : "을 에워쌌습니다"}.`);
     if (t.troops <= 0 && !defs.length) { say(b, `${t.name}에는 지키는 병사가 없습니다.`); b.ending = "capture"; }
@@ -364,7 +365,10 @@
   // Whether the defenders of a place would meet a crossing army on the water.
   //   ratio: their strength on the water against the attackers'
   //   onWater: the attackers on the water (S.waterMen); aw in the result
-  S.landingOdds = function (state, targetId, force, officers, troops, train, morale, onWater) {
+  //   view: how the one judging sees each side, as multipliers
+  //     {d, dq} on the defenders' men and strength, {a, aq} on the attackers'
+  S.landingOdds = function (state, targetId, force, officers, troops, train, morale, onWater, view) {
+    const v = Object.assign({ d: 1, dq: 1, a: 1, aq: 1 }, view);
     const t = S.place(state, targetId);
     const g = shoreGuard(state, t);
     const defs = g.defs;
@@ -372,28 +376,31 @@
     const aFleet = S.fleet(state, force, officers);
     const dFleet = t.owner ? S.fleet(state, t.owner, defs) : "mengchong";
     const dTroops = Math.floor(Math.min(g.cap, g.pool * S.LANDING.share));
-    const a = navalPower(aw, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale);
-    const d = navalPower(dTroops, defs, 40, t.train, dFleet, aFleet, 100);
+    const a = navalPower(aw * v.a, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale) * v.aq;
+    const d = navalPower(dTroops * v.d, defs, 40, t.train, dFleet, aFleet, 100) * v.dq;
     const ratio = a > 0 ? d / a : 99;
     const policy = S.defensePolicy(state, targetId);
     const need = policy === "intercept" ? S.LANDING.keen : S.LANDING.favour;
     const commit = !!t.owner && policy !== "hold" && dTroops >= S.LANDING.min && ratio >= need;
-    return { commit, ratio, aFleet, dFleet, dTroops, aw };
+    return { commit, ratio, aFleet, dFleet, dTroops, aw, view: v };
   };
   // How a landing would likely go, without the luck: for the attack window
-  // and the computer's plans.
+  // and the computer's plans. The defenders are as the attacker believes
+  // them to be (js/intel.js), so a plan can be badly wrong.
   //   pass: whether the army gets ashore; left: its men then; lostD: the
   //   defenders lost on the water
   S.landingForecast = function (state, targetId, force, officers, troops, train, onWater) {
-    const o = S.landingOdds(state, targetId, force, officers, troops, train, 100, onWater);
-    if (!o.commit) return Object.assign(o, { pass: o.aw > 0, left: o.aw > 0 ? troops : 0, lostD: 0 });
     const t = S.place(state, targetId);
+    const view = S.seenTroops && t.troops > 0 ? { d: S.seenTroops(state, force, t) / t.troops, dq: S.seenFleet(state, force, t) } : null;
+    const o = S.landingOdds(state, targetId, force, officers, troops, train, 100, onWater, view);
+    if (!o.commit) return Object.assign(o, { pass: o.aw > 0, left: o.aw > 0 ? troops : 0, lostD: 0 });
     const defs = shoreGuard(state, t).defs;
     const ashore = troops - o.aw; // waiting on the bank
+    o.dTroops = Math.round(o.dTroops * o.view.d); // as believed
     let a = o.aw, d = o.dTroops, am = 100, dm = 100;
     for (let day = 1; ; day++) {
       const aPow = navalPower(a, officers, 30, train, o.aFleet, o.dFleet, am);
-      const dPow = navalPower(d, defs, 40, t.train, o.dFleet, o.aFleet, dm);
+      const dPow = navalPower(d, defs, 40, t.train, o.dFleet, o.aFleet, dm) * o.view.dq;
       const lossD = Math.min(d, aPow * S.LANDING.rate), lossA = Math.min(a, dPow * S.LANDING.rate);
       a -= lossA; d -= lossD;
       am += swing(lossA, lossD, 8); dm += swing(lossD, lossA, 8);
@@ -405,7 +412,9 @@
   };
   function startLanding(state, b, t, atk) {
     const A = b.att;
-    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale, A.shipPort ? A.ships : S.waterMen(state, A.path, A.force, A.troops));
+    // The defenders judge the fleet by one look as it comes (js/intel.js).
+    const look = S.sizeUpFleet && t.owner ? S.sizeUpFleet(state, t.owner, b.place, A.force, (state.year * 12 + state.month) * 31 + (state.day || 0)) : null;
+    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale, A.shipPort ? A.ships : S.waterMen(state, A.path, A.force, A.troops), look && { a: look.t, aq: look.q });
     if (!odds.commit) {
       shipsHome(state, b);
       if (t.owner) say(b, `${S.josa(S.forceName(state, t.owner), "은", "는")} 물가를 지키지 않고 성에 틀어박혔습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} 무사히 뭍에 올랐습니다.`);

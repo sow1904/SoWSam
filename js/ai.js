@@ -78,7 +78,7 @@
   function guardNeed(state, c, except) {
     const can = S.links(state, c.id).map((id) => S.place(state, id))
       .filter((p) => p && p.owner && p.owner !== c.owner && p.id !== except && !S.allied(state, c.owner, p.owner))
-      .map((p) => Math.max(0, p.troops - (p.retainers || 0))).sort((a, b) => b - a);
+      .map((p) => Math.max(0, S.seenTroops(state, c.owner, p) - (p.retainers || 0))).sort((a, b) => b - a);
     const rest = can.slice(1).reduce((s, n) => s + n, 0);
     return Math.max(S.AI_GUARD.min, Math.round((can[0] || 0) * S.AI_GUARD.top + rest * S.AI_GUARD.rest));
   }
@@ -196,7 +196,7 @@
     let best = null;
     for (const c of S.citiesOf(state, fid)) {
       for (const t of attackable(state, c)) {
-        const defense = t.troops * (1 + t.wall / 2000) + 500;
+        const defense = S.seenTroops(state, fid, t) * (1 + t.wall / 2000) + 500;
         const score = c.troops / defense + (t.owner ? 0 : 0.3) + S.courtPull(state, fid, t) + S.titlePull(state, fid, t);
         if (!best || score > best.score) best = { target: t.id, stage: c.id, score };
       }
@@ -228,7 +228,7 @@
       const land = way && S.landingLink(way.path) ? S.landingForecast(state, t.id, c.owner, team, troops, c.train, S.waterMen(state, way.path, c.owner, troops)) : null;
       if (land && !land.pass) continue;
       const est = S.estimate(state, c.id, t.id, ids, land ? land.left : troops, unit);
-      if (land && land.lostD) est.ratio *= t.troops / Math.max(1, t.troops - land.lostD);
+      if (land && land.lostD) { const seen = S.seenTroops(state, c.owner, t); est.ratio *= seen / Math.max(1, seen - land.lostD); }
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull + S.titlePull(state, c.owner, t); // vacant cities are easy pickings
       // A fierce officer inside who may sortie makes the place look harder.

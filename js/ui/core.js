@@ -25,6 +25,19 @@
   UI.bind((s) => { state = s; });
 
   UI.fmt = (n) => (n >= 10000 ? (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "만" : String(n));
+  // Others' men are known only as the player's force believes (js/intel.js).
+  //   UI.guess: whether the place's numbers are a guess; UI.seen: the men believed
+  const round2 = (n) => { const k = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, n))) - 1)); return Math.round(n / k) * k; };
+  UI.guess = (p) => !!S.guessed && S.guessed(state, state.playerForce, p);
+  UI.seen = (p) => (UI.guess(p) ? round2(S.seenTroops(state, state.playerForce, p)) : p.troops);
+  UI.troopsText = (p, short) => (UI.guess(p) ? (short ? "~" : "약 ") + UI.fmt(UI.seen(p)) : (short ? UI.fmt(p.troops) : p.troops.toLocaleString()));
+  // A whole force's men, as believed.
+  UI.forceTroops = (fid, exact) => {
+    const places = S.citiesOf(state, fid).concat(Object.values(state.forts || {}).filter((f) => f.owner === fid));
+    if (!places.some(UI.guess)) return { n: exact, text: UI.fmt(exact) };
+    const n = round2(places.reduce((s, p) => s + UI.seen(p), 0) + Math.max(0, exact - places.reduce((s, p) => s + p.troops, 0)));
+    return { n, text: "약 " + UI.fmt(n) };
+  };
   UI.forceColor = (fid) => (fid && state.forces[fid] ? state.forces[fid].color : "#9c9c9c");
   // A game may have no player at all (관전): then nothing is "mine".
   // home: the player's force holds it. mine: the player gives its orders
