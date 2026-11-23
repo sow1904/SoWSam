@@ -44,6 +44,11 @@
     want: { top: 1.3, rest: 0.5, min: 5000 },
     gold: { keep: 300, perSize: 100 }, // gold a city keeps back
     food: { months: 6, plus: 2000, borderMonths: 24, borderPlus: 15000 }, // food a city keeps back (garrison months + a store)
+    // 군량 수송: a computer seat sends grain to a city of its corps with less
+    // than short months of food for its garrison, up to fill months, from what
+    // the seat holds beyond its own keep (S.keepFood); and gold the same way
+    // to a city whose income does not pay its garrison (at least goldMin).
+    supply: { short: 4, fill: 8, min: 500, goldMin: 50 },
     camp: 30, // days an army may stay in a city beyond its cap (staging, a city just taken)
     // A conquered city facing the foe keeps an occupation force for a year
     // (a share of the army that took it), so the foe cannot simply walk back in.
@@ -164,6 +169,40 @@
       // computer's send what they do not need on to the main army.
       if (!camping(state, c) && S.corpsRunsItself(state, c.owner, S.cityCorps(state, c)))
         sendToCapital(state, c, S.overCap(state, c) - Math.round(S.garrisonCap(state, c) * hold));
+    }
+    // 군량 수송: the seat feeds the garrisons its land cannot.
+    // why: the user's design. The stores gather at the seat; a border city
+    // holding thousands on a poor harvest is fed from there, not left to starve.
+    const U = W.supply;
+    for (const c of S.cityList(state)) {
+      if (!c.owner || S.isSeatCity(state, c) || S.besieged(state, c.id) || !c.troops) continue;
+      const k = S.cityCorps(state, c);
+      if (!S.corpsRunsItself(state, c.owner, k)) continue;
+      const use = S.foodUse(c.troops);
+      if (c.food >= use * U.short) continue;
+      const capId = S.seatOfCity(state, c);
+      const cap = capId && state.cities[capId];
+      if (!cap || S.besieged(state, capId) || !S.route(state, capId, c.id, "cargo")) continue;
+      const n = Math.min(Math.round(use * U.fill - c.food), Math.floor(cap.food - S.keepFood(state, cap)));
+      if (n < U.min) continue;
+      cap.food -= n;
+      c.food += n;
+      note("SUPPLY");
+    }
+    // ... and pays the garrisons the city's own gold cannot.
+    for (const c of S.cityList(state)) {
+      if (!c.owner || S.isSeatCity(state, c) || S.besieged(state, c.id)) continue;
+      const short = -S.balance(c);
+      if (short <= 0 || c.gold >= short * U.short) continue;
+      if (!S.corpsRunsItself(state, c.owner, S.cityCorps(state, c))) continue;
+      const capId = S.seatOfCity(state, c);
+      const cap = capId && state.cities[capId];
+      if (!cap || S.besieged(state, capId) || !S.route(state, capId, c.id, "cargo")) continue;
+      const n = Math.min(Math.round(short * U.fill - c.gold), Math.floor(cap.gold - S.keepGold(cap)));
+      if (n < U.goldMin) continue;
+      cap.gold -= n;
+      c.gold += n;
+      note("PAY");
     }
   };
 

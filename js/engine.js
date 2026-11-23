@@ -1131,14 +1131,17 @@
   }
 
   // ---------- turn ----------
-  // Monthly gold income and troop upkeep (1 gold per 50 soldiers).
+  // Monthly gold income and troop upkeep (1 gold per 100 soldiers).
   // The economy, not a cap, decides how large an army a realm can keep: its
-  // gold and its harvest pay for some 4% of its people under arms (more as
-  // the land is developed). Soldiers cost what they cost wherever they are.
+  // gold and its harvest pay for some 5% of its people under arms (more as
+  // the land is developed); a computer corps keeps less when its foes do not
+  // call for more (S.armyWant, js/war.js). Soldiers cost what they cost
+  // wherever they are.
   // why: the user's design. Under 曹操 魏 kept about 100,000 in the central
-  // armies, 5,000-10,000 on each front and about 1,000 in an inner county;
-  // the old rates paid for some 10% of the people and the armies grew every year.
-  S.ECON = { upkeep: 50, harvest: 0.5, stores: 10 }; // stores: years the stores are spread over
+  // armies, 5,000-10,000 on each front and about 1,000 in an inner county.
+  // The harvest was halved for it; upkeep at 1 per 50 starved the small
+  // undeveloped realms of 191 and they could hardly march.
+  S.ECON = { upkeep: 100, harvest: 0.5, stores: 10 }; // stores: years the stores are spread over
   S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold") * S.houseGold(c) * (S.techMul ? S.techMul(c, "salt") : 1));
   S.upkeep = (c) => Math.ceil(c.troops / S.ECON.upkeep);
   // The autumn harvest of a city (state: for the year's crop and locusts).
