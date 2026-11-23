@@ -336,6 +336,60 @@
     };
   }
   S.shoreGuard = shoreGuard;
+  // ---------- 요격 (a fleet passing a hostile port) ----------
+  // A fleet sailing from port to port passes the ports between (S.portsPassed).
+  // The day it passes one held by a force not at peace with it, that port's
+  // fleet may come out (as it would meet a landing: S.landingOdds) and fight
+  // it for days of the voyage (losing at most most of its men); the fleet
+  // then sails on with what is left.
+  // why: the user's design. A river held by the enemy cannot simply be
+  // sailed past (적벽, 하구).
+  S.INTERCEPT = { days: 2, most: 0.6 };
+  const hostilePort = (state, p, fid) => p && p.built && p.kind === "port" && p.owner && p.owner !== fid &&
+    !S.allied(state, fid, p.owner) && !S.truceLeft(state, fid, p.owner) &&
+    !(S.rel(state, fid, p.owner) >= 70 && !S.atWarWith(state, fid, p.owner)) && (p.ships || 0) > 0 && p.troops > 0;
+  S.runIntercepts = function (state) {
+    const now = S.today(state);
+    for (const m of state.marches || []) {
+      if (!(m.troops > 0) || !m.path || m.path.length < 2 || m.arrive <= m.start) continue;
+      const gone = (m.skip || 0) + ((now - m.start) / (m.arrive - m.start)) * m.km;
+      let at = 0;
+      for (let i = 1; i < m.path.length; i++) {
+        const a = m.path[i - 1], b = m.path[i];
+        const leg = S.legKm(state, a, b);
+        if (S.isPortLink(a, b)) {
+          for (const pass of S.portsPassed(a, b)) {
+            if ((m.passed || []).includes(pass.id) || gone < at + leg * pass.at) continue;
+            m.passed = (m.passed || []).concat([pass.id]);
+            const p = S.place(state, pass.id);
+            if (hostilePort(state, p, m.force)) intercept(state, m, p);
+          }
+        }
+        at += leg;
+      }
+    }
+  };
+  function intercept(state, m, p) {
+    const crew = crewOf(state, m.officers, m.force);
+    const odds = S.landingOdds(state, p.id, m.force, crew, m.troops, m.train || 50, 100, m.troops);
+    if (!odds.commit) return;
+    const g = shoreGuard(state, p);
+    const rnd = () => 0.8 + S.rand(state) * 0.4;
+    const aPow = navalPower(m.troops, crew, 30, m.train || 50, odds.aFleet, odds.dFleet, 100);
+    const dPow = navalPower(odds.dTroops, g.defs, 40, p.train, odds.dFleet, odds.aFleet, 100);
+    const I = S.INTERCEPT;
+    const lossA = Math.min(Math.floor(m.troops * I.most), Math.round(dPow * S.LANDING.rate * I.days * rnd()));
+    const lossD = Math.min(odds.dTroops, Math.round(aPow * S.LANDING.rate * I.days * rnd()));
+    m.troops -= lossA;
+    m.wounded = addW(m.wounded, lossA * S.WOUNDED.share, m.unit || S.DEFAULT_UNIT);
+    if (m.ships) m.ships = Math.max(0, m.ships - lossA);
+    shoreLoss(state, p, g, lossD);
+    const fName = S.forceName(state, m.force), pName = S.forceName(state, p.owner);
+    const mine = m.force === state.playerForce || p.owner === state.playerForce;
+    if (mine || lossA >= 1000) S.addLog(state, `요격: ${p.name}의 ${pName} 함대가 지나가던 ${fName} 함대를 덮쳤습니다. ${fName} -${lossA}, ${pName} -${lossD}.`,
+      m.force === state.playerForce ? "warn" : p.owner === state.playerForce ? "sys" : "info");
+    if (S.intelReveal) S.intelReveal(state, m.force, p.id); // the fleet has seen the port's ships
+  }
   // Losses on the water: a port's men first, then its city's; ships too.
   function shoreLoss(state, t, g, n) {
     const here = Math.min(n, t.troops);

@@ -31,16 +31,39 @@
   //   cost: gold per ship (from the port's city); start: ships at the start, of what it can hold
   S.PORT = { cap: 3000, per: 10000, build: 1000, cost: 0.2, start: 0.5 };
   // The waters: every port reaches every other port of the same waters.
+  // Each lists its ports in order along the water, with their place on it:
+  // the 장강 from upstream (west) to its mouth, the coast from south to north
+  // (답진 and 열구 face each other across the sea: neither passes the other).
   // 누현 at the river's mouth belongs to both.
   S.PORT_WATERS = {
-    river: ["wulin", "chanling", "baqiu", "shiyang", "chibi", "wankou", "ruxu", "niuzhu", "guabu", "louxian"],
-    sea: ["louxian", "shangyu", "changyang", "tajin", "liekou"],
+    river: { chanling: 0, baqiu: 1, wulin: 2, chibi: 3, shiyang: 4, chaisang: 5, wankou: 6, ruxu: 7, niuzhu: 8, guabu: 9, louxian: 10 },
+    sea: { shangyu: 0, louxian: 1, changyang: 2, tajin: 3, liekou: 3 },
   };
   const WATERS_OF = {};
-  for (const [w, ids] of Object.entries(S.PORT_WATERS)) for (const id of ids) (WATERS_OF[id] = WATERS_OF[id] || []).push(w);
+  for (const [w, ids] of Object.entries(S.PORT_WATERS)) for (const id of Object.keys(ids)) (WATERS_OF[id] = WATERS_OF[id] || []).push(w);
   // Do two ports share waters (and which)?
   S.portWaters = (a, b) => (WATERS_OF[a] || []).find((w) => (WATERS_OF[b] || []).includes(w)) || null;
   S.isPortLink = (a, b) => a !== b && !!S.portWaters(a, b);
+  // Ships on the water: a voyage is shorter than the road (rough) and eats
+  // less, the boats carrying the stores; on the 장강 the current speeds the
+  // way down (down) and slows the way up (up).
+  // why: the user's design. In these centuries grain and armies went by
+  // water wherever they could: 조조 dug canals to feed his northern wars,
+  // and 왕준's fleet came down the 장강 from 익주 to take 건업 in 280.
+  S.WATERWAY = { rough: 0.6, down: 0.7, up: 1.4 };
+  S.currentMul = (a, b) => {
+    if (S.portWaters(a, b) !== "river") return 1;
+    const R = S.PORT_WATERS.river;
+    return R[b] > R[a] ? S.WATERWAY.down : S.WATERWAY.up;
+  };
+  // The ports a ship sails past between port a and port b, each with how far
+  // along the voyage it lies (0..1).
+  S.portsPassed = function (a, b) {
+    const w = S.portWaters(a, b);
+    if (!w) return [];
+    const O = S.PORT_WATERS[w], lo = Math.min(O[a], O[b]), hi = Math.max(O[a], O[b]);
+    return Object.keys(O).filter((id) => O[id] > lo && O[id] < hi).map((id) => ({ id, at: Math.abs(O[id] - O[a]) / (hi - lo) }));
+  };
   S.isPort = (state, id) => !!(state.forts && state.forts[id] && state.forts[id].kind === "port");
   S.portMax = (state, f) => S.PORT.per * (f.owner && S.lineLevel ? S.lineLevel(state, f.owner, "navy") : 1);
   S.BUILD_COST = 1500;
@@ -70,6 +93,7 @@
       chanling: ["잔릉", "port", "wuling", null, "wuling", 30.05, 112.2, true],
       baqiu: ["파구", "port", "changsha", null, "changsha", 29.37, 113.1, true],
       shiyang: ["석양", "port", "jiangxia", null, "jiangxia", 30.62, 114.28, true],
+      chaisang: ["시상", "port", "yuzhang", null, "yuzhang", 29.72, 116.0, true],
       chibi: ["적벽", "port", "wuchang", null, "wuchang", 29.95, 113.95, true],
       wankou: ["환구", "port", "lujiang", null, "lujiang", 30.5, 117.05, true],
       ruxu: ["유수", "port", "jiujiang", null, "jiujiang", 31.35, 117.9, true], // 유수구: by land to 합비

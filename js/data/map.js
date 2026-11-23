@@ -297,7 +297,7 @@
     // 유주, 요동
     ["zhuo", "guangyang"], ["zhuo", "daijun"], ["guangyang", "daijun"],
     ["guangyang", "liaoxi"], // 노룡새
-    ["liaoxi", "liaodong"], ["liaoxi", "xuantu"], ["liaodong", "xuantu"], ["liaodong", "lelang"], ["lelang", "daifang"],
+    ["liaoxi", "liaodong"], ["liaoxi", "xuantu"], ["liaodong", "lelang"], ["lelang", "daifang"],
     // 기주
     ["weijun", "julu"], ["weijun", "dongjun"], ["weijun", "pingyuan"],
     ["julu", "changshan"], ["julu", "hejian"], ["julu", "pingyuan"],

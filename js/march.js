@@ -39,6 +39,7 @@
   // How rough a link of the network is: a piece of road split by a stronghold
   // is as rough as the road it belongs to.
   S.linkRough = function (state, a, b) {
+    if (S.isPortLink && S.isPortLink(a, b)) return S.WATERWAY.rough; // by ship (js/forts.js)
     const f = (state && state.forts && (state.forts[a] || state.forts[b])) || null;
     if (!f) return ROUGH_KEYED[key(a, b)] || 1;
     const city = f.id === a ? b : a;
@@ -123,7 +124,7 @@
     const ports = Object.values(state.forts || {}).filter((f) => f.built && f.kind === "port" && f.road.length === 1);
     for (const p of ports) {
       link(p.road[0], p.id, 1);
-      for (const q of ports) if (p.id < q.id && S.isPortLink(p.id, q.id)) link(p.id, q.id, 1);
+      for (const q of ports) if (p.id < q.id && S.isPortLink(p.id, q.id)) link(p.id, q.id, S.WATERWAY.rough);
     }
     net = { state, ver: state.fortVer || 0, map: S.MAP, links, rough, km };
     return net;
@@ -143,7 +144,8 @@
     return n.km[k];
   };
   // A leg of a path: along a link if there is one, else across country.
-  S.legKm = (state, a, b) => (a === b ? 0 : S.links(state, a).includes(b) ? S.linkKm(state, a, b) : S.nodeKm(state, a, b));
+  // On the 장강 the current makes the way down shorter than the way up.
+  S.legKm = (state, a, b) => (a === b ? 0 : S.links(state, a).includes(b) ? Math.round(S.linkKm(state, a, b) * S.currentMul(a, b)) : S.nodeKm(state, a, b));
   S.pathKm = (state, path) => path.slice(1).reduce((s, id, i) => s + S.legKm(state, path[i], id), 0);
 
   // Who may pass a place: own cities; own, allied or abandoned strongholds.
@@ -165,7 +167,7 @@
       done.add(cur);
       for (const n of S.links(state, cur)) {
         if (done.has(n) || !S.passable(state, n, owner)) continue;
-        const d = dist[cur] + S.linkKm(state, cur, n);
+        const d = dist[cur] + S.legKm(state, cur, n);
         if (!(n in dist) || d < dist[n]) { dist[n] = d; prev[n] = cur; }
       }
     }
@@ -348,6 +350,7 @@
   S.runMarches = function (state, onEvent) {
     if (!state.marches || !state.marches.length) return;
     const now = S.today(state);
+    if (S.runIntercepts) S.runIntercepts(state); // fleets passing a hostile port (js/battle.js)
     const due = state.marches.filter((m) => m.arrive <= now);
     if (!due.length) return;
     state.marches = state.marches.filter((m) => m.arrive > now);
