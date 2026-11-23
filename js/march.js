@@ -36,10 +36,43 @@
   S.roadKey = key;
   const ROUGH_KEYED = {};
   for (const [k, v] of Object.entries(ROUGH)) ROUGH_KEYED[key(...k.split("|"))] = v;
+  // 수로: land roads along a river or canal boats could use. Armies still
+  // march them, but their food goes by boat: hauled cheaply (as a voyage,
+  // S.WATERWAY.rough) and not counted among the dear days overland (S.HAUL).
+  // This feeds marches, sieges at their end and convoys (수송).
+  // why: the user's design. 손권 held to 합비 because the 유수 and the 소호
+  // carried his supplies there; 조조 came at it the same way down the 와수,
+  // the 회수 and the 비수.
+  S.WATER_ROADS = [
+    ["hefei", "ruxu"], ["jiujiang", "lujiang"], // 유수·소호, 시수·비수 (합비)
+    ["runan", "jiujiang"], ["peiguo", "jiujiang"], ["xiapi", "jiujiang"], ["guangling", "jiujiang"], // 회수와 그 지류
+    ["xiapi", "guangling"], // 한구 (邗溝)
+    ["yingchuan", "runan"], ["chenliu", "yingchuan"], ["chenliu", "qiao"], // 영수, 낭탕거
+    ["nanyang", "xinye"], ["xiangyang", "jiangxia"], ["xiangyang", "xincheng"], ["xincheng", "hanzhong"], // 육수, 한수
+    ["weijun", "dongjun"], // 백구 (白溝)
+    ["changsha", "lingling"], ["lingling", "cangwu"], // 상수, 영거
+    ["jingzhao", "youfufeng"], // 위수
+    ["bajun", "badong"], // 천강
+  ];
+  const WATER_ROAD = {};
+  for (const [a, b] of S.WATER_ROADS) WATER_ROAD[key(a, b)] = true;
+  // Is this link of the network a 수로 (a road along water, or a piece of
+  // one split by a stronghold)?
+  S.isWaterRoad = function (state, a, b) {
+    if (WATER_ROAD[key(a, b)]) return true;
+    const f = state && state.forts && (state.forts[a] || state.forts[b]);
+    if (!f || f.road.length < 2) return false;
+    const city = f.id === a ? b : a;
+    return f.road.some((x) => x !== city && WATER_ROAD[key(city, x)]);
+  };
   // How rough a link of the network is: a piece of road split by a stronghold
   // is as rough as the road it belongs to.
   S.linkRough = function (state, a, b) {
     if (S.isPortLink && S.isPortLink(a, b)) return S.WATERWAY.rough; // by ship (js/forts.js)
+    if (S.isWaterRoad(state, a, b)) return S.WATERWAY.rough * baseRough(state, a, b); // food by boat
+    return baseRough(state, a, b);
+  };
+  function baseRough(state, a, b) {
     const f = (state && state.forts && (state.forts[a] || state.forts[b])) || null;
     if (!f) return ROUGH_KEYED[key(a, b)] || 1;
     const city = f.id === a ? b : a;
@@ -95,7 +128,9 @@
   S.HAUL = { free: 15, grow: 20 };
   S.landDays = function (state, path, kind) {
     let km = 0;
-    for (let i = 1; i < (path || []).length; i++) if (!S.isPortLink(path[i - 1], path[i])) km += S.legKm(state, path[i - 1], path[i]);
+    for (let i = 1; i < (path || []).length; i++) {
+      if (!S.isPortLink(path[i - 1], path[i]) && !S.isWaterRoad(state, path[i - 1], path[i])) km += S.legKm(state, path[i - 1], path[i]);
+    }
     return km ? S.travelDays(km, kind || "army") : 0;
   };
   // How much dearer a day's food is at the end of land days of road.
