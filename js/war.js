@@ -22,7 +22,7 @@
 (function (S) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const W = S.WAR = {
-    cap: { base: 600, pop: 0.015 }, // garrison cap: base + people x pop
+    cap: { base: 1000, pop: 0.02 }, // garrison cap: base + people x pop
     gold: { keep: 300, perSize: 100 }, // gold a city keeps back
     food: { months: 6, plus: 2000, borderMonths: 24, borderPlus: 15000 }, // food a city keeps back (garrison months + a store)
     camp: 30, // days an army may stay in a city beyond its cap (staging, a city just taken)
@@ -34,6 +34,12 @@
     answer: { days: 25, over: 1.3 }, // an army sent to meet an invader: at most this far, this much stronger
     expedition: { min: 5000, guard: 0.25, guardMin: 3000, chance: 50 },
     press: { base: 75, weary: 0.8, perCity: 10, morale: 0.8, min: 10, max: 90, troops: 3000, odds: 1.0 }, // % an army goes on after taking a city
+    // 경계 태세 (S.runAlert): a main army across the water that could cross
+    // within days (in days) is met by men sent ahead to the bank, from a seat
+    // at most reach days away; at most share of what the seat can spare, at
+    // least min men; they stay hold days beyond the cap; rel: forces this
+    // friendly are not watched; guard: the share of the foe's army he keeps home
+    alert: { days: 20, reach: 45, share: 0.5, min: 1500, hold: 60, rel: 70, guard: 0.25 },
   };
   const rulerOf = (state, fid) => (fid && state.forces[fid] ? state.officers[state.forces[fid].ruler] : null);
   // Tallies for balance runs (tools): set S.WARLOG = {} to count why armies stay home.
@@ -247,6 +253,71 @@
     m.kind = "army";
     S.startSiege(state, m);
     return true;
+  };
+
+  // ---------- 경계 태세 (alert on the river) ----------
+  // Every month each computer corps looks across the water: where a foe's
+  // main army could come over within days (as believed, js/intel.js), it
+  // sends men ahead to the bank, enough that the ships there could meet the
+  // crossing (S.landingOdds), and keeps them there beyond the cap while the
+  // threat lasts. Without it the main army only hears of a crossing a day
+  // after it sets out, from a seat far inland, and comes too late.
+  // why: 장료 held 합비 and 조인 held 강릉 with standing armies on the river.
+  S.alertThreats = function (state) {
+    const out = {}; // place id -> {aw, foe}
+    for (const g of Object.values(state.forces)) {
+      if (!g.alive) continue;
+      for (const k of S.corpsList(state, g.id)) {
+        const seat = k.seat && state.cities[k.seat];
+        if (!seat || seat.owner !== g.id) continue;
+        for (const way of S.attackTargets(state, seat.id)) {
+          if (way.days > W.alert.days || !S.landingLink(way.path)) continue;
+          const t = S.place(state, way.id);
+          if (!t || !t.owner || t.owner === g.id || S.allied(state, g.id, t.owner) || S.truceLeft(state, g.id, t.owner)) continue;
+          if (S.rel(state, g.id, t.owner) >= W.alert.rel && !S.atWarWith(state, g.id, t.owner)) continue;
+          const men = (S.seenTroops ? S.seenTroops(state, t.owner, seat) : seat.troops) * (1 - W.alert.guard);
+          const aw = S.waterMen(state, way.path, g.id, Math.round(men));
+          if (!out[t.id] || out[t.id].aw < aw) out[t.id] = { aw, foe: g.id };
+        }
+      }
+    }
+    return out;
+  };
+  S.runAlert = function (state) {
+    const today = S.today(state);
+    const threats = S.alertThreats(state);
+    for (const [tid, th] of Object.entries(threats)) {
+      const t = S.place(state, tid);
+      const fid = t.owner;
+      const k = S.placeCorps(state, t);
+      if (!S.corpsRunsItself(state, fid, k)) continue;
+      const home = t.kind === "port" && state.cities[t.home] && state.cities[t.home].owner === fid ? state.cities[t.home] : null;
+      const dest = home || t;
+      const g = S.shoreGuard(state, t);
+      const coming = (state.marches || []).filter((m) => m.alert && m.force === fid && m.target === dest.id).reduce((s, m) => s + m.troops, 0);
+      const want = Math.min(g.cap, th.aw) / S.LANDING.share;
+      const short = Math.round(want - g.pool - coming);
+      dest.campUntil = Math.max(dest.campUntil || 0, today + W.alert.hold); // the men there stay
+      if (short < W.alert.min) continue;
+      const seatId = S.corpsSeat(state, fid, k);
+      const seat = seatId && state.cities[seatId];
+      if (!seat || seatId === dest.id || S.besieged(state, seatId) || threats[seatId]) continue;
+      const route = S.route(state, seatId, dest.id, "army");
+      if (!route || route.days > W.alert.reach) continue;
+      const spare = Math.floor(S.marchable(seat) - Math.max(W.expedition.guardMin, seat.troops * W.expedition.guard));
+      const send = Math.min(short, Math.floor(spare * W.alert.share));
+      if (send < W.alert.min) continue;
+      const counts = S.mixCounts(S.garrisonUnit(seat), send);
+      const unit = S.takeTroops(seat, counts);
+      if (!unit) continue;
+      const m = S.launch(state, { kind: "move", force: fid, path: route.path, km: route.km, speed: S.unitSpeed(counts),
+        officers: [], troops: S.countsTotal(counts), unit, train: seat.train, origin: seatId, target: dest.id, corps: k });
+      m.alert = true;
+      dest.campUntil = Math.max(dest.campUntil || 0, today + route.days + W.alert.hold);
+      note("ALERT");
+      S.addLog(state, `경계 태세: ${S.corpsLabel(state, fid, k)} 병사 ${m.troops}명이 ${S.forceName(state, th.foe)}의 도강에 대비해 ${S.ro(dest.name)} 향합니다.`,
+        fid === state.playerForce ? "sys" : th.foe === state.playerForce ? "threat" : "info");
+    }
   };
 
   // Is the corps (1군단 if none named) already at war with its main army?

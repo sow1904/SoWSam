@@ -385,7 +385,11 @@
     const free = all.filter((c) => S.cityCorps(state, c) === 1 && !S.isSeatCity(state, c));
     const far = free.filter((c) => { const d = near(c); return d > A.far && d < 999; });
     if (far.length < A.min) return;
-    const seat = far.slice().sort((a, b) => b.size - a.size || S.marchable(b) - S.marchable(a))[0];
+    // The seat faces the foe: a city on the border (a river crossing above all)
+    // before a larger one behind it, so the main army is where it is needed.
+    const foeOver = (id) => S.links(state, id).some((n) => { const p = S.place(state, n); return S.isWater(id, n) && p && p.owner && p.owner !== fid; });
+    const front = (c) => (S.isBorder(state, c) ? 2 : 0) + ([c.id].concat(S.links(state, c.id)).some(foeOver) ? 1 : 0);
+    const seat = far.slice().sort((a, b) => front(b) + b.size - (front(a) + a.size) || S.marchable(b) - S.marchable(a))[0];
     const mine = free.filter((c) => days(c.id, seat.id) < near(c));
     if (mine.length < A.min) return;
     const head = pickHead(state, fid, mine);

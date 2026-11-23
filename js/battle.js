@@ -345,6 +345,7 @@
       cap: t.kind === "port" ? t.ships || 0 : t.owner ? S.ferryOf(state, t.owner) : 0,
     };
   }
+  S.shoreGuard = shoreGuard;
   // Losses on the water: a port's men first, then its city's; ships too.
   function shoreLoss(state, t, g, n) {
     const here = Math.min(n, t.troops);
@@ -431,8 +432,10 @@
     L.day++;
     if (L.aw == null) L.aw = L.aw0 = A.troops; // a save from before
     const g = shoreGuard(state, t);
-    defs = g.defs;
-    L.troops = Math.min(L.troops, g.pool);
+    const R = b.relief;
+    if (!R) L.rel = 0;
+    defs = g.defs.concat(L.rel ? crewOf(state, R.officers, R.force) : []);
+    L.troops = Math.min(L.troops, g.pool + (L.rel || 0));
     L.aw = Math.min(L.aw, A.troops);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
     const aPow = navalPower(L.aw, atk, 30, A.train, L.aFleet, L.dFleet, A.morale);
@@ -448,8 +451,17 @@
     lossD = Math.min(L.troops, lossD);
     lossA = Math.min(L.aw, lossA);
     const gu = S.garrisonUnit(t);
+    // The relief men aboard take their share of the losses.
+    const lossR = L.rel ? Math.min(L.rel, R.troops, Math.round(lossD * L.rel / Math.max(1, L.troops))) : 0;
     L.troops -= lossD;
-    shoreLoss(state, t, g, lossD);
+    if (lossR) {
+      L.rel -= lossR;
+      R.troops -= lossR;
+      b.killedR = (b.killedR || 0) + lossR;
+      hurt(R, lossR, R.unit);
+      if (t.kind === "port") t.ships = Math.max(0, (t.ships || 0) - lossR);
+    }
+    shoreLoss(state, t, g, lossD - lossR);
     L.aw -= lossA;
     A.troops -= lossA;
     if (A.shipPort) A.ships = Math.max(0, (A.ships || 0) - lossA);
@@ -969,6 +981,18 @@
     }
     hold(state, b, ids);
     say(b, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 ${S.placeName(state, m.origin)}에서 달려왔습니다!`);
+    // A fight on the water: as many as the ships can still carry go aboard.
+    const L = b.landing;
+    if (L) {
+      const room = Math.max(0, shoreGuard(state, S.place(state, b.place)).cap - L.troops);
+      const n = Math.min(room, b.relief.troops - (L.rel || 0));
+      if (n > 0) {
+        L.rel = (L.rel || 0) + n;
+        L.troops += n;
+        L.troops0 += n;
+        say(b, `원군 ${n}명이 배에 올라 수비 함대에 합류합니다.${n < m.troops ? ` (배가 모자라 ${m.troops - n}명은 뭍에서 기다립니다)` : ""}`);
+      } else say(b, `배가 모자라 원군은 뭍에서 기다립니다.`);
+    }
     return true;
   };
   // The relief army fights the besiegers in the open and hunts for their supply.
