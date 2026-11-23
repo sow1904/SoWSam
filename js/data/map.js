@@ -297,7 +297,7 @@
     // 유주, 요동
     ["zhuo", "guangyang"], ["zhuo", "daijun"], ["guangyang", "daijun"],
     ["guangyang", "liaoxi"], // 노룡새
-    ["liaoxi", "liaodong"], ["liaoxi", "xuantu"], ["liaodong", "lelang"], ["lelang", "daifang"],
+    ["liaoxi", "xuantu"], ["liaodong", "xuantu"], ["liaodong", "lelang"], ["lelang", "daifang"],
     // 기주
     ["weijun", "julu"], ["weijun", "dongjun"], ["weijun", "pingyuan"],
     ["julu", "changshan"], ["julu", "hejian"], ["julu", "pingyuan"],
@@ -390,17 +390,19 @@
       badong: [948, 968], zangke: [742, 1343], yuexi: [425, 1224], yizhoujun: [423, 1489],
       yongchang: [177, 1471], nanyang: [1164, 780], xinye: [1181, 858], xiangyang: [1165, 937], xincheng: [989, 874],
       jiangxia: [1289, 919], nanjun: [1196, 1050], wuling: [1128, 1160], lingling: [1145, 1342],
-      changsha: [1237, 1223], guiyang: [1260, 1387], wuchang: [1319, 1024], jiujiang: [1466, 823],
-      lujiang: [1470, 983], wujun: [1725, 914], kuaiji: [1798, 980], danyang: [1601, 873],
+      changsha: [1237, 1223], guiyang: [1260, 1387], wuchang: [1321, 1027], jiujiang: [1466, 823],
+      lujiang: [1470, 983], wujun: [1725, 914], kuaiji: [1798, 980], danyang: [1615, 874],
       yuzhang: [1429, 1160], nanhai: [1418, 1610], cangwu: [1161, 1568], jiaozhi: [712, 1813],
       rinan: [774, 1997], hulao: [1175, 630], hangu: [1101, 627], tongguan: [1021, 642],
       chencang: [844, 675], yangping: [711, 761], jiameng: [703, 833], jiange: [673, 868],
       yiling: [1115, 1015], yijing: [1317, 306], hefei: [1475, 883],
       // Ports, as the user placed them (tools/map-editor.html).
-      chibi: [1293, 1036], wulin: [1258, 1048], chanling: [1169, 1094], baqiu: [1216, 1178],
-      niuzhu: [1585, 876], louxian: [1777, 879], shangyu: [1852, 961],
+      chibi: [1288, 1058], wulin: [1249, 1075], chanling: [1185, 1139], baqiu: [1222, 1174],
+      niuzhu: [1578, 882], louxian: [1772, 874], shangyu: [1852, 961],
       changyang: [1682, 381], tajin: [1731, 292], liekou: [1923, 372],
-      ruxu: [1532, 905], guabu: [1592, 838],
+      ruxu: [1559, 914], guabu: [1609, 843],
+      chaisang: [1427, 1075],
+      shiyang: [1315, 997],
     },
   };
 

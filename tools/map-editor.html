@@ -153,7 +153,12 @@
           const water = S.waterLink(fortState, chain[i].id, n.id);
           return `<line class="road${water ? " water" : ""}" x1="${chain[i].x}" y1="${chain[i].y}" x2="${n.x}" y2="${n.y}"/>`;
         }).join("");
-      }).join("");
+      }).join("") +
+        // A port's road to its city (js/forts.js); the waters between ports are not drawn.
+        Object.entries(S.FORT_SITES["main"]).filter(([, f]) => f[1] === "port" && f[3] == null).map(([id, f]) => {
+          const P = nodes[id], C = nodes[f[2]];
+          return P && C ? `<line class="road" x1="${C.x}" y1="${C.y}" x2="${P.x}" y2="${P.y}"/>` : "";
+        }).join("");
     }
     function build() {
       svg.innerHTML = `<image href="../${T.image}" x="0" y="0" width="${T.w}" height="${T.h}" preserveAspectRatio="none"/>` +
