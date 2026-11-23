@@ -406,11 +406,11 @@
     // Every city drafts while the realm (its corps) can pay the upkeep and
     // feed the men: the soldiers beyond the city's cap march on to the main
     // army (js/war.js).
-    const realm = S.corpsCities(state, fid, S.cityCorps(state, c));
-    const upkeep = realm.reduce((s, x) => s + S.upkeep(x), 0);
-    const purse = realm.reduce((s, x) => s + S.income(x) - S.salaries(x), 0);
-    const capGold = capId && state.cities[capId] ? state.cities[capId].gold : 0;
-    const affordable = () => upkeep + 15 < purse + capGold / 36 && S.canFeed(state, realm, 1000);
+    // The same reckoning as 귀농 (S.armyKeep, S.armyWant), so a corps never
+    // drafts the men it would send home the next month.
+    const k = S.cityCorps(state, c);
+    const realm = S.corpsCities(state, fid, k);
+    const affordable = () => S.corpsMen(state, fid, k, realm) + 1000 <= Math.min(S.armyKeep(state, realm), S.armyWant(state, fid, k, realm));
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       let r = null;

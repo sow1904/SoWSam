@@ -952,7 +952,13 @@
   // Share of the people who can be called up: 12%, more with 호적 and 병호.
   S.manpowerShare = (c) => 0.12 + (S.techAdd ? S.techAdd(c, "census") + S.techAdd(c, "binghu") : 0);
   S.manpowerMax = (c) => Math.round(c.pop * S.manpowerShare(c));
-  S.manpowerRegen = (c) => Math.round(c.pop * 0.001 * (S.manpowerShare(c) / 0.12) * (0.5 + c.order / 200));
+  // Each year about one in two hundred people comes of age fit to serve (more
+  // where order is good).
+  // why: the user's design. At 1 in 100 a realm made good any defeat within a
+  // year or two and the armies came on in floods; men are raised slowly.
+  S.MANPOWER = { regen: 0.0004 };
+  S.POP_GROWTH = 16000; // quarterly growth: (order - 30) / this
+  S.manpowerRegen = (c) => Math.round(c.pop * S.MANPOWER.regen * (S.manpowerShare(c) / 0.12) * (0.5 + c.order / 200));
   function returnManpower(c, n) {
     c.manpower = Math.min(S.manpowerMax(c), c.manpower + Math.round(n));
   }
@@ -1175,7 +1181,8 @@
           c.order = Math.max(0, c.order - 10);
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 군량이 바닥나 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / 8000) * S.regionMul(c, "pop") * S.growthMul(c, state)));
+        // People grow about 1% a year in good order, less as it falls.
+        if (state.month % 3 === 0 && c.order > 30) c.pop = Math.round(c.pop * (1 + ((c.order - 30) / S.POP_GROWTH) * S.regionMul(c, "pop") * S.growthMul(c, state)));
         wearinessEffects(state, c);
         S.houseMonth(state, c);
         runGentry(state, c);

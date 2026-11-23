@@ -36,6 +36,12 @@
     // pay for (over x what it can keep) sends share of the excess home each
     // month, from the main army; they go back to the fields and the rolls.
     discharge: { over: 1.1, share: 0.3, min: 500 },
+    // The army a computer corps wants (S.armyWant): its garrisons' needs and a
+    // main army of top x the largest foe corps across its borders and rest x
+    // the others (friendly ones, rel, count half), at least min. It keeps no
+    // more than that even when its land could feed more; the rest of its
+    // gold goes to the land and the stores.
+    want: { top: 1.3, rest: 0.5, min: 5000 },
     gold: { keep: 300, perSize: 100 }, // gold a city keeps back
     food: { months: 6, plus: 2000, borderMonths: 24, borderPlus: 15000 }, // food a city keeps back (garrison months + a store)
     camp: 30, // days an army may stay in a city beyond its cap (staging, a city just taken)
@@ -394,9 +400,8 @@
         }
         // 귀농: more men than the corps can pay for.
         const D = W.discharge;
-        const keep = S.armyKeep(state, realm);
-        const men = realm.reduce((s, c) => s + c.troops, 0) +
-          (state.marches || []).filter((m) => m.force === f.id && (m.corps || 1) === k.n && m.troops).reduce((s, m) => s + m.troops, 0);
+        const keep = Math.min(S.armyKeep(state, realm), S.armyWant(state, f.id, k.n, realm));
+        const men = S.corpsMen(state, f.id, k.n, realm);
         if (men <= keep * D.over) continue;
         const n = Math.floor(Math.min((men - keep) * D.share, S.marchable(seat) - W.expedition.guardMin));
         if (n < D.min) continue;
@@ -404,13 +409,52 @@
         seat.pop += n;
         seat.manpower = Math.min(S.manpowerMax(seat), seat.manpower + n);
         note("DISCHARGE");
-        if (f.id === state.playerForce) S.addLog(state, `${S.corpsName(k.n)}이 군량과 금으로 먹일 수 없는 병사 ${n}명을 고향으로 돌려보냈습니다.`, "warn");
+        if (f.id === state.playerForce) S.addLog(state, `${S.corpsName(k.n)}이 쓸 데 없거나 먹일 수 없는 병사 ${n}명을 고향으로 돌려보냈습니다.`, "warn");
       }
     }
   };
   // How many soldiers these cities can keep for years: the fewer of what
   // their harvest (and a share of the stores) feeds and what their gold
   // (and a share of the seat's treasury) pays.
+  // Every soldier of a corps: in its cities, on the march and in battle.
+  S.corpsMen = function (state, fid, n, realm) {
+    realm = realm || S.corpsCities(state, fid, n);
+    const mine = (x) => x && x.force === fid && (x.corps || 1) === (n || 1) ? x.troops || 0 : 0;
+    return realm.reduce((s, c) => s + c.troops, 0) +
+      (state.marches || []).reduce((s, m) => s + mine(m), 0) +
+      (state.battles || []).reduce((s, b) => s + mine(b.att) + mine(b.relief), 0);
+  };
+  // How many soldiers a corps wants: what its garrisons need and a main army
+  // to match the foe corps across its borders (as believed, js/intel.js).
+  // Worked out once a day for each corps.
+  // why: the user's design. A realm keeps the army its enemies call for, not
+  // all its land can feed; a weak neighbour spends all it has, a strong one
+  // stays well short of it.
+  S.armyWant = function (state, fid, n, realm) {
+    const key = S.today(state) + ":" + fid + ":" + (n || 1);
+    state._want = state._want && state._want.day === S.today(state) ? state._want : { day: S.today(state) };
+    if (state._want[key] != null) return state._want[key];
+    realm = realm || S.corpsCities(state, fid, n);
+    const V = W.want;
+    let needs = 0;
+    const foes = {}; // "force:corps" -> weight
+    for (const c of realm) {
+      if (!S.isSeatCity(state, c)) needs += S.garrisonNeed(state, c);
+      for (const id of S.links(state, c.id)) {
+        const p = S.place(state, id);
+        if (!p || !p.owner || p.owner === fid || S.allied(state, fid, p.owner)) continue;
+        const friendly = S.truceLeft(state, fid, p.owner) || (S.rel(state, fid, p.owner) >= W.need.rel && !S.atWarWith(state, fid, p.owner));
+        const fk = p.owner + ":" + S.placeCorps(state, p);
+        foes[fk] = Math.max(foes[fk] || 0, friendly ? 0.5 : 1);
+      }
+    }
+    const seen = Object.entries(foes).map(([fk, w]) => {
+      const [g, k] = fk.split(":");
+      return w * S.corpsCities(state, g, +k).reduce((s, c) => s + Math.max(0, (S.seenTroops ? S.seenTroops(state, fid, c) : c.troops) - (c.retainers || 0)), 0);
+    }).sort((a, b) => b - a);
+    const main = Math.max(V.min, (seen[0] || 0) * V.top + seen.slice(1).reduce((s, x) => s + x, 0) * V.rest);
+    return (state._want[key] = Math.round(needs + main));
+  };
   S.armyKeep = function (state, cities) {
     const grain = cities.reduce((s, c) => s + S.harvestOf(state, c) + c.food / S.ECON.stores, 0);
     const gold = cities.reduce((s, c) => s + S.income(c) - S.salaries(c) + (S.isSeatCity(state, c) ? c.gold / (S.ECON.stores * 12) : 0), 0);

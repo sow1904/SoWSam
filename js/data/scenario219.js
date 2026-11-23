@@ -23,8 +23,11 @@
 // Held cities start better developed than in 191 (develop), so that the
 // armies listed can be paid and fed, and officers the lists do not place by
 // name are spread over their force's cities (spread).
-// Troop numbers are this game's own, set so the three stand roughly as four
-// to one to one.
+// Troop numbers are this game's own: about what each realm's gold and
+// harvest can keep (S.armyKeep), the great armies at the seats and on the
+// fronts, a few thousand on a border, a garrison of 1,500 or so inside.
+// why: the user's design, after 魏 under 曹操 (about 100,000 in the central
+// armies, 5,000-10,000 on a front, about 1,000 in an inner county).
 (function (S) {
   S.SCENARIO_219 = {
     id: "219",
@@ -93,27 +96,27 @@
         tech: { spear: 2, sword: 2, bow: 2, horse: 2, siege: 2, irrigation: 2, census: 2 },
         cities: {
           // 사례
-          henan: 12000, henei: 7000, hedong: 7000, hongnong: 8000,
+          henan: 3000, henei: 1500, hedong: 2000, hongnong: 3000,
           // 예주
-          yingchuan: 20000, runan: 9000, peiguo: 6000, qiao: 7000,
+          yingchuan: 10000, runan: 3000, peiguo: 1500, qiao: 2000,
           // 연주
-          chenliu: 7000, dongjun: 6000, shanyang: 6000, taishan: 6000,
+          chenliu: 1500, dongjun: 1500, shanyang: 1500, taishan: 1500,
           // 기주
-          weijun: 25000, julu: 6000, changshan: 6000, hejian: 5000, bohai: 7000, pingyuan: 6000,
+          weijun: 25000, julu: 1500, changshan: 1500, hejian: 1500, bohai: 1500, pingyuan: 1500,
           // 유주
-          zhuo: 6000, guangyang: 8000, daijun: 5000, liaoxi: 5000,
+          zhuo: 1500, guangyang: 3000, daijun: 2000, liaoxi: 4000,
           // 병주
-          shangdang: 5000, taiyuan: 8000, yanmen: 5000, xihe: 4000,
+          shangdang: 1500, taiyuan: 3000, yanmen: 2000, xihe: 1500,
           // 서주
-          xiapi: 7000, pengcheng: 6000, guangling: 6000, donghai: 8000,
+          xiapi: 3000, pengcheng: 1500, guangling: 5000, donghai: 2000,
           // 청주
-          qiguo: 7000, beihai: 6000, jinan: 5000, donglai: 5000,
+          qiguo: 2000, beihai: 1500, jinan: 1500, donglai: 1500,
           // 옹주
-          jingzhao: 30000, zuopingyi: 6000, youfufeng: 14000, hanyang: 10000, longxi: 5000,
+          jingzhao: 40000, zuopingyi: 2000, youfufeng: 10000, hanyang: 6000, longxi: 4000,
           // 량주
-          wuwei: 5000, jincheng: 5000, jiuquan: 3000, zhangye: 3000,
+          wuwei: 3000, jincheng: 2000, jiuquan: 1500, zhangye: 1500,
           // 형북과 회남
-          nanyang: 15000, xinye: 20000, xiangyang: 12000, jiangxia: 8000, jiujiang: 20000,
+          nanyang: 8000, xinye: 15000, xiangyang: 25000, jiangxia: 6000, jiujiang: 20000,
         },
         officers: [
           "조조 @jingzhao", "가후 @jingzhao", "사마의 @jingzhao",
@@ -151,9 +154,9 @@
         former: { 유장: "유장 이엄 오의 오반 맹달 허정 유파" },
         tech: { spear: 2, sword: 2, bow: 2, irrigation: 2 },
         cities: {
-          hanzhong: 30000, shujun: 15000, guanghan: 6000, bajun: 7000, badong: 5000,
-          nanjun: 25000, wuling: 5000, lingling: 5000, xincheng: 6000,
-          zangke: 4000, yuexi: 4000, yizhoujun: 4000, yongchang: 3000,
+          hanzhong: 25000, shujun: 12000, guanghan: 2000, bajun: 3000, badong: 3000,
+          nanjun: 25000, wuling: 3000, lingling: 3000, xincheng: 5000,
+          zangke: 2000, yuexi: 2000, yizhoujun: 2000, yongchang: 1500,
         },
         officers: [
           "유비 @hanzhong", "법정 @hanzhong", "황충 @hanzhong",
@@ -184,9 +187,9 @@
         gentry: { danyang: 85, wujun: 85, kuaiji: 85, yuzhang: 85 },
         tech: { sword: 2, bow: 2, navy: 2, logging: 2 },
         cities: {
-          danyang: 25000, wujun: 8000, kuaiji: 8000, yuzhang: 8000, lujiang: 14000,
-          wuchang: 14000, changsha: 10000, guiyang: 5000,
-          nanhai: 6000, cangwu: 5000,
+          danyang: 25000, wujun: 3000, kuaiji: 3000, yuzhang: 3000, lujiang: 12000,
+          wuchang: 15000, changsha: 5000, guiyang: 2000,
+          nanhai: 2500, cangwu: 2000,
         },
         officers: [
           "손권 @danyang", "장소 @danyang", "육손 @danyang",
@@ -203,12 +206,12 @@
       },
       {
         id: "gongsunkang", name: "공손강", color: "#5f9ea0",
-        cities: { liaodong: 12000, xuantu: 4000, lelang: 4000, daifang: 2000 },
+        cities: { liaodong: 8000, xuantu: 2000, lelang: 2000, daifang: 1500 },
         officers: ["공손강 @liaodong", "공손공 @liaodong"],
       },
       {
         id: "shixie", name: "사섭", color: "#20b2aa",
-        cities: { jiaozhi: 12000, rinan: 3000 },
+        cities: { jiaozhi: 10000, rinan: 2000 },
         officers: ["사섭 @jiaozhi", "사휘 @jiaozhi"],
       },
     ],
