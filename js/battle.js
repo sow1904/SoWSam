@@ -476,6 +476,7 @@
     const beaten = L.troops < L.troops0 * S.LANDING.beaten || D.morale <= S.LANDING.broken;
     if (failed && !beaten) {
       say(b, `상륙 실패! ${S.josa(S.forceName(state, A.force), "이", "가")} 뭍에 오르지 못하고 뱃머리를 돌립니다.`);
+      if (S.willSetback) S.willSetback(state, A.force, D.force, "landing");
       shipsHome(state, b);
       b.broke = "morale";
       return "retreat";
@@ -488,6 +489,7 @@
     }
     if (L.day >= S.LANDING.days) {
       say(b, `상륙 실패! 며칠을 싸워도 물길을 열지 못해 ${S.josa(S.forceName(state, A.force), "이", "가")} 물러납니다.`);
+      if (S.willSetback) S.willSetback(state, A.force, D.force, "landing");
       shipsHome(state, b);
       b.broke = "morale";
       return "retreat";

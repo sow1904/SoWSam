@@ -652,6 +652,7 @@
         const a = called || policy === "border" ? "border" : S.chooseAim(state, fid, foe);
         const ratio = S.might(state, fid) / Math.max(1, S.might(state, foe));
         const v = ratio + (a === "annihilate" ? 0.5 : a === "decisive" ? 0.2 : 0) - S.rel(state, fid, foe) / 100 +
+          (S.willOf ? S.willOf(state, fid, foe) / 50 : 0) +
           (called ? 1 : 0) + (S.foeBusy(state, foe) ? 0.5 : 0) + (S.provoked ? S.provoked(state, fid, foe) : 0) - (S.atWarWith(state, fid, foe) ? 0 : 0.1);
         if (!pick || v > pick.v) pick = { foe, a, v, called };
       }
@@ -677,8 +678,10 @@
     // Lighter odds when an ally asked, or when the foe's main army is away.
     const opening = (war && war.joint ? W.ally.odds : 0) + (best.t.owner && S.foeBusy(state, best.t.owner, S.placeCorps(state, best.t)) ? W.ally.busy : 0);
     const advice = S.adviserEdge ? S.adviserEdge(state, fid) : 0; // a 군사 sees which wars can be won
-    if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening - advice) return note("odds too low: " + aim);
-    if (!S.chance(state, E.chance)) return note("dice");
+    // 원정 의지 (js/will.js): a lord who has long meant to go asks less of the odds.
+    const will = best.t.owner && S.willOdds ? S.willOdds(state, fid, best.t.owner) : 0;
+    if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening - advice - will) return note("odds too low: " + aim);
+    if (!S.chance(state, E.chance * (best.t.owner && S.willOf ? 0.5 + S.willOf(state, fid, best.t.owner) / 100 : 1))) return note("dice");
     // The council debates it first (js/council.js); a 도독 decides alone.
     const council = S.conveneWar && n === 1 ? S.conveneWar(state, fid, { foe: best.t.owner, target: best.t.id, aim, ratio: best.est.ratio, team: ids }) : null;
     if (council && !council.adopted) return note("council against");
@@ -688,6 +691,7 @@
     if (council && S.councilLaunched) S.councilLaunched(state, council, r.march);
     r.march.corps = n;
     r.march.campaign = { foe: best.t.owner || null, taken: 0, since: S.monthsElapsed(state), aim };
+    if (best.t.owner && S.willSpent) S.willSpent(state, fid, best.t.owner);
     const me = S.corpsLabel(state, fid, n);
     const tone = (foe) => (foe === state.playerForce ? "threat" : fid === state.playerForce ? "sys" : "info");
     if (war && !rec.war && best.t.owner) {
@@ -736,6 +740,7 @@
     f.brokenUntil = S.monthsElapsed(state) + W.broken;
     S.addWeariness(state, loser, 10);
     note("MAIN ARMY BROKEN");
+    if (S.willSetback) { S.willSetback(state, loser, victor, "broken"); S.willWin(state, victor, loser); }
     const v = S.corpsRec(state, victor, vk);
     if (v && v.war && v.war.foe === loser) v.war.devour = true;
     S.addLog(state, `결전: ${S.corpsLabel(state, loser, lk)} 주력군 ${size}명이 ${S.corpsLabel(state, victor, vk)}에게 크게 패했습니다.` +

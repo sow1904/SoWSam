@@ -237,6 +237,7 @@
     S.initForts(state);
     S.initCapitals(state);
     if (S.initCorps) S.initCorps(state, scenario); // the scenario's corps (js/corps.js)
+    if (S.initWill) S.initWill(state, scenario); // the scenario's 원정 의지 (js/will.js)
     if (S.consolidate) S.consolidate(state); // soldiers beyond each city's cap join the main army (js/war.js)
     if (S.initStanding) S.initStanding(state); // fame, merit, seats at court (js/standing.js)
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
@@ -1204,6 +1205,7 @@
     if (S.runGarrisons) S.runGarrisons(state); // border garrisons filled, men the realm cannot pay for sent home (js/war.js)
     if (S.runTribute) S.runTribute(state); // surplus to the capital (js/war.js)
     if (S.runCorps) S.runCorps(state); // corps keep seats and heads; computer forces cut new ones (js/corps.js)
+    if (S.runWill) S.runWill(state); // 원정 의지 against each foe in reach (js/will.js)
     if (S.runPeace) S.runPeace(state); // wars that both sides would end (js/war.js)
     if (S.runRebellion) S.runRebellion(state);
     if (S.runStrife) S.runStrife(state);

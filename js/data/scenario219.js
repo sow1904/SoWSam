@@ -53,6 +53,9 @@
     ],
     develop: 0.75,
     spread: 5,
+    // 원정 의지 (js/will.js) in June 219: 관우 is about to march on 번성,
+    // 손권 means to have 형주 back, 조조 has just lost 한중 and is tired.
+    will: [["liubei", "caocao", 60], ["sunquan", "liubei", 50], ["caocao", "liubei", 40], ["caocao", "sunquan", 25]],
     relations: [
       // 조조 and 유비 had just fought two years over 한중.
       ["caocao", "liubei", 5],
