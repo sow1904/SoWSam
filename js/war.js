@@ -116,7 +116,10 @@
       cap.gold += gold;
       cap.food += food;
       c.sent = { gold, food };
-      if (!camping(state, c)) sendToCapital(state, c, S.overCap(state, c) - Math.round(S.garrisonCap(state, c) * hold));
+      // The player's own cities keep what he puts there (he pays for it); the
+      // computer's send what they do not need on to the main army.
+      if (!camping(state, c) && S.corpsRunsItself(state, c.owner, S.cityCorps(state, c)))
+        sendToCapital(state, c, S.overCap(state, c) - Math.round(S.garrisonCap(state, c) * hold));
     }
   };
 

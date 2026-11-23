@@ -1125,9 +1125,26 @@
   }
 
   // ---------- turn ----------
-  // Monthly gold income and troop upkeep (1 gold per 100 soldiers).
+  // Monthly gold income and troop upkeep (1 gold per 50 soldiers).
+  // The economy, not a cap, decides how large an army a realm can keep: its
+  // gold and its harvest pay for some 4% of its people under arms (more as
+  // the land is developed). Soldiers cost what they cost wherever they are.
+  // why: the user's design. Under 曹操 魏 kept about 100,000 in the central
+  // armies, 5,000-10,000 on each front and about 1,000 in an inner county;
+  // the old rates paid for some 10% of the people and the armies grew every year.
+  S.ECON = { upkeep: 50, harvest: 0.5 };
   S.income = (c) => Math.round((c.trade / 3 + c.pop / 5000) * (0.5 + c.order / 200) * S.regionMul(c, "gold") * S.houseGold(c) * (S.techMul ? S.techMul(c, "salt") : 1));
-  S.upkeep = (c) => Math.ceil(c.troops / 100);
+  S.upkeep = (c) => Math.ceil(c.troops / S.ECON.upkeep);
+  // The autumn harvest of a city (state: for the year's crop and locusts).
+  S.harvestOf = (state, c) => Math.round((c.farm * 9 + c.pop / 50) * (0.5 + c.order / 200) * S.ECON.harvest * S.regionMul(c, "food") *
+    S.techMul(c, "irrigation", state) * (S.harvestMul ? S.harvestMul(state, c) : 1));
+  // Can the land of these cities feed n more soldiers for years to come:
+  // a year's harvest and a third of the stores against a year's eating.
+  S.canFeed = (state, cities, n) => {
+    const grain = cities.reduce((s, c) => s + S.harvestOf(state, c) + c.food / 3, 0);
+    const eat = cities.reduce((s, c) => s + S.foodUse(c.troops), 0) * 12 + S.foodUse(n) * 12;
+    return grain >= eat;
+  };
 
   // Traits: who walks away, and how fast loyalty wears down.
   S.leaveThreshold = (o) => (S.hasTrait(o, "의리") ? 15 : S.hasTrait(o, "변심") ? 50 : S.hasTrait(o, "야심") ? 45 : 40);
@@ -1150,7 +1167,7 @@
           const lost = loseTroops(c, Math.ceil(c.troops * 0.05));
           if (c.owner === state.playerForce) S.addLog(state, `${c.name}의 금이 바닥나 봉급을 받지 못한 병사 ${lost}명이 달아났습니다.`, "warn");
         }
-        if (harvest) c.food += Math.round((c.farm * 9 + c.pop / 50) * eff * S.regionMul(c, "food") * S.techMul(c, "irrigation", state) * (S.harvestMul ? S.harvestMul(state, c) : 1));
+        if (harvest) c.food += S.harvestOf(state, c);
         c.food -= S.foodUse(c.troops);
         if (c.food < 0) {
           c.food = 0;

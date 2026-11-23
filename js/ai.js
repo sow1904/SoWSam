@@ -403,13 +403,14 @@
       const o = [...idle].sort((a, b) => a.cmd - b.cmd)[0];
       if (S.stake(state, o.id, c.id).ok) idle = idle.filter((x) => x !== o);
     }
-    // Every city drafts while the realm (its corps) can pay the upkeep: the
-    // soldiers beyond the city's cap march on to the main army (js/war.js).
+    // Every city drafts while the realm (its corps) can pay the upkeep and
+    // feed the men: the soldiers beyond the city's cap march on to the main
+    // army (js/war.js).
     const realm = S.corpsCities(state, fid, S.cityCorps(state, c));
-    const upkeep = realm.reduce((s, x) => s + x.troops / 100, 0);
+    const upkeep = realm.reduce((s, x) => s + S.upkeep(x), 0);
     const purse = realm.reduce((s, x) => s + S.income(x) - S.salaries(x), 0);
     const capGold = capId && state.cities[capId] ? state.cities[capId].gold : 0;
-    const affordable = () => upkeep + 15 < purse + capGold / 36;
+    const affordable = () => upkeep + 15 < purse + capGold / 36 && S.canFeed(state, realm, 1000);
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       let r = null;
@@ -498,8 +499,8 @@
     if (!mil && idle.length > 1 && S.chance(state, 40)) note(S.search(state, take("wit").id, c.id), "탐색");
     if (idle.length && c.gentry > 40 && c.consent < (mil ? 40 : 55) && c.gold > 300) note(S.woo(state, take("speech").id, c.id), "회유");
     const want = () => mil
-      ? (frontier ? c.troops / 100 + 15 < S.income(c) - S.salaries(c) + c.gold / 36 : c.troops < 6000)
-      : c.troops < (frontier ? 5000 : 2500);
+      ? (frontier ? S.upkeep(c) + 15 < S.income(c) - S.salaries(c) + c.gold / 36 : c.troops < 6000) && S.canFeed(state, [c], 1000)
+      : c.troops < (frontier ? 5000 : 2500) && S.canFeed(state, [c], 1000);
     while (idle.length) {
       const foodMonths = c.troops > 0 ? c.food / S.foodUse(c.troops) : 99;
       const ok = want() && c.manpower > 400 && c.gold > (mil ? 250 : 600) && c.order > (mil ? 50 : 60) && foodMonths > (mil ? 8 : 12);

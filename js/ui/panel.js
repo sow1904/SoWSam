@@ -273,7 +273,7 @@
       `<div class="cinfo">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` +
       `<div class="stats">` +
       (S.isSeatCity(state, c) ? stat("주력군", UI.troopsText(c))
-        : stat("수비대", UI.guess(c) ? UI.troopsText(c) : `${c.troops.toLocaleString()}/${S.garrisonCap(state, c).toLocaleString()}`)) + stat("훈련", c.train) +
+        : stat("수비대", UI.guess(c) ? UI.troopsText(c) : S.corpsRunsItself(state, c.owner, S.cityCorps(state, c)) ? `${c.troops.toLocaleString()}/${S.garrisonCap(state, c).toLocaleString()}` : c.troops.toLocaleString())) + stat("훈련", c.train) +
       stat("금", c.gold.toLocaleString()) + stat("군량", c.food.toLocaleString()) +
       (own && c.sent ? stat("지난달 상납", `금 ${fmt(c.sent.gold)} · 군량 ${fmt(c.sent.food)}`) : "") +
       stat("인구", c.pop.toLocaleString()) + stat("치안", c.order) +
