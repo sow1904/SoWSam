@@ -8,11 +8,25 @@
 (function (S) {
   const fail = (msg) => ({ ok: false, msg });
 
-  S.FORT_KINDS = { pass: "관문", fort: "요새" };
+  S.FORT_KINDS = { pass: "관문", fort: "요새", port: "항구" };
   S.FORT_STATS = {
     pass: { wallMax: 1600, troops: 1500 }, // the lie of the land does most of the work
     fort: { wallMax: 1200, troops: 2000 }, // high walls and deep stores
+    port: { wallMax: 500, troops: 2000 }, // a stockade on the shore
   };
+  // Ports (항구): strongholds on a great river where ships are built and kept.
+  // An army crosses from an own port to an enemy port, as many men as the
+  // port has ships for (ships are counted in the men they carry). Ships lost
+  // on the water are gone; the rest sail home. The defenders of a port meet
+  // a crossing with the men of the port and of its city, as many as their
+  // own ships carry. A port holds few men, so one taken without a main army
+  // behind it is soon taken back.
+  //   cap: most men a port keeps (the rest go to its city); per: ships a port
+  //   can hold per level of 조선; build: ships built a month per level;
+  //   cost: gold per ship (from the port's city); start: ships at the start, of what it can hold
+  S.PORT = { cap: 3000, per: 10000, build: 1000, cost: 0.2, start: 0.5 };
+  S.isPort = (state, id) => !!(state.forts && state.forts[id] && state.forts[id].kind === "port");
+  S.portMax = (state, f) => S.PORT.per * (f.owner && S.lineLevel ? S.lineLevel(state, f.owner, "navy") : 1);
   S.BUILD_COST = 1500;
   S.BUILD_DAYS = 90;
 
@@ -32,6 +46,9 @@
       yiling: ["이릉", "fort", "badong", "nanjun", "nanjun", 30.7, 111.3, true], // 삼협이 끝나는 곳
       yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
+      // Ports (trial): 강하 and 서릉 meet only across the river.
+      shiyang: ["석양항", "port", "jiangxia", "wuchang", "jiangxia", 30.62, 114.28, true],
+      chibi: ["적벽항", "port", "jiangxia", "wuchang", "wuchang", 29.95, 113.95, true],
     },
   };
 
@@ -49,18 +66,24 @@
       prov: state.cities[home].prov, posts: S.emptyPosts(),
     };
   }
+  // A port's ships at the start: a share of what it can hold.
+  function stockPort(state, f) {
+    if (f.kind !== "port") return;
+    f.ships = f.owner ? Math.round(S.portMax(state, f) * S.PORT.start) : 0;
+    f.shipsOf = f.owner;
+  }
   // The places a stronghold's roads join: [a, b] or [a, b1, b2, ...].
   S.siteRoad = (site) => [site[2], ...[].concat(site[3])];
   S.initForts = function (state) {
     state.forts = {};
-    for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) state.forts[id] = newFort(state, id, site);
+    for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) stockPort(state, state.forts[id] = newFort(state, id, site));
     state.fortVer = 1;
   };
   // A save from before a site was added to the map gets it now.
   S.addMissingForts = function (state) {
     for (const [id, site] of Object.entries(S.FORT_SITES[state.map] || {})) {
       if (state.forts[id]) { state.forts[id].road = S.siteRoad(site); continue; }
-      state.forts[id] = newFort(state, id, site);
+      stockPort(state, state.forts[id] = newFort(state, id, site));
       state.fortVer = (state.fortVer || 0) + 1;
     }
   };
@@ -115,6 +138,7 @@
   S.runForts = function (state) {
     for (const f of Object.values(state.forts || {})) {
       if (!f.built) continue;
+      if (f.kind === "port") runPort(state, f);
       if (f.wall < f.wallMax) f.wall = Math.min(f.wallMax, f.wall + 20);
       if (!f.owner || f.troops <= 0) continue;
       const need = S.foodUse(f.troops);
@@ -134,6 +158,26 @@
       }
     }
   };
+  // A port: ships burnt when it changes hands, men over its cap sent to its
+  // city, new ships built with the city's gold.
+  function runPort(state, f) {
+    if (f.shipsOf !== f.owner) { f.ships = 0; f.shipsOf = f.owner; }
+    const home = state.cities[f.home];
+    if (!f.owner || !home || home.owner !== f.owner) return;
+    const over = Math.floor(f.troops - S.PORT.cap);
+    if (over > 0) { S.addTroops(home, S.garrisonUnit(f), over); f.troops -= over; }
+    const lv = S.lineLevel ? S.lineLevel(state, f.owner, "navy") : 1;
+    const n = Math.min(S.PORT.build * lv, S.portMax(state, f) - (f.ships || 0), Math.floor(home.gold / S.PORT.cost));
+    if (n <= 0) return;
+    f.ships = (f.ships || 0) + n;
+    home.gold -= Math.ceil(n * S.PORT.cost);
+  }
+  // Ships come back to a port: only to one still held.
+  S.returnShips = function (state, force, portId, n) {
+    const f = state.forts && state.forts[portId];
+    if (f && f.owner === force && n > 0) f.ships = Math.min(S.portMax(state, f), (f.ships || 0) + Math.round(n));
+  };
+
   // A force that falls loses its strongholds; the men scatter.
   S.dropForts = function (state, fid) {
     for (const f of Object.values(state.forts || {})) {

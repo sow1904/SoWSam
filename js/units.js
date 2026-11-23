@@ -347,12 +347,13 @@
   };
 
   // The ships a side fights in on a great river: 투함 under a naval
-  // specialist or with 조선 technology, else 몽충. A force that would sail
-  // 투함 and holds a city on the Yangzi builds 누선 instead.
+  // specialist or with 조선 technology, else 몽충. A force with the second
+  // level of 조선 that holds a city on the Yangzi builds 누선 instead: the
+  // shipyards are not enough without the craft to use them.
   S.fleet = (state, fid, officers) => {
-    const big = officers.some((o) => S.hasSkill(o, "수전")) || (S.lineLevel && S.lineLevel(state, fid, "navy") >= 2);
-    if (!big) return "mengchong";
-    return S.holdsSpecialLand(state, fid, "louchuan") ? "louchuan" : "douhan";
+    const lv = S.lineLevel ? S.lineLevel(state, fid, "navy") : 1;
+    if (!officers.some((o) => S.hasSkill(o, "수전")) && lv < 2) return "mengchong";
+    return lv >= 2 && S.holdsSpecialLand(state, fid, "louchuan") ? "louchuan" : "douhan";
   };
 
   // One type's multiplier on what it deals, against a foe type.

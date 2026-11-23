@@ -315,7 +315,7 @@
   const FORT_ICONS = { pass: [28, 26], fort: [30, 22], site: [26, 15], fort_ruin: [26, 24] }; // display sizes
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
-    const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind;
+    const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind === "port" ? "fort" : f.kind; // ports: no picture of their own yet
     const [iw, ih] = FORT_ICONS[icon];
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
       `<image class="ficon" href="assets/forts/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;

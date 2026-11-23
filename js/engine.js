@@ -1035,6 +1035,18 @@
       return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
     }
     if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
+    // Over the river from a port: as many as its ships carry (js/forts.js).
+    const portId = S.isPort && S.landingLink(way.path) && S.isPort(state, way.path[way.path.length - 2]) ? way.path[way.path.length - 2] : null;
+    if (portId) {
+      const port = state.forts[portId];
+      const ships = port.owner === c.owner ? Math.floor(port.ships || 0) : 0;
+      if (ships < S.MIN_SORTIE_TROOPS) return fail(`${port.name}에 배가 모자랍니다. (병사 ${ships}명분)`);
+      if (troops > ships) {
+        const k = ships / troops;
+        for (const id of Object.keys(counts)) counts[id] = Math.floor(counts[id] * k);
+        troops = S.countsTotal(counts);
+      }
+    }
     const speed = S.unitSpeed(counts);
     const days = S.travelDays(way.km, speed);
     const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path));
@@ -1048,6 +1060,7 @@
       officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
     // The supply base, and when the target hears of it (js/war.js).
     if (S.marchBase) { m.base = S.marchBase(state, m.path, m.force); m.seen = S.spotDay(state, m); }
+    if (portId) { state.forts[portId].ships -= troops; m.ships = troops; m.shipPort = portId; }
     const names = oids.map((id) => state.officers[id].name).join(", ");
     return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };

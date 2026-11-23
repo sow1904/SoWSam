@@ -31,7 +31,8 @@
     // 장강
     ["jiujiang", "danyang"], ["lujiang", "danyang"], ["guangling", "danyang"], ["guangling", "wujun"], ["wujun", "kuaiji"],
     ["nanjun", "wuchang"], ["nanjun", "changsha"], ["nanjun", "wuling"], ["wuchang", "changsha"], ["wuchang", "yuzhang"],
-    ["wuchang", "lujiang"], ["lujiang", "yuzhang"], ["jiangxia", "wuchang"], ["danyang", "hefei"], // 유수구
+    ["wuchang", "lujiang"], ["lujiang", "yuzhang"], ["danyang", "hefei"], // 유수구
+    ["shiyang", "chibi"], // 강하와 서릉 사이: 항구에서 항구로 (js/forts.js)
     // 황하
     ["henan", "henei"], ["henan", "hedong"], ["dongjun", "weijun"], ["dongjun", "pingyuan"],
     ["hedong", "hongnong"], ["hedong", "zuopingyi"], ["pingyuan", "jinan"],
@@ -275,6 +276,7 @@
       old.att.rations += m.troops / 10;
       old.att.officers.push(...ids);
       if (old.landing) old.landing.a0 += m.troops;
+      if (m.ships && m.shipPort) S.returnShips(state, m.force, m.shipPort, m.ships); // they unload behind the lines
       hold(state, old, ids);
       say(old, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 도착해 포위에 가세했습니다.`);
       return old;
@@ -284,7 +286,8 @@
     const b = newBattle(state, {
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
       att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target),
-        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null, corps: m.corps || 1 },
+        rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null, corps: m.corps || 1,
+        ships: m.ships || 0, shipPort: m.shipPort || null },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
@@ -315,101 +318,156 @@
   S.LANDING = { share: 0.8, min: 1000, favour: 1, keen: 0.8, rate: 0.06, days: 8, skill: 1.2, green: 0.75, fail: 0.65, beaten: 0.5, broken: 40 };
   // Whether a march ends by crossing water.
   S.landingLink = (path) => !!path && path.length >= 2 && S.isWater(path[path.length - 2], path[path.length - 1]);
+  // Men a force can put on the water where it has no port, by its level of
+  // 조선: the boats it can gather on the shore. The rest wait on the bank and
+  // cross once the landing is won.
+  S.FERRY = { 1: 8000, 2: 15000, 3: 25000 };
+  S.ferryOf = (state, fid) => S.FERRY[Math.min(3, S.lineLevel ? S.lineLevel(state, fid, "navy") : 1)] || S.FERRY[1];
+  // Of an army crossing by this road, how many fight on the water: from an
+  // own port, as many as its ships carry; elsewhere, what the force can ferry.
+  S.waterMen = function (state, path, force, troops) {
+    const p = state.forts && state.forts[path[path.length - 2]];
+    if (p && p.kind === "port") return Math.min(troops, p.owner === force ? p.ships || 0 : 0);
+    return Math.min(troops, S.ferryOf(state, force));
+  };
+  // Who meets a crossing: a port's men and its city's, as many as the port's
+  // ships carry; elsewhere the garrison, as many as the force can ferry.
+  //   pool: the men they could put out; cap: the most the boats carry
+  function shoreGuard(state, t) {
+    const home = t.kind === "port" ? state.cities[t.home] : null;
+    const withHome = !!home && !!t.owner && home.owner === t.owner;
+    const mine = (id) => S.serving(state, id).filter((o) => o.force === t.owner);
+    return {
+      home: withHome ? home : null,
+      pool: t.troops + (withHome ? home.troops : 0),
+      defs: mine(t.id).concat(withHome ? mine(home.id) : []),
+      cap: t.kind === "port" ? t.ships || 0 : t.owner ? S.ferryOf(state, t.owner) : 0,
+    };
+  }
+  // Losses on the water: a port's men first, then its city's; ships too.
+  function shoreLoss(state, t, g, n) {
+    const here = Math.min(n, t.troops);
+    S.loseTroops(t, here);
+    if (g.home && n > here) S.loseTroops(g.home, Math.min(g.home.troops, n - here));
+    if (t.kind === "port") t.ships = Math.max(0, (t.ships || 0) - n);
+  }
+  // The attackers' ships that are left sail home.
+  function shipsHome(state, b) {
+    const A = b.att;
+    if (A.ships > 0 && A.shipPort) S.returnShips(state, A.force, A.shipPort, A.ships);
+    A.ships = 0;
+  }
   // A side's strength on the water: its men, its leaders, its ships.
   function navalPower(troops, list, fallback, train, fleet, foeFleet, morale) {
     return S.power(troops, S.sideStats(list, fallback), train, 1) * S.unitMul(fleet, foeFleet, "water", 1) * (has(list, "수전") ? S.LANDING.skill : 1) * (fleet === "mengchong" ? S.LANDING.green : 1) * moraleMul(morale);
   }
   // Whether the defenders of a place would meet a crossing army on the water.
   //   ratio: their strength on the water against the attackers'
-  S.landingOdds = function (state, targetId, force, officers, troops, train, morale) {
+  //   onWater: the attackers on the water (S.waterMen); aw in the result
+  S.landingOdds = function (state, targetId, force, officers, troops, train, morale, onWater) {
     const t = S.place(state, targetId);
-    const defs = S.serving(state, targetId).filter((o) => o.force === t.owner);
+    const g = shoreGuard(state, t);
+    const defs = g.defs;
+    const aw = Math.max(0, Math.floor(onWater == null ? Math.min(troops, S.ferryOf(state, force)) : Math.min(troops, onWater)));
     const aFleet = S.fleet(state, force, officers);
     const dFleet = t.owner ? S.fleet(state, t.owner, defs) : "mengchong";
-    const dTroops = Math.floor(t.troops * S.LANDING.share);
-    const a = navalPower(troops, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale);
+    const dTroops = Math.floor(Math.min(g.cap, g.pool * S.LANDING.share));
+    const a = navalPower(aw, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale);
     const d = navalPower(dTroops, defs, 40, t.train, dFleet, aFleet, 100);
     const ratio = a > 0 ? d / a : 99;
     const policy = S.defensePolicy(state, targetId);
     const need = policy === "intercept" ? S.LANDING.keen : S.LANDING.favour;
     const commit = !!t.owner && policy !== "hold" && dTroops >= S.LANDING.min && ratio >= need;
-    return { commit, ratio, aFleet, dFleet, dTroops };
+    return { commit, ratio, aFleet, dFleet, dTroops, aw };
   };
   // How a landing would likely go, without the luck: for the attack window
   // and the computer's plans.
   //   pass: whether the army gets ashore; left: its men then; lostD: the
   //   defenders lost on the water
-  S.landingForecast = function (state, targetId, force, officers, troops, train) {
-    const o = S.landingOdds(state, targetId, force, officers, troops, train, 100);
-    if (!o.commit) return Object.assign(o, { pass: true, left: troops, lostD: 0 });
+  S.landingForecast = function (state, targetId, force, officers, troops, train, onWater) {
+    const o = S.landingOdds(state, targetId, force, officers, troops, train, 100, onWater);
+    if (!o.commit) return Object.assign(o, { pass: o.aw > 0, left: o.aw > 0 ? troops : 0, lostD: 0 });
     const t = S.place(state, targetId);
-    const defs = S.serving(state, targetId).filter((x) => x.force === t.owner);
-    let a = troops, d = o.dTroops, am = 100, dm = 100;
+    const defs = shoreGuard(state, t).defs;
+    const ashore = troops - o.aw; // waiting on the bank
+    let a = o.aw, d = o.dTroops, am = 100, dm = 100;
     for (let day = 1; ; day++) {
       const aPow = navalPower(a, officers, 30, train, o.aFleet, o.dFleet, am);
       const dPow = navalPower(d, defs, 40, t.train, o.dFleet, o.aFleet, dm);
       const lossD = Math.min(d, aPow * S.LANDING.rate), lossA = Math.min(a, dPow * S.LANDING.rate);
       a -= lossA; d -= lossD;
       am += swing(lossA, lossD, 8); dm += swing(lossD, lossA, 8);
-      const failed = a < troops * S.LANDING.fail || am <= S.LANDING.broken;
+      const failed = a < o.aw * S.LANDING.fail || am <= S.LANDING.broken;
       const beaten = d < o.dTroops * S.LANDING.beaten || dm <= S.LANDING.broken;
-      if (failed && !beaten) return Object.assign(o, { pass: false, left: Math.round(a), lostD: Math.round(o.dTroops - d) });
-      if (beaten || day >= S.LANDING.days) return Object.assign(o, { pass: beaten || aPow >= dPow, left: Math.round(a), lostD: Math.round(o.dTroops - d) });
+      if (failed && !beaten) return Object.assign(o, { pass: false, left: Math.round(a + ashore), lostD: Math.round(o.dTroops - d) });
+      if (beaten || day >= S.LANDING.days) return Object.assign(o, { pass: beaten || aPow >= dPow, left: Math.round(a + ashore), lostD: Math.round(o.dTroops - d) });
     }
   };
   function startLanding(state, b, t, atk) {
     const A = b.att;
-    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale);
+    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale, A.shipPort ? A.ships : S.waterMen(state, A.path, A.force, A.troops));
     if (!odds.commit) {
+      shipsHome(state, b);
       if (t.owner) say(b, `${S.josa(S.forceName(state, t.owner), "은", "는")} 물가를 지키지 않고 성에 틀어박혔습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} 무사히 뭍에 올랐습니다.`);
       return false;
     }
-    b.landing = { day: 0, a0: A.troops, troops: odds.dTroops, troops0: odds.dTroops, aFleet: odds.aFleet, dFleet: odds.dFleet };
+    b.landing = { day: 0, a0: A.troops, aw: odds.aw, aw0: odds.aw, troops: odds.dTroops, troops0: odds.dTroops, aFleet: odds.aFleet, dFleet: odds.dFleet };
     say(b, `${S.forceName(state, t.owner)}의 ${S.unitName(odds.dFleet)} 함대 ${odds.dTroops}명이 물 위로 나와 상륙을 막아섭니다! ` +
-      `(${S.forceName(state, A.force)}은 ${S.unitName(odds.aFleet)})`);
+      `(${S.forceName(state, A.force)}은 ${S.unitName(odds.aFleet)} ${odds.aw}명${odds.aw < A.troops ? `, 나머지 ${A.troops - odds.aw}명은 물가에서 기다립니다` : ""})`);
     return true;
   }
   // One day on the water. Returns "retreat" when the attackers give up.
   function landingDay(state, b, t, atk, defs) {
     const A = b.att, D = b.def, L = b.landing;
     L.day++;
-    L.troops = Math.min(L.troops, t.troops);
+    if (L.aw == null) L.aw = L.aw0 = A.troops; // a save from before
+    const g = shoreGuard(state, t);
+    defs = g.defs;
+    L.troops = Math.min(L.troops, g.pool);
+    L.aw = Math.min(L.aw, A.troops);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const aPow = navalPower(A.troops, atk, 30, A.train, L.aFleet, L.dFleet, A.morale);
+    const aPow = navalPower(L.aw, atk, 30, A.train, L.aFleet, L.dFleet, A.morale);
     const dPow = navalPower(L.troops, defs, 40, t.train, L.dFleet, L.aFleet, D.morale);
     let lossD = Math.round(aPow * S.LANDING.rate * rnd());
     let lossA = Math.round(dPow * S.LANDING.rate * rnd());
+    const aSide = { force: A.force, troops: L.aw, morale: A.morale };
     const dSide = { force: D.force, troops: L.troops, morale: D.morale };
-    lossD += fireShips(state, b, atk, defs, A, dSide, L.dFleet);
-    lossA += fireShips(state, b, defs, atk, dSide, A, L.aFleet);
+    lossD += fireShips(state, b, atk, defs, aSide, dSide, L.dFleet);
+    lossA += fireShips(state, b, defs, atk, dSide, aSide, L.aFleet);
+    A.morale = aSide.morale;
     D.morale = dSide.morale;
     lossD = Math.min(L.troops, lossD);
-    lossA = Math.min(A.troops, lossA);
+    lossA = Math.min(L.aw, lossA);
     const gu = S.garrisonUnit(t);
     L.troops -= lossD;
-    S.loseTroops(t, lossD);
+    shoreLoss(state, t, g, lossD);
+    L.aw -= lossA;
     A.troops -= lossA;
+    if (A.shipPort) A.ships = Math.max(0, (A.ships || 0) - lossA);
     b.killedA = (b.killedA || 0) + lossA;
     b.killedD = (b.killedD || 0) + lossD;
     hurt(A, lossA, A.unit);
     S.addWounded(t, "fast", lossD * S.WOUNDED.share, gu);
     A.morale += swing(lossA, lossD, 8);
     D.morale += swing(lossD, lossA, 8);
-    say(b, `상륙 ${L.day}일째: 공격 함대 -${lossA} (${A.troops}), 수비 함대 -${lossD} (${L.troops})`);
-    const failed = A.troops < L.a0 * S.LANDING.fail || A.morale <= S.LANDING.broken;
+    say(b, `상륙 ${L.day}일째: 공격 함대 -${lossA} (${L.aw}), 수비 함대 -${lossD} (${L.troops})`);
+    const failed = L.aw < L.aw0 * S.LANDING.fail || A.morale <= S.LANDING.broken;
     const beaten = L.troops < L.troops0 * S.LANDING.beaten || D.morale <= S.LANDING.broken;
     if (failed && !beaten) {
       say(b, `상륙 실패! ${S.josa(S.forceName(state, A.force), "이", "가")} 뭍에 오르지 못하고 뱃머리를 돌립니다.`);
+      shipsHome(state, b);
       b.broke = "morale";
       return "retreat";
     }
     if (beaten || (L.day >= S.LANDING.days && aPow >= dPow)) {
       say(b, `상륙 성공! ${S.forceName(state, D.force)}의 함대가 성으로 물러났습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} ${S.josa(t.name, "을", "를")} 에워쌉니다.`);
       b.landing = null;
+      shipsHome(state, b);
       return null;
     }
     if (L.day >= S.LANDING.days) {
       say(b, `상륙 실패! 며칠을 싸워도 물길을 열지 못해 ${S.josa(S.forceName(state, A.force), "이", "가")} 물러납니다.`);
+      shipsHome(state, b);
       b.broke = "morale";
       return "retreat";
     }
@@ -1070,6 +1128,7 @@
   function finish(state, b, outcome, onEvent) {
     state.battles = state.battles.filter((x) => x !== b);
     const A = b.att, D = b.def;
+    shipsHome(state, b);
     const report = { kind: b.kind, landing: !!b.landing, lines: b.log, attackerWon: false, from: b.from, to: S.placeName(state, b.place), captured: [], attacker: A.force, defender: D.force, days: b.day };
     const origin = S.place(state, A.origin || (b.march && b.march.origin));
     if (b.kind === "siege") {

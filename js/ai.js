@@ -225,7 +225,7 @@
       const unit = pickUnit(state, c, t, troops);
       // Over water, what is likely left once ashore, if it gets ashore at all.
       const way = ways.find((w) => w.id === t.id);
-      const land = way && S.landingLink(way.path) ? S.landingForecast(state, t.id, c.owner, team, troops, c.train) : null;
+      const land = way && S.landingLink(way.path) ? S.landingForecast(state, t.id, c.owner, team, troops, c.train, S.waterMen(state, way.path, c.owner, troops)) : null;
       if (land && !land.pass) continue;
       const est = S.estimate(state, c.id, t.id, ids, land ? land.left : troops, unit);
       if (land && land.lostD) est.ratio *= t.troops / Math.max(1, t.troops - land.lostD);

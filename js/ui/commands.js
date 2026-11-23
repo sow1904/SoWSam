@@ -513,7 +513,7 @@
   function landingLine(way, t, ids, sent) {
     if (!way || !S.landingLink(way.path)) return "";
     const from = S.place(state, UI.selected);
-    const o = S.landingForecast(state, t.id, from.owner, ids.map((id) => state.officers[id]), sent, from.train);
+    const o = S.landingForecast(state, t.id, from.owner, ids.map((id) => state.officers[id]), sent, from.train, S.waterMen(state, way.path, from.owner, sent));
     const fleets = `아군 ${S.unitName(o.aFleet)} · 적 ${S.unitName(o.dFleet)}, 물 위 전력 ${edgeLabel(1 / Math.max(0.01, o.ratio))}`;
     if (!o.commit) return `상륙전: 적은 물가를 지키지 않을 것 같습니다 (${fleets})<br>`;
     return `<span class="bad">상륙전: 적 함대 ${fmt(o.dTroops)}명이 막아섭니다</span> (${fleets})<br>` +

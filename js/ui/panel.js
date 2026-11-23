@@ -308,8 +308,13 @@
         `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
     }
     html += `<div class="stats">` + stat("병력", f.troops.toLocaleString()) + stat("훈련", f.train) +
-      stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) + `</div>`;
-    return html + `<p class="hint">${f.kind === "pass" ? "지형이 험해 지키기 쉽습니다." : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다."} ` +
+      stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) +
+      (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 / ${S.portMax(state, f).toLocaleString()}`) : "") + `</div>`;
+    const why = f.kind === "pass" ? "지형이 험해 지키기 쉽습니다."
+      : f.kind === "port" ? `강 건너 항구로 출진할 때는 이 항구의 배에 태울 수 있는 만큼만 건넙니다. 배는 매달 ${state.cities[f.home].name}의 금으로 지어집니다(조선 1단계마다 병사 ${S.PORT.build.toLocaleString()}명분, 최대 ${S.PORT.per.toLocaleString()}명분). ` +
+        `적이 건너오면 항구와 ${state.cities[f.home].name}의 병사가 배에 오를 수 있는 만큼 나가 막습니다. 항구에는 병사를 ${S.PORT.cap.toLocaleString()}명까지만 둡니다. 빼앗긴 항구의 배는 불탑니다.`
+      : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다.";
+    return html + `<p class="hint">${why} ` +
       `거점에는 백성과 내정이 없습니다. 지키는 병사는 한 달에 병사 25명당 군량 1을 먹고, 군량은 길로 이어진 아군 도시에서 채웁니다. ` +
       `적이 지키는 거점은 먼저 빼앗아야 그 너머로 갈 수 있습니다. 비어 있는 거점은 수송이나 이동으로 들어가면 차지합니다.</p>`;
   }

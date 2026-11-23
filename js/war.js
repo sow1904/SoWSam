@@ -409,7 +409,7 @@
     if (troops < E.min) return note("main army too small");
     const best = aimTarget(state, fid, war, ways, (t, way) => {
       const unit = S.pickAttackUnit(state, cap, t, troops);
-      const land = S.landingLink(way.path) ? S.landingForecast(state, t.id, fid, team, troops, cap.train) : null;
+      const land = S.landingLink(way.path) ? S.landingForecast(state, t.id, fid, team, troops, cap.train, S.waterMen(state, way.path, fid, troops)) : null;
       if (land && !land.pass) return null;
       const est = S.estimate(state, capId, t.id, ids, land ? land.left : troops, unit);
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
@@ -703,7 +703,10 @@
     for (const c of cede) {
       if (c.owner !== loser) continue;
       // The loser's soldiers and officers withdraw; the families stay.
-      const capId = S.seatOfCity(state, c);
+      // To its corps' seat, or the capital when that seat is itself given up.
+      const keeps = (id) => !!id && !!state.cities[id] && state.cities[id].owner === loser && !cede.includes(state.cities[id]);
+      const seat = S.seatOfCity(state, c), cap = S.capitalOf(state, loser);
+      const capId = keeps(seat) ? seat : keeps(cap) ? cap : null;
       const n = Math.max(0, S.marchable(c));
       const route = capId && S.route(state, c.id, capId, "army");
       if (n >= 100 && route) {
