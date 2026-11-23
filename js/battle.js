@@ -263,7 +263,7 @@
       old.att.rations += m.troops / 10;
       old.att.officers.push(...ids);
       if (old.landing) old.landing.a0 += m.troops;
-      if (m.ships && m.shipPort) S.returnShips(state, m.force, m.shipPort, m.ships); // they unload behind the lines
+      if (m.ships && m.shipPort) S.returnShips(state, m.force, m.shipPort, m.ships, m.shipMix); // they unload behind the lines
       hold(state, old, ids);
       say(old, `${S.forceName(state, m.force)} 원군 ${S.unitName(m.unit)} ${m.troops}명이 도착해 포위에 가세했습니다.`);
       return old;
@@ -274,7 +274,7 @@
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
       att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target),
         rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null, corps: m.corps || 1,
-        ships: m.ships || 0, shipPort: m.shipPort || null },
+        ships: m.ships || 0, shipPort: m.shipPort || null, shipMix: m.shipMix || null },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
@@ -368,12 +368,12 @@
   };
   function intercept(state, m, p) {
     const crew = crewOf(state, m.officers, m.force);
-    const odds = S.landingOdds(state, p.id, m.force, crew, m.troops, m.train || 50, 100, m.troops);
+    const odds = S.landingOdds(state, p.id, m.force, crew, m.troops, m.train || 50, 100, m.troops, m.shipMix ? { fleet: m.shipMix } : null);
     if (!odds.commit) return;
     const g = shoreGuard(state, p);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const aPow = navalPower(m.troops, crew, 30, m.train || 50, odds.aFleet, odds.dFleet, 100);
-    const dPow = navalPower(odds.dTroops, g.defs, 40, p.train, odds.dFleet, odds.aFleet, 100);
+    const aPow = navalPower(state, m.force, m.troops, crew, 30, m.train || 50, odds.aFleet, odds.dFleet, 100);
+    const dPow = navalPower(state, p.owner, odds.dTroops, g.defs, 40, p.train, odds.dFleet, odds.aFleet, 100);
     const I = S.INTERCEPT;
     const lossA = Math.min(Math.floor(m.troops * I.most), Math.round(dPow * S.LANDING.rate * I.days * rnd()));
     const lossD = Math.min(odds.dTroops, Math.round(aPow * S.LANDING.rate * I.days * rnd()));
@@ -392,17 +392,21 @@
     const here = Math.min(n, t.troops);
     S.loseTroops(t, here);
     if (g.home && n > here) S.loseTroops(g.home, Math.min(g.home.troops, n - here));
-    if (t.kind === "port") t.ships = Math.max(0, (t.ships || 0) - n);
+    if (t.kind === "port") S.takeShips(t, n);
   }
   // The attackers' ships that are left sail home.
   function shipsHome(state, b) {
     const A = b.att;
-    if (A.ships > 0 && A.shipPort) S.returnShips(state, A.force, A.shipPort, A.ships);
+    if (A.ships > 0 && A.shipPort) S.returnShips(state, A.force, A.shipPort, A.ships, A.shipMix);
     A.ships = 0;
   }
-  // A side's strength on the water: its men, its leaders, its ships.
-  function navalPower(troops, list, fallback, train, fleet, foeFleet, morale) {
-    return S.power(troops, S.sideStats(list, fallback), train, 1) * S.unitMul(fleet, foeFleet, "water", 1) * (has(list, "수전") ? S.LANDING.skill : 1) * (fleet === "mengchong" ? S.LANDING.green : 1) * moraleMul(morale);
+  // A side's strength on the water: its men, its leaders, its ships (a mix
+  // of kinds, js/ships.js). Crews with no naval leader of a force without
+  // 조선 2단계 are not at home on the water (green).
+  S.greenCrew = (state, fid, list) => !has(list, "수전") && (S.lineLevel ? S.lineLevel(state, fid, "navy") : 1) < 2;
+  function navalPower(state, fid, troops, list, fallback, train, fleet, foeFleet, morale) {
+    return S.power(troops, S.sideStats(list, fallback), train, 1) * S.unitMul(fleet, foeFleet, "water", 1) * (has(list, "수전") ? S.LANDING.skill : 1) *
+      (fid && S.greenCrew(state, fid, list) ? S.LANDING.green : 1) * moraleMul(morale);
   }
   // Whether the defenders of a place would meet a crossing army on the water.
   //   ratio: their strength on the water against the attackers'
@@ -415,11 +419,13 @@
     const g = shoreGuard(state, t);
     const defs = g.defs;
     const aw = Math.max(0, Math.floor(onWater == null ? Math.min(troops, S.ferryOf(state, force)) : Math.min(troops, onWater)));
-    const aFleet = S.fleet(state, force, officers);
-    const dFleet = t.owner ? S.fleet(state, t.owner, defs) : "mengchong";
+    // The ships: the attackers' as they sailed (v.fleet), else the force's
+    // fleet as a whole; the defenders' those of the port.
+    const aFleet = v.fleet || S.forceShipMix(state, force);
+    const dFleet = S.shipMix(t);
     const dTroops = Math.floor(Math.min(g.cap, g.pool * S.LANDING.share));
-    const a = navalPower(aw * v.a, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale) * v.aq;
-    const d = navalPower(dTroops * v.d, defs, 40, t.train, dFleet, aFleet, 100) * v.dq;
+    const a = navalPower(state, force, aw * v.a, officers, 30, train, aFleet, dFleet, morale == null ? 100 : morale) * v.aq;
+    const d = navalPower(state, t.owner, dTroops * v.d, defs, 40, t.train, dFleet, aFleet, 100) * v.dq;
     const ratio = a > 0 ? d / a : 99;
     const policy = S.defensePolicy(state, targetId);
     const need = policy === "intercept" ? S.LANDING.keen : S.LANDING.favour;
@@ -441,8 +447,8 @@
     o.dTroops = Math.round(o.dTroops * o.view.d); // as believed
     let a = o.aw, d = o.dTroops, am = 100, dm = 100;
     for (let day = 1; ; day++) {
-      const aPow = navalPower(a, officers, 30, train, o.aFleet, o.dFleet, am);
-      const dPow = navalPower(d, defs, 40, t.train, o.dFleet, o.aFleet, dm) * o.view.dq;
+      const aPow = navalPower(state, force, a, officers, 30, train, o.aFleet, o.dFleet, am);
+      const dPow = navalPower(state, t.owner, d, defs, 40, t.train, o.dFleet, o.aFleet, dm) * o.view.dq;
       const lossD = Math.min(d, aPow * S.LANDING.rate), lossA = Math.min(a, dPow * S.LANDING.rate);
       a -= lossA; d -= lossD;
       am += swing(lossA, lossD, 8); dm += swing(lossD, lossA, 8);
@@ -456,7 +462,8 @@
     const A = b.att;
     // The defenders judge the fleet by one look as it comes (js/intel.js).
     const look = S.sizeUpFleet && t.owner ? S.sizeUpFleet(state, t.owner, b.place, A.force, (state.year * 12 + state.month) * 31 + (state.day || 0)) : null;
-    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale, A.shipPort ? A.ships : S.waterMen(state, A.path, A.force, A.troops), look && { a: look.t, aq: look.q });
+    const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale, A.shipPort ? A.ships : S.waterMen(state, A.path, A.force, A.troops),
+      Object.assign(look ? { a: look.t, aq: look.q } : {}, A.shipMix ? { fleet: A.shipMix } : {}));
     if (!odds.commit) {
       shipsHome(state, b);
       if (t.owner) say(b, `${S.josa(S.forceName(state, t.owner), "은", "는")} 물가를 지키지 않고 성에 틀어박혔습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} 무사히 뭍에 올랐습니다.`);
@@ -479,8 +486,8 @@
     L.troops = Math.min(L.troops, g.pool + (L.rel || 0));
     L.aw = Math.min(L.aw, A.troops);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const aPow = navalPower(L.aw, atk, 30, A.train, L.aFleet, L.dFleet, A.morale);
-    const dPow = navalPower(L.troops, defs, 40, t.train, L.dFleet, L.aFleet, D.morale);
+    const aPow = navalPower(state, A.force, L.aw, atk, 30, A.train, L.aFleet, L.dFleet, A.morale);
+    const dPow = navalPower(state, D.force, L.troops, defs, 40, t.train, L.dFleet, L.aFleet, D.morale);
     let lossD = Math.round(aPow * S.LANDING.rate * rnd());
     let lossA = Math.round(dPow * S.LANDING.rate * rnd());
     const aSide = { force: A.force, troops: L.aw, morale: A.morale };
@@ -500,7 +507,7 @@
       R.troops -= lossR;
       b.killedR = (b.killedR || 0) + lossR;
       hurt(R, lossR, R.unit);
-      if (t.kind === "port") t.ships = Math.max(0, (t.ships || 0) - lossR);
+      if (t.kind === "port") S.takeShips(t, lossR);
     }
     shoreLoss(state, t, g, lossD - lossR);
     L.aw -= lossA;
@@ -854,8 +861,9 @@
       say(b, `${S.forceName(state, side.force)}이 화선을 띄웠으나 ${w ? S.josa(w.name, "이", "가") + " 바람을 읽고 피했습니다" : "적이 피했습니다"}.`);
       return 0;
     }
-    const tall = foeFleet === "louchuan";
-    const loss = Math.round(foe.troops * S.FIRESHIP.loss * (tall ? S.FIRESHIP.tall : 1));
+    const tallShare = S.mixOf(foeFleet).louchuan || 0;
+    const tall = tallShare >= 0.5;
+    const loss = Math.round(foe.troops * S.FIRESHIP.loss * (1 + (S.FIRESHIP.tall - 1) * tallShare));
     foe.morale -= S.FIRESHIP.morale;
     say(b, `${S.forceName(state, side.force)}의 화선이 적 함대에 불을 붙였습니다! ${tall ? "높은 누선이 잘 탑니다. " : ""}적 ${loss}명이 쓰러집니다.`);
     return loss;

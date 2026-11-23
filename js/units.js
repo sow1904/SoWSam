@@ -33,8 +33,8 @@
   // atk/def scale what a side deals and how much it shrugs off; tier and
   // special decide when it can be raised; cost is what each soldier is
   // drafted with: spears iron, swords more iron (shield and armour),
-  // bows wood, horses horses. 몽충 and 투함 are the ordinary fleet and cost
-  // nothing; the 누선 tower ship takes a lot of timber.
+  // bows wood, horses horses. Ships are built at ports, not drafted, and
+  // cost what js/ships.js says.
   S.UNITS = {
     jibing: { name: "극병", line: "spear", tier: 1, atk: 1, def: 1, cost: { iron: 1 } },
     spearman: { name: "창병", line: "spear", tier: 2, atk: 1.1, def: 1.1, cost: { iron: 1, wood: 1 } },
@@ -90,7 +90,7 @@
   const MOUNTED = { horse: true, horsebow: true };
   // How well a line fights in a setting:
   //   field  - in the open (a sortie, a relief army)
-  //   water  - a landing, fought in ships only (see S.fleet)
+  //   water  - a landing, fought in ships only (the ships of js/ships.js)
   //   siegeA - storming walls; siegeD - holding them
   const SETTING = {
     field: { siege: 0.4, other: 1 },
@@ -292,7 +292,7 @@
   // drafted only in those cities (troops can then go anywhere). 연노병 and
   // 보도병 are inventions: researched in the capital once the force holds a
   // city there (js/tech.js), then drafted in any city. 누선 is not drafted:
-  // it is the fleet of a force holding a city on the Yangzi (S.fleet).
+  // it is built at a port whose city lies in its lands (js/ships.js).
   //   cities: exact commanderies; prov: a whole province
   // why: 무릉만 and 산월 were the hill peoples south of the river line; 남중
   // is the far south of 익주; elephants came up through 교주; 오환 riders
@@ -346,15 +346,7 @@
     for (const [k, v] of Object.entries(S.unitOf(id).cost || {})) c.res[k] -= v * n;
   };
 
-  // The ships a side fights in on a great river: 투함 under a naval
-  // specialist or with 조선 technology, else 몽충. A force with the second
-  // level of 조선 that holds a city on the Yangzi builds 누선 instead: the
-  // shipyards are not enough without the craft to use them.
-  S.fleet = (state, fid, officers) => {
-    const lv = S.lineLevel ? S.lineLevel(state, fid, "navy") : 1;
-    if (!officers.some((o) => S.hasSkill(o, "수전")) && lv < 2) return "mengchong";
-    return lv >= 2 && S.holdsSpecialLand(state, fid, "louchuan") ? "louchuan" : "douhan";
-  };
+  // The ships a side fights in are those of its port, by kind (js/ships.js).
 
   // One type's multiplier on what it deals, against a foe type.
   //   where: "water" | "field" | "siegeA" | "siegeD"; rough: the road's roughness (1 = easy)

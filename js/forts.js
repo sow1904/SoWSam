@@ -121,11 +121,16 @@
       prov: state.cities[home].prov, posts: S.emptyPosts(),
     };
   }
-  // A port's ships at the start: a share of what it can hold.
+  // A port's ships at the start: a share of what it can hold, of the best
+  // kind its owner builds there (js/ships.js).
   function stockPort(state, f) {
     if (f.kind !== "port") return;
-    f.ships = f.owner ? Math.round(S.portMax(state, f) * S.PORT.start) : 0;
+    f.fleet = {};
+    f.ships = 0;
     f.shipsOf = f.owner;
+    if (!f.owner) return;
+    const kind = ["louchuan", "douhan", "mengchong"].find((k) => S.canBuildShip(state, f, k)) || "mengchong";
+    S.addShips(state, f, kind, Math.round(S.portMax(state, f) * S.PORT.start));
   }
   // The places a stronghold's roads join: [a, b] or [a, b1, b2, ...].
   S.siteRoad = (site) => [site[2], ...[].concat(site[3] == null ? [] : site[3])];
@@ -218,24 +223,20 @@
       }
     }
   };
-  // A port: ships burnt when it changes hands, men over its cap sent to its
-  // city, new ships built with the city's gold.
+  // A port: ships burnt when it changes hands (and the orders with them),
+  // men over its cap sent to its city, ships built and kept (js/ships.js).
   function runPort(state, f) {
-    if (f.shipsOf !== f.owner) { f.ships = 0; f.shipsOf = f.owner; }
+    if (f.shipsOf !== f.owner) { f.fleet = {}; f.ships = 0; f.shipOrder = null; f.shipsOf = f.owner; }
     const home = state.cities[f.home];
     if (!f.owner || !home || home.owner !== f.owner) return;
     const over = Math.floor(f.troops - S.PORT.cap);
     if (over > 0) { S.addTroops(home, S.garrisonUnit(f), over); f.troops -= over; }
-    const lv = S.lineLevel ? S.lineLevel(state, f.owner, "navy") : 1;
-    const n = Math.min(S.PORT.build * lv, S.portMax(state, f) - (f.ships || 0), Math.floor(home.gold / S.PORT.cost));
-    if (n <= 0) return;
-    f.ships = (f.ships || 0) + n;
-    home.gold -= Math.ceil(n * S.PORT.cost);
+    S.runShipyard(state, f);
   }
-  // Ships come back to a port: only to one still held.
-  S.returnShips = function (state, force, portId, n) {
+  // Ships come back to a port (of the kinds in mix): only to one still held.
+  S.returnShips = function (state, force, portId, n, mix) {
     const f = state.forts && state.forts[portId];
-    if (f && f.owner === force && n > 0) f.ships = Math.min(S.portMax(state, f), (f.ships || 0) + Math.round(n));
+    if (f && f.owner === force && n > 0) S.putShips(state, f, n, mix);
   };
 
   // A force that falls loses its strongholds; the men scatter.

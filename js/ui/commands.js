@@ -677,6 +677,8 @@
       const r = S.trade(state, UI.selected, p.good, num("trAmount"), p.sell);
       if (UI.result(r)) commands.trade();
     },
+    orderShips: () => UI.result(S.orderShips(state, UI.selected, $("#shipKind").value, num("shipN"))),
+    stopShips: () => UI.result(S.orderShips(state, UI.selected, null, 0)),
     moveCapital: () => {
       const c = state.cities[UI.selected];
       if (!confirm(`${S.capitalLabel(state, c.owner)}를 ${S.ro(c.name)} 옮길까요?`)) return;

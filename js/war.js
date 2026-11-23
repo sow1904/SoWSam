@@ -499,7 +499,8 @@
   };
   S.armyKeep = function (state, cities) {
     const grain = cities.reduce((s, c) => s + S.harvestOf(state, c) + c.food / S.ECON.stores, 0);
-    const gold = cities.reduce((s, c) => s + S.income(c) - S.salaries(c) + (S.isSeatCity(state, c) ? c.gold / (S.ECON.stores * 12) : 0), 0);
+    const gold = cities.reduce((s, c) => s + S.income(c) - S.salaries(c) + (S.isSeatCity(state, c) ? c.gold / (S.ECON.stores * 12) : 0), 0) -
+      (S.portsUpkeep ? S.portsUpkeep(state, cities) : 0); // the fleet is paid first (js/ships.js)
     return Math.max(0, Math.min(grain * 25 / 12, (gold - 15) * S.ECON.upkeep));
   };
 

@@ -1069,7 +1069,7 @@
       officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
     // The supply base, and when the target hears of it (js/war.js).
     if (S.marchBase) { m.base = S.marchBase(state, m.path, m.force); m.seen = S.spotDay(state, m); }
-    if (portId) { state.forts[portId].ships -= troops; m.ships = troops; m.shipPort = portId; }
+    if (portId) { m.shipMix = S.takeShips(state.forts[portId], troops); m.ships = troops; m.shipPort = portId; }
     const names = oids.map((id) => state.officers[id].name).join(", ");
     return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };

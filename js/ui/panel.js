@@ -127,6 +127,21 @@
     return `<div class="row"><label>수비 병력${tip}</label><span>${UI.guess(p) ? `${UI.troopsText(p)} <span class="hint">(추정)</span>` : S.mixText(S.garrisonUnit(p), p.troops)}</span></div>` +
       (pools.length ? `<div class="row"><label>부상병${helpTip(H.wounded)}</label><span>${pools.map(([k, w]) => `${S.WOUND_CARE[k]} ${fmt(w.n)}`).join(" · ")}</span></div>` : "");
   }
+  // A port's ships by kind, as text.
+  UI.fleetText = (f) => S.SHIP_KINDS.filter((k) => (S.fleetOf(f)[k] || 0) >= 1).map((k) => `${S.unitName(k)} ${fmt(Math.floor(S.fleetOf(f)[k]))}`).join(" · ") || "없음";
+  // The shipyard of an own port: its fleet, its order and a new one (js/ships.js).
+  function shipyardRows(f) {
+    const o = f.shipOrder;
+    const kinds = S.SHIP_KINDS.filter((k) => S.canBuildShip(state, f, k));
+    const ai = S.corpsRunsItself && S.corpsRunsItself(state, f.owner, S.placeCorps(state, f));
+    const cur = o ? `${S.unitName(o.kind)} 병사 ${fmt(Math.ceil(o.left))}명분 남음 (한 달에 최대 ${fmt(S.shipRate(state, f, o.kind))}명분)` : "없음";
+    return `<h3>함선 건조${helpTip(H.ships)}</h3>` +
+      `<div class="row"><label>함대</label><span>${UI.fleetText(f)} <span class="hint">(${fmt(f.ships || 0)} / ${fmt(S.portMax(state, f))}명분, 유지비 매달 금 ${S.shipUpkeep(f)})</span></span></div>` +
+      `<div class="row"><label>건조 중</label><span>${cur}${o && !ai ? ` <button data-action="stopShips">멈춤</button>` : ""}</span></div>` +
+      (ai ? `<p class="hint">도독에게 맡긴 군단의 항구는 도독이 알아서 짓습니다.</p>` :
+        `<div class="row"><label>새 건조</label><span><select id="shipKind">${kinds.map((k) => `<option value="${k}">${S.unitName(k)} (100명분에 ${S.shipCostText(k, 100)})</option>`).join("")}</select> ` +
+        `<input id="shipN" type="number" min="100" step="500" value="${Math.max(500, S.portMax(state, f) - (f.ships || 0))}" style="width:6em"> 명분 <button data-action="orderShips">건조</button></span></div>`);
+  }
   // Moving the force capital here.
   function capitalRow(c) {
     if (S.isCapital(state, c.id)) return "";
@@ -239,6 +254,7 @@
         `<p class="idle">대기 무장 <b>${S.idle(state, f.id).length}</b> / ${servants.length}명${helpTip(H.command)}</p>` +
         cmdGroup("군사", [cmdButton(f, "attack"), S.reliefTargets(state, f.id).length ? cmdButton(f, "relieve") : "", cmdButton(f, "move")]) +
         cmdGroup("인사", [cmdButton(f, "relocate")]) +
+        (f.kind === "port" ? shipyardRows(f) : "") +
         `<h3>방비</h3>` + policyRow(f.id) + garrisonRow(f.id)]);
     }
     tabs.push(["men", `무장 ${servants.length}`, () => `<h3>무장 (${servants.length})</h3>` +
@@ -309,9 +325,10 @@
     }
     html += `<div class="stats">` + stat("병력", UI.troopsText(f)) + stat("훈련", f.train) +
       stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) +
-      (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 / ${S.portMax(state, f).toLocaleString()}`) : "") + `</div>`;
+      (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 / ${S.portMax(state, f).toLocaleString()}`) : "") + `</div>` +
+      (f.kind === "port" && f.owner && (UI.mine(f) || !UI.guess(f)) ? `<p class="hint">함대: ${UI.fleetText(f)}</p>` : "");
     const why = f.kind === "pass" ? "지형이 험해 지키기 쉽습니다."
-      : f.kind === "port" ? `강 건너 항구로 출진할 때는 이 항구의 배에 태울 수 있는 만큼만 건넙니다. 배는 매달 ${state.cities[f.home].name}의 금으로 지어집니다(조선 1단계마다 병사 ${S.PORT.build.toLocaleString()}명분, 최대 ${S.PORT.per.toLocaleString()}명분). ` +
+      : f.kind === "port" ? `강 건너 항구로 출진할 때는 이 항구의 배에 태울 수 있는 만큼만 건넙니다. 배는 건조 명령에 따라 ${state.cities[f.home].name}의 금과 목재로 짓고, 유지비도 그 도시가 냅니다(최대 조선 1단계마다 ${S.PORT.per.toLocaleString()}명분). ` +
         `적이 건너오면 항구와 ${state.cities[f.home].name}의 병사가 배에 오를 수 있는 만큼 나가 막습니다. 항구에는 병사를 ${S.PORT.cap.toLocaleString()}명까지만 둡니다. 빼앗긴 항구의 배는 불탑니다.`
       : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다.";
     return html + `<p class="hint">${why} ` +
