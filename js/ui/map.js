@@ -305,7 +305,7 @@
         `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>` +
         `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
         `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
-        `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 18 * k}">${UI.troopsText(c, true)}</text></g>`;
+        `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 9 * k + 11}">${UI.troopsText(c, true)}</text></g>`;
     }));
     UI.renderMarches();
     if (!(drag && UI.dragged)) applyView();
@@ -323,7 +323,7 @@
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
-      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 25}">${UI.troopsText(f, true)}</text>` : "") + `</g>`;
+      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 27}">${UI.troopsText(f, true)}</text>` : "") + `</g>`;
   }
 
   UI.battleTitle = function (b) {
