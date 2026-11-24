@@ -247,6 +247,10 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 .land { fill: var(--land); stroke: var(--land-edge); stroke-width: 3; stroke-linejoin: round; }
 .prov { font-family: var(--serif); font-size: 46px; font-weight: 800; fill: var(--label); opacity: 0.13; text-anchor: middle; dominant-baseline: middle; pointer-events: none; letter-spacing: 6px; }
 #map.far .city text.troops { display: none; }
+/* 전도 감상: the whole painting, letterboxed, without roads or names */
+#map.panorama #roadLayer, #map.panorama text, #map.panorama .mroute, #map.panorama .ring { display: none; }
+#mapBase.panorama .sea { fill: #0d0c0b; }
+#map.panorama { cursor: default; }
 .river { fill: none; stroke: var(--river); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
 .road { stroke: var(--road); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
 .road.hl { stroke: var(--accent); stroke-width: 3.5; stroke-dasharray: none; opacity: 1; }
@@ -284,6 +288,12 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 #map.terrain .road { stroke: rgba(255, 244, 214, 0.8); stroke-width: 2.2; stroke-dasharray: 6 4; opacity: 1; }
 #map.terrain .road.sea-road { stroke: rgba(170, 220, 255, 0.75); stroke-dasharray: 2 6; stroke-linecap: round; }
 #map.terrain .road.hl { stroke: #ffcf5a; stroke-width: 3.5; stroke-dasharray: none; }
+/* Lines keep about their width on screen as the map zooms, as the icons do (--k, js/ui/map.js). */
+#map.terrain .road { stroke-width: calc(2.2px * var(--k, 1)); stroke-dasharray: calc(6px * var(--k, 1)) calc(4px * var(--k, 1)); }
+#map.terrain .road.sea-road { stroke-dasharray: calc(2px * var(--k, 1)) calc(6px * var(--k, 1)); }
+#map.terrain .road.hl { stroke-width: calc(3.5px * var(--k, 1)); stroke-dasharray: none; }
+#map.terrain .mroute { stroke-width: calc(2px * var(--k, 1)); stroke-dasharray: calc(2px * var(--k, 1)) calc(5px * var(--k, 1)); }
+#map.terrain .mroute.threat { stroke-width: calc(3px * var(--k, 1)); }
 #map.terrain .city text, #map.terrain .fort text { fill: #fff8e6; stroke: #1d1a16; stroke-width: 3.5px; }
 #map.terrain .city text.troops, #map.terrain .fort text.troops { fill: #f0e2bf; }
 #map.terrain .city.mine text.name, #map.terrain .fort.mine text.name { fill: #ffd27a; }

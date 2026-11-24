@@ -23,13 +23,33 @@
   // Zoom limits; with a painted map the view never goes past its edges, so
   // the farthest zoom out is the one at which the picture just fills the
   // screen (on a screen of another shape, part of the land is then off it).
-  const ZOOM = { min: 0.35, max: 2.5 };
+  const ZOOM = { min: 0.35, max: 3.5 };
   const minZoom = (r) => {
     const T = S.MAP && S.MAP.terrain;
     return T && r.width && r.height ? Math.max(ZOOM.min, r.width / T.w, r.height / T.h) : ZOOM.min;
   };
+  // 전도 감상 (panorama): one more turn of the wheel out from the farthest
+  // zoom shows the whole painting, letterboxed, with no roads and no names.
+  // why: the user's design, to look at the map itself.
+  UI.panorama = false;
+  const wholeZoom = (r) => { const T = S.MAP.terrain; return Math.min(r.width / T.w, r.height / T.h); };
+  // Icons keep about their size on screen as the map zooms (they grow by
+  // zoom^(1-ICON.keep) only), so crowded places come apart when zoomed in.
+  // why: the user's design; the land is true to scale and 낙양's neighbours
+  // sit close together.
+  const ICON = { keep: 0.8, ref: 1, min: 0.35, max: 1.15 };
+  UI.iconK = 1;
+  const iconKOf = (zoom) => (UI.panorama ? 1 : Math.min(ICON.max, Math.max(ICON.min, Math.pow(ICON.ref / zoom, ICON.keep))));
   function fitView(r) {
     const T = r.width > 0 && r.height > 0 && S.MAP && S.MAP.terrain; // (a hidden map has no size)
+    if (T && UI.panorama) {
+      view.zoom = wholeZoom(r);
+      view.w = r.width / view.zoom;
+      view.h = r.height / view.zoom;
+      view.x = (T.w - view.w) / 2;
+      view.y = (T.h - view.h) / 2;
+      return;
+    }
     if (T) view.zoom = Math.min(Math.max(view.zoom, minZoom(r)), Math.max(ZOOM.max, minZoom(r)));
     view.w = T ? r.width / view.zoom : Math.max(200, r.width / view.zoom);
     view.h = T ? r.height / view.zoom : Math.max(200, r.height / view.zoom);
@@ -66,7 +86,12 @@
     Object.assign(shown, { x: view.x, y: view.y, w: view.w, h: view.h });
     for (const x of both()) x.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
     svg.classList.toggle("far", view.zoom < 0.75);
+    for (const x of both()) x.classList.toggle("panorama", UI.panorama);
     miniBox();
+    // A new zoom: the icons are drawn again at their new scale.
+    const k = Math.round(iconKOf(view.zoom) * 100) / 100;
+    svg.style.setProperty("--k", k); // lines (css/style.css)
+    if (k !== UI.iconK) { UI.iconK = k; if (state) requestAnimationFrame(() => UI.renderMap()); }
   }
 
   // ---------- which painting of the map (S.MAP_ART, js/data/map.js) ----------
@@ -145,6 +170,18 @@
   };
   function zoomAt(factor, cx, cy) {
     const r = mapRect();
+    const T = S.MAP && S.MAP.terrain;
+    if (T && !UI.panorama && factor < 1 && view.zoom <= minZoom(r) + 1e-6) { UI.panorama = true; applyView(); return; }
+    if (UI.panorama) {
+      if (factor <= 1) return;
+      UI.panorama = false; // back in at the farthest zoom, centred where the wheel was
+      const px = view.x + ((cx - r.left) / r.width) * view.w, py = view.y + ((cy - r.top) / r.height) * view.h;
+      view.zoom = minZoom(r);
+      view.x = px - r.width / view.zoom / 2;
+      view.y = py - r.height / view.zoom / 2;
+      applyView();
+      return;
+    }
     const px = view.x + ((cx - r.left) / r.width) * view.w;
     const py = view.y + ((cy - r.top) / r.height) * view.h;
     view.zoom = Math.min(Math.max(ZOOM.max, minZoom(r)), Math.max(minZoom(r), view.zoom * factor));
@@ -169,6 +206,7 @@
       const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
       if (!UI.dragged && Math.hypot(dx, dy) < 5) return;
       UI.dragged = true;
+      if (UI.panorama) return; // the whole map is shown: nothing to drag
       view.x = drag.vx - dx / view.zoom;
       view.y = drag.vy - dy / view.zoom;
       previewView();
@@ -194,6 +232,8 @@
     c1_ruin: [215, 157], c2_ruin: [215, 165], c3_ruin: [215, 164], c4_ruin: [215, 177], c5_ruin: [218, 189], palace_ruin: [215, 187],
   };
   const art4 = () => S.MAP_ART === 4;
+  // A glyph drawn about its place at the icons' scale (UI.iconK).
+  const scaleAt = (p) => (UI.iconK === 1 ? "" : ` transform="translate(${p.x} ${p.y}) scale(${UI.iconK}) translate(${-p.x} ${-p.y})"`);
   // 세력 깃발 (4안): a flag on a corner of the building, its cloth dyed the
   // owner's colour (a filter per force over the white cloth; the pole and the
   // ink outline stay as drawn). The pole stands at 6/140 of the picture.
@@ -349,9 +389,10 @@
       const tier = icon.startsWith("palace") ? 5 : S.cityTier(c);
       const w = iw * 0.2 * (0.9 + tier * 0.04) * k * (art4() ? 0.78 : 1), h = w * ih / iw;
       const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.home(c) ? "mine" : "", c.id === S.playerCity(state) ? "seat" : ""].join(" ");
-      return `<g class="${cls}" data-city="${c.id}">` +
+      return `<g class="${cls}" data-city="${c.id}"${scaleAt(c)}>` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
-        `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>` +
+        // the owner: a flag in 4안 (below), a coloured ground under the castle otherwise
+        (art4() ? "" : `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>`) +
         `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
         (art4() && c.owner ? flagAt(c.owner, c.x + w * 0.3, c.y - h * 0.18, h * 0.62) : "") +
         `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
@@ -369,11 +410,11 @@
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
     const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
-    const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
+    const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>` +
       (art4() && f.built && f.owner ? flagAt(f.owner, f.x + iw * 0.3, f.y - ih * 0.15, ih * 0.62) : "");
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
-    return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
+    return `<g class="${cls}" data-city="${f.id}"${scaleAt(f)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
       (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 27}">${UI.troopsText(f, true)}</text>` : "") + `</g>`;
   }
@@ -417,7 +458,7 @@
         // siege engines. The number of men rides below it.
         const kind = m.speed === "cavalry" ? "horse" : m.speed === "siege" ? "engine" : "foot";
         const deg = Math.round(Math.atan2(dest.y - y, dest.x - x) * 180 / Math.PI);
-        svg += `<g class="march army ${kind}${threat ? " threat" : ""}" transform="translate(${x} ${y})"><title>${tip}</title>` +
+        svg += `<g class="march army ${kind}${threat ? " threat" : ""}" transform="translate(${x} ${y}) scale(${UI.iconK})"><title>${tip}</title>` +
           `<ellipse class="shade" cx="1" cy="9" rx="13" ry="4"/>` +
           (kind === "horse" ? `<path class="tok" transform="rotate(${deg})" d="${TOKEN.horse}" fill="${color}"/>`
             : `<path class="tok" d="${TOKEN[kind]}" fill="${color}"/><path class="lit" d="${TOKEN[kind + "Lit"]}"/>`) +
