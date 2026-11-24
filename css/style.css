@@ -251,6 +251,8 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 #map.panorama #roadLayer, #map.panorama text, #map.panorama .mroute, #map.panorama .ring { display: none; }
 #mapBase.panorama .sea { fill: #0d0c0b; }
 #map.panorama { cursor: default; }
+#map.panorama .march text { display: inline; } /* armies still go about, with their numbers */
+body.panorama #panelInfo, body.panorama #miniNav, body.panorama #cityWin { display: none; } /* the 전황 fills the side */
 .river { fill: none; stroke: var(--river); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
 .road { stroke: var(--road); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
 .road.hl { stroke: var(--accent); stroke-width: 3.5; stroke-dasharray: none; opacity: 1; }

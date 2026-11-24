@@ -37,9 +37,14 @@
   // zoom^(1-ICON.keep) only), so crowded places come apart when zoomed in.
   // why: the user's design; the land is true to scale and 낙양's neighbours
   // sit close together.
+  // Cities keep less of their size (CITY.keep), so they grow a little as the
+  // map comes closer while strongholds and armies stay small beside them.
   const ICON = { keep: 0.8, ref: 1, min: 0.35, max: 1.15 };
+  const CITY = { keep: 0.5, min: 0.55, max: 1.15 };
   UI.iconK = 1;
-  const iconKOf = (zoom) => (UI.panorama ? 1 : Math.min(ICON.max, Math.max(ICON.min, Math.pow(ICON.ref / zoom, ICON.keep))));
+  UI.cityK = 1;
+  const kOf = (zoom, I) => (UI.panorama ? 1 : Math.min(I.max, Math.max(I.min, Math.pow(ICON.ref / zoom, I.keep))));
+  const iconKOf = (zoom) => kOf(zoom, ICON);
   function fitView(r) {
     const T = r.width > 0 && r.height > 0 && S.MAP && S.MAP.terrain; // (a hidden map has no size)
     if (T && UI.panorama) {
@@ -89,9 +94,10 @@
     for (const x of both()) x.classList.toggle("panorama", UI.panorama);
     miniBox();
     // A new zoom: the icons are drawn again at their new scale.
-    const k = Math.round(iconKOf(view.zoom) * 100) / 100;
+    document.body.classList.toggle("panorama", UI.panorama); // the side panel and the small map step aside (css)
+    const k = Math.round(iconKOf(view.zoom) * 100) / 100, kc = Math.round(kOf(view.zoom, CITY) * 100) / 100;
     svg.style.setProperty("--k", k); // lines (css/style.css)
-    if (k !== UI.iconK) { UI.iconK = k; if (state) requestAnimationFrame(() => UI.renderMap()); }
+    if (k !== UI.iconK || kc !== UI.cityK) { UI.iconK = k; UI.cityK = kc; if (state) requestAnimationFrame(() => UI.renderMap()); }
   }
 
   // ---------- which painting of the map (S.MAP_ART, js/data/map.js) ----------
@@ -233,12 +239,12 @@
   };
   const art4 = () => S.MAP_ART === 4;
   // A glyph drawn about its place at the icons' scale (UI.iconK).
-  const scaleAt = (p) => (UI.iconK === 1 ? "" : ` transform="translate(${p.x} ${p.y}) scale(${UI.iconK}) translate(${-p.x} ${-p.y})"`);
+  const scaleAt = (p, k = UI.iconK) => (k === 1 ? "" : ` transform="translate(${p.x} ${p.y}) scale(${k}) translate(${-p.x} ${-p.y})"`);
   // 세력 깃발 (4안): a flag on a corner of the building, its cloth dyed the
   // owner's colour (a filter per force over the white cloth; the pole and the
   // ink outline stay as drawn). The pole stands at 6/140 of the picture.
   // why: the user's design, the white flag of their icon sheet as the banner.
-  const FLAG = { w: 140, h: 183, pole: 6 / 140 };
+  const FLAG = { w: 140, h: 183, pole: 6 / 140, size: 1.8 }; // size: x the building's height
   const tintId = (fid) => "tint-" + (fid || "none");
   function flagDefs() {
     const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
@@ -389,12 +395,12 @@
       const tier = icon.startsWith("palace") ? 5 : S.cityTier(c);
       const w = iw * 0.2 * (0.9 + tier * 0.04) * k * (art4() ? 0.78 : 1), h = w * ih / iw;
       const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.home(c) ? "mine" : "", c.id === S.playerCity(state) ? "seat" : ""].join(" ");
-      return `<g class="${cls}" data-city="${c.id}"${scaleAt(c)}>` +
+      return `<g class="${cls}" data-city="${c.id}"${scaleAt(c, UI.cityK)}>` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         // the owner: a flag in 4안 (below), a coloured ground under the castle otherwise
         (art4() ? "" : `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>`) +
         `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
-        (art4() && c.owner ? flagAt(c.owner, c.x + w * 0.3, c.y - h * 0.18, h * 0.62) : "") +
+        (art4() && c.owner ? flagAt(c.owner, c.x + w * 0.3, c.y - h * 0.18, h * FLAG.size) : "") +
         `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 9 * k + 11}">${UI.troopsText(c, true)}</text></g>`;
     }));
@@ -412,7 +418,7 @@
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>` +
-      (art4() && f.built && f.owner ? flagAt(f.owner, f.x + iw * 0.3, f.y - ih * 0.15, ih * 0.62) : "");
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x + iw * 0.3, f.y - ih * 0.15, ih * FLAG.size) : "");
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"${scaleAt(f)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
