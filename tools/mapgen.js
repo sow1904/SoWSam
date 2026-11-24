@@ -7,6 +7,7 @@
 //   season: spring | summer | autumn | winter (default summer)
 //   --places: dots and names of the cities, to check the fit
 //   --ink: in ink and wash (tools/mapgen-ink.js); --lines: ink only, no paper or colour
+//   --control: bare shapes for ControlNet (coast, river banks, lakes, crests)
 //   --size=4096: the ink map drawn larger (2048 by default)
 //   --geo: true latitude and longitude, the cities at their true places
 const fs = require("fs"), path = require("path"), vm = require("vm");
@@ -217,7 +218,7 @@ for (const [la, lo, r] of PLAINS) {
 
 // Ink and wash instead (tools/mapgen-ink.js).
 if (process.argv.includes("--ink")) {
-  require("./mapgen-ink.js")({ W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf, lineOnly: process.argv.includes("--lines"), size: +((process.argv.find((x) => x.startsWith("--size=")) || "=2048").split("=")[1]) });
+  require("./mapgen-ink.js")({ W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf, lineOnly: process.argv.includes("--lines"), control: process.argv.includes("--control"), size: +((process.argv.find((x) => x.startsWith("--size=")) || "=2048").split("=")[1]) });
   process.exit(0);
 }
 // ---------- colour ----------

@@ -7,7 +7,9 @@
 // usage: node tools/mapgen.js <out.png> [season] --ink [--places]
 const { execFileSync } = require("child_process");
 module.exports = function (ctx) {
-  const { W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf, lineOnly } = ctx;
+  const { W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf } = ctx;
+  // control: only the shapes, black on white, for ControlNet (coast, river banks, lakes, crests).
+  const control = !!ctx.control, lineOnly = ctx.lineOnly || control;
   // N: the size drawn (2048, or more for a detailed sheet); q: brushes and marks grow with it.
   const N = ctx.size || 2048, k = N / W, q = N / 2048;
   // ---------- the fields at full size (bilinear) ----------
@@ -42,7 +44,7 @@ module.exports = function (ctx) {
     }
   };
   // A light wash under the high ground.
-  for (let i = 0; i < N * N; i++) if (isLand(i)) ink[i] = Math.max(0, Hh[i] - 0.15) * 0.25;
+  if (!control) for (let i = 0; i < N * N; i++) if (isLand(i)) ink[i] = Math.max(0, Hh[i] - 0.15) * 0.25;
   // Mountains: mounds drawn from the back to the front, each inked darkest
   // along its crest and fading down its flank to the paper, the nearer ones
   // hiding those behind; strokes (준법) down from the crest.
@@ -60,7 +62,7 @@ module.exports = function (ctx) {
     for (let dx = -Math.ceil(w); dx <= w; dx++) {
       const yt = top(dx), xx = Math.round(m.x + dx);
       if (xx < 0 || xx >= N) continue;
-      for (let yy = Math.floor(yt); yy <= m.y; yy++) {
+      for (let yy = Math.floor(yt); yy <= m.y && !control; yy++) {
         if (yy < 0 || yy >= N) continue;
         const i = yy * N + xx;
         if (!isLand(i)) continue;
@@ -71,14 +73,14 @@ module.exports = function (ctx) {
       add(xx, yt, dark * 0.9); for (let o = 1; o < q; o++) add(xx, yt + o, dark * 0.7); add(xx, yt + q, dark * 0.4); // the crest line
     }
     // 준법: a few strokes down the flank from the crest
-    const k2 = Math.round(w / 4);
+    const k2 = control ? 0 : Math.round(w / 4);
     for (let s = 0; s < k2; s++) {
       const dx = (rnd() * 2 - 1) * w * 0.85, yt = top(dx), len = (m.y - yt) * (0.3 + rnd() * 0.4);
       line(m.x + dx, yt + 1, m.x + dx * 1.15 + (rnd() - 0.5) * 3 * q, yt + len, 0.25 + m.v * 0.3, Math.max(1, Math.round(q)));
     }
   }
   // 점태: dots of moss on the wooded low hills of the wetter land.
-  for (let n = 0; n < 30000 * q * q; n++) {
+  for (let n = 0; n < (control ? 0 : 30000 * q * q); n++) {
     const x = rnd() * N, y = rnd() * N, i = (y | 0) * N + (x | 0);
     if (!isLand(i) || D[i] > 0.2) continue;
     const v = Hh[i], wood = fbm(x / k / 18 + 60, y / k / 18 + 60, 4);
@@ -94,21 +96,42 @@ module.exports = function (ctx) {
       add(x, y, a); for (let o = 1; o < q; o++) add(x + o, y, a * 0.8); add(x + q, y, a * 0.4);
     }
   }
-  // Rivers: a thin ink line, the great ones firmer.
+  // Rivers: a ribbon of water between two inked banks, so they read as
+  // rivers and not as strokes (the great ones widest).
+  const waterAt = new Uint8Array(N * N);
   for (const [width, r] of riversLL) {
-    const pts = r.map(([la, lo]) => P(la, lo).map((v) => v * k));
-    for (let j = 1; j < pts.length; j++) {
-      const [x1, y1] = pts[j - 1], [x2, y2] = pts[j];
-      const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 3);
-      let px = x1, py = y1;
-      for (let s = 1; s <= n; s++) {
-        const t = s / n, bx = x1 + (x2 - x1) * t, by = y1 + (y2 - y1) * t;
-        const wob = (fbm(bx / (16 * q), by / (16 * q), 2) - 0.5) * 10 * q, len = Math.hypot(x2 - x1, y2 - y1) || 1;
-        const qx = bx + wob * (y2 - y1) / len, qy = by - wob * (x2 - x1) / len;
-        line(px, py, qx, qy, width >= 3 ? 0.75 : width >= 2 ? 0.6 : 0.45, Math.max(1, Math.round((width >= 2 ? 2 : 1) * q)));
-        px = qx; py = qy;
+    const ctrl = r.map(([la, lo]) => P(la, lo).map((v) => v * k));
+    const path = [ctrl[0]];
+    for (let j = 1; j < ctrl.length; j++) {
+      const [x1, y1] = ctrl[j - 1], [x2, y2] = ctrl[j], len = Math.hypot(x2 - x1, y2 - y1) || 1, n = Math.ceil(len / (3 * q));
+      for (let s2 = 1; s2 <= n; s2++) {
+        const t = s2 / n, bx = x1 + (x2 - x1) * t, by = y1 + (y2 - y1) * t;
+        const wob = s2 === n ? 0 : (fbm(bx / (16 * q), by / (16 * q), 2) - 0.5) * 10 * q;
+        path.push([bx + wob * (y2 - y1) / len, by - wob * (x2 - x1) / len]);
       }
     }
+    const hw = (width >= 3 ? 4.5 : width >= 2 ? 3 : 1.8) * q;
+    // the water
+    for (let j = 1; j < path.length; j++) {
+      const [x1, y1] = path[j - 1], [x2, y2] = path[j], n = Math.ceil(Math.hypot(x2 - x1, y2 - y1)) + 1;
+      for (let s2 = 0; s2 <= n; s2++) {
+        const cx = x1 + (x2 - x1) * s2 / n, cy = y1 + (y2 - y1) * s2 / n, R = Math.ceil(hw);
+        for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+          if (dx * dx + dy * dy > hw * hw) continue;
+          const xx = Math.round(cx + dx), yy = Math.round(cy + dy);
+          if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
+          waterAt[yy * N + xx] = 1; ink[yy * N + xx] = 0;
+        }
+      }
+    }
+    // the banks
+    const side = (sgn) => path.map((p, j) => {
+      const a2 = path[Math.max(0, j - 1)], b2 = path[Math.min(path.length - 1, j + 1)];
+      const dx = b2[0] - a2[0], dy = b2[1] - a2[1], l = Math.hypot(dx, dy) || 1;
+      return [p[0] - (dy / l) * hw * sgn, p[1] + (dx / l) * hw * sgn];
+    });
+    const tone = width >= 3 ? 0.8 : width >= 2 ? 0.7 : 0.55;
+    for (const bank of [side(1), side(-1)]) for (let j = 1; j < bank.length; j++) line(bank[j - 1][0], bank[j - 1][1], bank[j][0], bank[j][1], tone, Math.max(1, Math.round(q)));
   }
   // Lakes: an inked shore around bare paper.
   const lakeAt = new Uint8Array(N * N);
@@ -130,7 +153,7 @@ module.exports = function (ctx) {
     const i = y * N + x;
     const grain = lineOnly ? 0 : (fbm(x / 1.7, y / 1.7, 2) - 0.5) * 10 + (fbm(x / 40, y / 40, 3) - 0.5) * 8; // the paper's fibre and blotches
     let base = lineOnly ? [255, 255, 255] : PAPER;
-    if (lineOnly) { /* white paper, ink only */ } else if (!isLand(i) || lakeAt[i]) {
+    if (lineOnly) { /* white paper, ink only */ } else if (!isLand(i) || lakeAt[i] || waterAt[i]) {
       // the water: bare paper with a faint wash, and wave strokes near the shore
       base = SEA;
     } else {
