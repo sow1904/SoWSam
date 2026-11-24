@@ -41,9 +41,13 @@
   // 0: drawn to the map's scale): names, ports and armies most; passes and
   // forts less; castles least, so they grow as the map comes closer.
   const ICON = { keep: 0.8, ref: 1, min: 0.35, max: 1.15 };
-  const FORT = { keep: 0.6, min: 0.45, max: 1.15 };
+  // At the closest zoom (3.5) forts stand about twice and ports one and a
+  // half times as large on screen as they first did (the user's choice).
+  const FORT = { keep: 0.05, min: 0.9, max: 1.15 };
+  const PASS = { keep: 0.6, min: 0.45, max: 1.15 }; // passes are drawn twice as large already
+  const PORT = { keep: 0.48, min: 0.5, max: 1.15 };
   const CITY = { keep: 0.3, min: 0.6, max: 1 };
-  UI.iconK = 1; UI.fortK = 1; UI.cityK = 1;
+  UI.iconK = 1; UI.fortK = 1; UI.cityK = 1; UI.portK = 1; UI.passK = 1;
   const kOf = (zoom, I) => (UI.panorama ? 1 : Math.min(I.max, Math.max(I.min, Math.pow(ICON.ref / zoom, I.keep))));
   const iconKOf = (zoom) => kOf(zoom, ICON);
   function fitView(r) {
@@ -97,10 +101,10 @@
     // A new zoom: the icons are drawn again at their new scale.
     document.body.classList.toggle("panorama", UI.panorama); // the side panel and the small map step aside (css)
     const r2 = (x) => Math.round(x * 100) / 100;
-    const k = r2(iconKOf(view.zoom)), kf = r2(kOf(view.zoom, FORT)), kc = r2(kOf(view.zoom, CITY));
+    const k = r2(iconKOf(view.zoom)), kf = r2(kOf(view.zoom, FORT)), kc = r2(kOf(view.zoom, CITY)), kp = r2(kOf(view.zoom, PORT)), ka = r2(kOf(view.zoom, PASS));
     svg.style.setProperty("--k", k); // lines (css/style.css)
-    if (k !== UI.iconK || kf !== UI.fortK || kc !== UI.cityK) {
-      UI.iconK = k; UI.fortK = kf; UI.cityK = kc;
+    if (k !== UI.iconK || kf !== UI.fortK || kc !== UI.cityK || kp !== UI.portK || ka !== UI.passK) {
+      UI.iconK = k; UI.fortK = kf; UI.cityK = kc; UI.portK = kp; UI.passK = ka;
       if (state) requestAnimationFrame(() => UI.renderMap());
     }
   }
@@ -261,21 +265,11 @@
       return `<filter id="${tintId(fid)}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${r} 0 0 0 0 0 ${g} 0 0 0 0 0 ${b} 0 0 0 0 0 1 0"/></filter>`;
     }).join("");
   }
-  // The surname on a force's banner, as in 삼국지4: the ruler's (two
-  // syllables for 제갈, 사마, 하후, 공손 and the like).
-  const DOUBLE = ["제갈", "사마", "하후", "공손", "황보", "태사", "선우", "장손", "구양", "사도"];
-  UI.bannerName = (fid) => {
-    const f = state.forces[fid], r = f && state.officers[f.ruler];
-    if (!r) return "";
-    return DOUBLE.find((d) => r.name.startsWith(d) && r.name.length > 2) || r.name[0];
-  };
   // A flag whose pole foot is at (x, y), fh tall.
   const flagAt = (fid, x, y, fh) => {
     const fw = fh * FLAG.w / FLAG.h, left = x - fw * FLAG.pole, top = y - fh;
-    const name = UI.bannerName(fid), size = fh * (name.length > 1 ? 0.22 : 0.32);
     return `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
-      `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/>` +
-      (name ? `<text class="flagname" x="${left + fw * 0.52}" y="${top + fh * 0.44}" style="font-size:${size.toFixed(1)}px">${name}</text>` : "");
+      `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/>`;
   };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
@@ -442,7 +436,7 @@
       (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.4, f.y - ih * 0.42, (ih / big) * FLAG.size * 2) : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
-    const kf = f.kind === "port" ? UI.iconK : UI.fortK, foot = { x: f.x, y: f.y + ih * 0.42 * kf };
+    const kf = f.kind === "port" ? UI.portK : f.kind === "pass" ? UI.passK : UI.fortK, foot = { x: f.x, y: f.y + ih * 0.42 * kf };
     return `<g class="${cls}" data-city="${f.id}"><g${scaleAt(f, kf)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="${13 * big}"/>${shape}</g>` +
       `<g${scaleAt(foot)}><text class="name" x="${f.x}" y="${foot.y + 9}">${label}</text></g>` +
       `</g>`;
