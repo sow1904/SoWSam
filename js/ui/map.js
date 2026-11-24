@@ -255,7 +255,7 @@
   // why: the user's design, the white flag of their icon sheet as the banner.
   // As in 삼국지4 (the user's reference): a banner on a short pole (the
   // picture's pole cut to a stub) standing on the top of the icon.
-  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.5, lean: 30 }; // size: x the building's height
+  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.5, lean: 0 }; // size: x the building's height
   const tintId = (fid) => "tint-" + (fid || "none");
   function flagDefs() {
     const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
@@ -435,7 +435,7 @@
     const big = f.kind === "pass" && f.built ? (art4() ? 2 : 1.5) : 1; // passes drawn larger (the user's choice: 2x in 4안, 1.5x in 2안)
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon].map((v) => v * big);
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      (art4() && f.built && f.owner ? flagAt(f.owner, f.x, f.y - ih * 0.48, (ih / big) * FLAG.size * (f.kind === "fort" ? 1 : 2)) : "") +
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x, f.y - ih * 0.48, (ih / big) * FLAG.size * ({ fort: 1, port: 1.5 }[f.kind] || 2)) : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     const kf = f.kind === "port" ? UI.portK : f.kind === "pass" ? UI.passK : UI.fortK, foot = { x: f.x, y: f.y + ih * 0.42 * kf };
