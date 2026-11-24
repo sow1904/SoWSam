@@ -8,7 +8,8 @@
 const { execFileSync } = require("child_process");
 module.exports = function (ctx) {
   const { W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf, lineOnly } = ctx;
-  const N = 2048, k = N / W;
+  // N: the size drawn (2048, or more for a detailed sheet); q: brushes and marks grow with it.
+  const N = ctx.size || 2048, k = N / W, q = N / 2048;
   // ---------- the fields at full size (bilinear) ----------
   const up = (src) => {
     const o = new Float32Array(N * N);
@@ -20,6 +21,12 @@ module.exports = function (ctx) {
     return o;
   };
   const L = up(Float32Array.from(land)), Hh = up(h), D = up(dry);
+  // Smooth the coast drawn up from the coarser grid, so it does not stair-step.
+  {
+    const r = Math.max(1, Math.round(1.5 * k)), tmp = new Float32Array(N * N);
+    for (let y = 0; y < N; y++) { let sum = 0; for (let x = -r; x < N; x++) { if (x + r < N) sum += L[y * N + x + r]; if (x - r - 1 >= 0) sum -= L[y * N + x - r - 1]; if (x >= 0) tmp[y * N + x] = sum / (2 * r + 1); } }
+    for (let x = 0; x < N; x++) { let sum = 0; for (let y = -r; y < N; y++) { if (y + r < N) sum += tmp[(y + r) * N + x]; if (y - r - 1 >= 0) sum -= tmp[(y - r - 1) * N + x]; if (y >= 0) L[y * N + x] = sum / (2 * r + 1); } }
+  }
   const isLand = (i) => L[i] > 0.5;
   // ---------- ink: how dark each point is (0 paper .. 1 black) ----------
   const ink = new Float32Array(N * N);
@@ -31,7 +38,7 @@ module.exports = function (ctx) {
     for (let s = 0; s <= n; s++) {
       const t = s / n, x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t, taper = Math.sin(Math.PI * Math.min(1, t * 1.15)) * 0.7 + 0.3;
       add(x, y, a * taper);
-      if (w > 1) { add(x + 1, y, a * taper * 0.6); add(x, y + 1, a * taper * 0.6); }
+      for (let ox = 0; ox < w; ox++) for (let oy = 0; oy < w; oy++) if (ox || oy) add(x + ox, y + oy, a * taper * 0.6);
     }
   };
   // A light wash under the high ground.
@@ -40,16 +47,16 @@ module.exports = function (ctx) {
   // along its crest and fading down its flank to the paper, the nearer ones
   // hiding those behind; strokes (준법) down from the crest.
   const mounds = [];
-  for (let n = 0; n < 26000; n++) {
+  for (let n = 0; n < 26000 * q * q; n++) {
     const x = rnd() * N, y = rnd() * N, i = (y | 0) * N + (x | 0);
     if (!isLand(i) || Hh[i] < 0.3 || rnd() > (Hh[i] - 0.25) * 1.1) continue;
     mounds.push({ x, y, v: Hh[i] });
   }
   mounds.sort((p, q) => p.y - q.y);
   for (const m of mounds) {
-    const w = 8 + m.v * 26 * (0.7 + rnd() * 0.6), t = 6 + m.v * 26 * (0.6 + rnd() * 0.7);
+    const w = (8 + m.v * 26 * (0.7 + rnd() * 0.6)) * q, t = (6 + m.v * 26 * (0.6 + rnd() * 0.7)) * q;
     const lean = (rnd() - 0.5) * 0.5, dark = 0.4 + Math.min(0.62, m.v) * 0.6, sharp = 0.45 + rnd() * 0.9;
-    const top = (dx) => { const u = dx / w; return m.y - t * Math.pow(Math.max(0, 1 - Math.abs(u) ** (1 + sharp)), sharp) * (1 + lean * u) - (fbm(m.x + dx / 3, m.y, 2) - 0.5) * 4; };
+    const top = (dx) => { const u = dx / w; return m.y - t * Math.pow(Math.max(0, 1 - Math.abs(u) ** (1 + sharp)), sharp) * (1 + lean * u) - (fbm(m.x + dx / (3 * q), m.y, 2) - 0.5) * 4 * q; };
     for (let dx = -Math.ceil(w); dx <= w; dx++) {
       const yt = top(dx), xx = Math.round(m.x + dx);
       if (xx < 0 || xx >= N) continue;
@@ -61,22 +68,22 @@ module.exports = function (ctx) {
         const tone = dark * Math.pow(1 - f, 2.2) * (dx > 0 ? 1 : 0.75); // the shaded side darker
         ink[i] = ink[i] * 0.25 + tone; // the nearer mound covers what is behind
       }
-      add(xx, yt, dark * 0.9); add(xx, yt + 1, dark * 0.4); // the crest line
+      add(xx, yt, dark * 0.9); for (let o = 1; o < q; o++) add(xx, yt + o, dark * 0.7); add(xx, yt + q, dark * 0.4); // the crest line
     }
     // 준법: a few strokes down the flank from the crest
     const k2 = Math.round(w / 4);
     for (let s = 0; s < k2; s++) {
       const dx = (rnd() * 2 - 1) * w * 0.85, yt = top(dx), len = (m.y - yt) * (0.3 + rnd() * 0.4);
-      line(m.x + dx, yt + 1, m.x + dx * 1.15 + (rnd() - 0.5) * 3, yt + len, 0.25 + m.v * 0.3);
+      line(m.x + dx, yt + 1, m.x + dx * 1.15 + (rnd() - 0.5) * 3 * q, yt + len, 0.25 + m.v * 0.3, Math.max(1, Math.round(q)));
     }
   }
   // 점태: dots of moss on the wooded low hills of the wetter land.
-  for (let n = 0; n < 30000; n++) {
+  for (let n = 0; n < 30000 * q * q; n++) {
     const x = rnd() * N, y = rnd() * N, i = (y | 0) * N + (x | 0);
     if (!isLand(i) || D[i] > 0.2) continue;
     const v = Hh[i], wood = fbm(x / k / 18 + 60, y / k / 18 + 60, 4);
     if (v < 0.12 || v > 0.5 || wood < 0.55) continue;
-    add(x, y, 0.6); add(x + 1, y, 0.35); add(x, y + 1, 0.3);
+    for (let ox = 0; ox < q; ox++) for (let oy = 0; oy < q; oy++) add(x + ox, y + oy, 0.6); add(x + q, y, 0.35); add(x, y + q, 0.3);
   }
   // The shore inked, firmer where the land is high.
   for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
@@ -84,7 +91,7 @@ module.exports = function (ctx) {
     if (!isLand(i)) continue;
     if (!isLand(i - 1) || !isLand(i + 1) || !isLand(i - N) || !isLand(i + N)) {
       const a = 0.55 + 0.3 * fbm(x / 6, y / 6, 2);
-      add(x, y, a); add(x + 1, y, a * 0.4);
+      add(x, y, a); for (let o = 1; o < q; o++) add(x + o, y, a * 0.8); add(x + q, y, a * 0.4);
     }
   }
   // Rivers: a thin ink line, the great ones firmer.
@@ -96,9 +103,9 @@ module.exports = function (ctx) {
       let px = x1, py = y1;
       for (let s = 1; s <= n; s++) {
         const t = s / n, bx = x1 + (x2 - x1) * t, by = y1 + (y2 - y1) * t;
-        const wob = (fbm(bx / 16, by / 16, 2) - 0.5) * 10, len = Math.hypot(x2 - x1, y2 - y1) || 1;
+        const wob = (fbm(bx / (16 * q), by / (16 * q), 2) - 0.5) * 10 * q, len = Math.hypot(x2 - x1, y2 - y1) || 1;
         const qx = bx + wob * (y2 - y1) / len, qy = by - wob * (x2 - x1) / len;
-        line(px, py, qx, qy, width >= 3 ? 0.75 : width >= 2 ? 0.6 : 0.45, width >= 2 ? 2 : 1);
+        line(px, py, qx, qy, width >= 3 ? 0.75 : width >= 2 ? 0.6 : 0.45, Math.max(1, Math.round((width >= 2 ? 2 : 1) * q)));
         px = qx; py = qy;
       }
     }
@@ -111,7 +118,7 @@ module.exports = function (ctx) {
     for (let y = Math.floor(cy - ry - 4); y <= cy + ry + 4; y++) for (let x = Math.floor(cx - rx - 4); x <= cx + rx + 4; x++) {
       if (x < 0 || y < 0 || x >= N || y >= N) continue;
       const d = Math.hypot((x - cx) / rx, (y - cy) / ry) + (fbm(x / 8 + 200, y / 8 + 200, 2) - 0.5) * 0.5;
-      if (d < 1) { lakeAt[y * N + x] = 1; ink[y * N + x] = 0; } else if (d < 1 + 2.5 / rx) add(x, y, 0.6);
+      if (d < 1) { lakeAt[y * N + x] = 1; ink[y * N + x] = 0; } else if (d < 1 + 2.5 * q / rx) add(x, y, 0.6);
     }
   }
   // ---------- paper and colour ----------
@@ -137,10 +144,11 @@ module.exports = function (ctx) {
   }
   if (withPlaces) {
     for (const [id, m] of Object.entries(M.cities)) {
-      const [px, py] = placeOf(id, m);
-      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const [px, py] = placeOf(id, m).map((v) => v * q);
+      const R = Math.round(4 * q);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
         const xx = Math.round(px) + dx, yy = Math.round(py) + dy;
-        if (xx < 0 || yy < 0 || xx >= N || yy >= N || dx * dx + dy * dy > 16) continue;
+        if (xx < 0 || yy < 0 || xx >= N || yy >= N || dx * dx + dy * dy > R * R) continue;
         const j = (yy * N + xx) * 3; img[j] = 190; img[j + 1] = 30; img[j + 2] = 30; // 낙관 red
       }
     }
