@@ -244,7 +244,9 @@
   // owner's colour (a filter per force over the white cloth; the pole and the
   // ink outline stay as drawn). The pole stands at 6/140 of the picture.
   // why: the user's design, the white flag of their icon sheet as the banner.
-  const FLAG = { w: 140, h: 183, pole: 6 / 140, size: 1.8 }; // size: x the building's height
+  // As in 삼국지4 (the user's reference): the banner stands at the castle's
+  // upper left on a short pole (the picture's pole cut to a stub).
+  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 1.3 }; // size: x the building's height
   const tintId = (fid) => "tint-" + (fid || "none");
   function flagDefs() {
     const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
@@ -399,8 +401,9 @@
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         // the owner: a flag in 4안 (below), a coloured ground under the castle otherwise
         (art4() ? "" : `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>`) +
+        // the banner behind the castle, at its upper left
+        (art4() && c.owner ? flagAt(c.owner, c.x - w * 0.36, c.y - h * 0.2, h * FLAG.size) : "") +
         `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
-        (art4() && c.owner ? flagAt(c.owner, c.x + w * 0.3, c.y - h * 0.18, h * FLAG.size) : "") +
         `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 9 * k + 11}">${UI.troopsText(c, true)}</text></g>`;
     }));
@@ -417,8 +420,8 @@
     const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>` +
-      (art4() && f.built && f.owner ? flagAt(f.owner, f.x + iw * 0.3, f.y - ih * 0.15, ih * FLAG.size) : "");
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.36, f.y - ih * 0.18, ih * FLAG.size) : "") +
+      `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"${scaleAt(f)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
