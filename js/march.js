@@ -11,7 +11,10 @@
   S.ROAD_FACTOR = 1.3; // roads wind; straight-line distance is too short
   // Mountain roads and gorges, by how much longer they take.
   const ROUGH = {
-    "youfufeng|hanzhong": 1.6, // 포사도
+    "youfufeng|hanzhong": 1.6, // 진창도 (고도, 산관)
+    "hanzhong|wuzhang": 1.6, // 포사도: 사곡을 넘어 오장원으로
+    "hanzhong|luogu": 1.9, // 당락도: 가장 험한 길
+    "hanzhong|ziwu": 1.7, // 자오도: 장안 남쪽 자오곡으로
     "hanyang|hanzhong": 1.4, // 기산도
     "hanzhong|guanghan": 1.5, // 금우도
     "bajun|jiameng": 1.2, // 가릉강 골짜기를 거슬러
@@ -74,7 +77,7 @@
   };
   function baseRough(state, a, b) {
     const f = (state && state.forts && (state.forts[a] || state.forts[b])) || null;
-    if (!f) return ROUGH_KEYED[key(a, b)] || 1;
+    if (!f || (S.isWaypoint && S.isWaypoint(f))) return ROUGH_KEYED[key(a, b)] || 1;
     const city = f.id === a ? b : a;
     if (!S.MAP.cities[city]) return 1;
     return Math.max(1, ...f.road.filter((x) => x !== city).map((x) => ROUGH_KEYED[key(city, x)] || 1));
@@ -150,7 +153,7 @@
     if (net && net.state === state && net.ver === (state.fortVer || 0) && net.map === S.MAP) return net;
     const onRoad = {};
     for (const f of Object.values(state.forts || {})) {
-      if (f.built) for (const b of f.road.slice(1)) (onRoad[key(f.road[0], b)] = onRoad[key(f.road[0], b)] || []).push(f);
+      if (f.built && !f.way) for (const b of f.road.slice(1)) (onRoad[key(f.road[0], b)] = onRoad[key(f.road[0], b)] || []).push(f);
     }
     const links = {}, rough = {}, km = {};
     const link = (a, b, r) => {
@@ -169,6 +172,13 @@
     }
     // Ports (js/forts.js): a land road to the port's city, and the waters to
     // every other port they share.
+    // 길목 터 (js/forts.js): a road of their own through the site, built or not.
+    for (const f of Object.values(state.forts || {})) {
+      if (!S.isWaypoint(f)) continue;
+      const [a, b] = f.road;
+      link(a, f.id, ROUGH_KEYED[key(a, f.id)] || 1);
+      link(f.id, b, ROUGH_KEYED[key(f.id, b)] || 1);
+    }
     const ports = Object.values(state.forts || {}).filter((f) => f.built && f.kind === "port" && f.road.length === 1);
     for (const p of ports) {
       link(p.road[0], p.id, 1);

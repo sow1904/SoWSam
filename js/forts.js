@@ -85,6 +85,15 @@
       yiling: ["이릉", "fort", "badong", "nanjun", "nanjun", 30.7, 111.3, true], // 삼협이 끝나는 곳
       yijing: ["역경", "fort", "zhuo", "hejian", "hejian", 38.95, 116.05, false],
       hefei: ["합비", "fort", "jiujiang", "lujiang", "jiujiang", 31.86, 117.27, true],
+      // 길목 터 (way: the 9th field): a road of its own from a to b through
+      // the site, open from the start; anyone may pass while it stands empty,
+      // and either end may build a fort there to hold it.
+      // why: the user's design. The roads from 한중 into 관중 besides 기산도
+      // and 진창도 (산관): 포사도 out at 오장원 (제갈량, 234), 당락도 out at
+      // 낙곡 (조상's 흥세 campaign, 244), 자오도 out at 자오곡 (위연's plan).
+      wuzhang: ["오장원", "fort", "hanzhong", "youfufeng", "youfufeng", 34.25, 107.62, false, true],
+      luogu: ["낙곡", "pass", "hanzhong", "jingzhao", "jingzhao", 34.05, 108.2, false, true],
+      ziwu: ["자오곡", "pass", "hanzhong", "jingzhao", "jingzhao", 34.02, 108.9, false, true],
       // Ports: a port's road is its city alone (road end b null); the waters
       // join it to the other ports (S.PORT_WATERS).
       // TODO(항구망): ships passing an enemy port, the current (downstream
@@ -113,7 +122,7 @@
     const st = S.FORT_STATS[kind];
     const owner = built ? state.cities[home].owner : null;
     return {
-      id, name, kind, road: S.siteRoad(site), home, lat, lon, x, y, built, owner, building: null,
+      id, name, kind, road: S.siteRoad(site), way: !!site[8], home, lat, lon, x, y, built, owner, building: null,
       troops: owner ? st.troops : 0, train: owner ? state.cities[home].train : 40, food: owner ? 3000 : 0,
       wall: built ? st.wallMax : 0, wallMax: st.wallMax,
       // So the battle rules can treat a stronghold like a city.
@@ -147,11 +156,13 @@
       if (!sites[id] && state.forts[id].kind === "port") { delete state.forts[id]; state.fortVer = (state.fortVer || 0) + 1; }
     }
     for (const [id, site] of Object.entries(sites)) {
-      if (state.forts[id]) { state.forts[id].road = S.siteRoad(site); state.forts[id].name = site[0]; continue; }
+      if (state.forts[id]) { Object.assign(state.forts[id], { road: S.siteRoad(site), name: site[0], way: !!site[8] }); continue; }
       stockPort(state, state.forts[id] = newFort(state, id, site));
       state.fortVer = (state.fortVer || 0) + 1;
     }
   };
+  // A 길목 터: its own road between its two ends, passable while empty.
+  S.isWaypoint = (f) => !!(f && f.way);
   S.fortsOf = (state, fid) => Object.values(state.forts || {}).filter((f) => f.built && f.owner === fid);
   // The city an officer at a stronghold goes back to when he leaves service.
   S.homeCity = (state, id) => (state.forts && state.forts[id] ? state.forts[id].home : id);

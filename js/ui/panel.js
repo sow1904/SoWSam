@@ -320,6 +320,7 @@
       `<div class="cinfo"><div>${S.FORT_KINDS[f.kind]} · ${between}</div><div>소속: ${state.cities[f.home].name}</div></div>`;
     if (!f.built) {
       return html + `<p>${f.building ? `${S.forceName(state, f.building.force)}이 쌓고 있습니다.` : "아직 쌓지 않은 터입니다."} ` +
+        (S.isWaypoint(f) ? `${ends.join("과 ")}을 잇는 길목이라, 비어 있는 동안에는 누구나 지나갈 수 있습니다. ` : "") +
         `축성 특기가 있는 무장이 ${ends.join(", ")} 중 한 곳에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>` +
         `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
     }
