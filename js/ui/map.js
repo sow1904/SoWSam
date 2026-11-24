@@ -286,6 +286,8 @@
     you: [null, null, 80, 0], // clear of 광양
     yang: ["danyang", null, 0, 70], // below 단양
     jingnan: ["wuling", "lingling"],
+    liang: ["wuwei", "jincheng"],
+    bing: ["xihe", "shangdang"],
   };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
