@@ -286,7 +286,7 @@ body.panorama #panelInfo, body.panorama #miniNav, body.panorama #cityWin { displ
 /* the painted terrain map */
 #mapBase.terrain .sea { fill: #1d4f7a; }
 #map.terrain .terrain-img { pointer-events: none; }
-#map.terrain .prov { fill: #fffbe8; opacity: 0.16; }
+#map.terrain .prov { fill: #fffbe8; opacity: 0.12; }
 #map.terrain .road { stroke: rgba(192, 183, 160, 0.8); stroke-width: 2.2; stroke-dasharray: 6 4; opacity: 1; }
 #map.terrain .road.sea-road { stroke: rgba(170, 220, 255, 0.75); stroke-dasharray: 2 6; stroke-linecap: round; }
 #map.terrain .road.hl { stroke: #ffcf5a; stroke-width: 3.5; stroke-dasharray: none; }
