@@ -251,7 +251,9 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minma
 #map.panorama #roadLayer, #map.panorama text, #map.panorama .mroute, #map.panorama .ring { display: none; }
 #mapBase.panorama .sea { fill: #0d0c0b; }
 #map.panorama { cursor: default; }
-#map.panorama .march text { display: inline; } /* armies still go about, with their numbers */
+#map.panorama .march text { display: inline; }
+/* the surname on a banner (4안) */
+#map.terrain .city text.banner, #map.terrain .fort text.banner { fill: #fffaf0; font-weight: 800; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: rgba(20, 16, 12, 0.85); stroke-width: 0.12em; pointer-events: none; font-family: "Batang", "Nanum Myeongjo", serif; } /* armies still go about, with their numbers */
 body.panorama #panelInfo, body.panorama #miniNav, body.panorama #cityWin { display: none; } /* the 전황 fills the side */
 .river { fill: none; stroke: var(--river); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
 .road { stroke: var(--road); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
