@@ -6,6 +6,7 @@
 // usage: node tools/mapgen.js <out.png> [season] [--places]
 //   season: spring | summer | autumn | winter (default summer)
 //   --places: dots and names of the cities, to check the fit
+//   --ink: in ink and wash (tools/mapgen-ink.js)
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const { execFileSync } = require("child_process");
 for (const f of ["data/map.js"]) vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..", "js", f), "utf8"), { filename: f });
@@ -198,6 +199,11 @@ for (const [la, lo, r] of PLAINS) {
   }
 }
 
+// Ink and wash instead (tools/mapgen-ink.js).
+if (process.argv.includes("--ink")) {
+  require("./mapgen-ink.js")({ W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out });
+  process.exit(0);
+}
 // ---------- colour ----------
 const PAL = {
   summer: { deep: [31, 79, 134], sea: [44, 102, 166], shore: [150, 196, 230], low: [139, 176, 74], low2: [121, 163, 66], south: [104, 156, 60], hill: [116, 134, 66], brown: [134, 110, 74], rock: [122, 104, 84], snow: [234, 238, 242], sand: [216, 182, 108], sand2: [200, 163, 92], steppe: [181, 178, 104], forest: [62, 106, 46], river: [56, 116, 196] },
