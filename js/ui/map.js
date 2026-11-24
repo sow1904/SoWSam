@@ -37,10 +37,13 @@
   // zoom^(1-ICON.keep) only), so crowded places come apart when zoomed in.
   // why: the user's design; the land is true to scale and 낙양's neighbours
   // sit close together.
-  // Castles are drawn to the map's scale (they grow as it comes closer);
-  // strongholds, armies and every name and number keep their size on screen.
+  // How much of their on-screen size each kind keeps (keep 1: all of it,
+  // 0: drawn to the map's scale): names, ports and armies most; passes and
+  // forts less; castles least, so they grow as the map comes closer.
   const ICON = { keep: 0.8, ref: 1, min: 0.35, max: 1.15 };
-  UI.iconK = 1;
+  const FORT = { keep: 0.6, min: 0.45, max: 1.15 };
+  const CITY = { keep: 0.3, min: 0.6, max: 1 };
+  UI.iconK = 1; UI.fortK = 1; UI.cityK = 1;
   const kOf = (zoom, I) => (UI.panorama ? 1 : Math.min(I.max, Math.max(I.min, Math.pow(ICON.ref / zoom, I.keep))));
   const iconKOf = (zoom) => kOf(zoom, ICON);
   function fitView(r) {
@@ -93,9 +96,13 @@
     miniBox();
     // A new zoom: the icons are drawn again at their new scale.
     document.body.classList.toggle("panorama", UI.panorama); // the side panel and the small map step aside (css)
-    const k = Math.round(iconKOf(view.zoom) * 100) / 100;
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const k = r2(iconKOf(view.zoom)), kf = r2(kOf(view.zoom, FORT)), kc = r2(kOf(view.zoom, CITY));
     svg.style.setProperty("--k", k); // lines (css/style.css)
-    if (k !== UI.iconK) { UI.iconK = k; if (state) requestAnimationFrame(() => UI.renderMap()); }
+    if (k !== UI.iconK || kf !== UI.fortK || kc !== UI.cityK) {
+      UI.iconK = k; UI.fortK = kf; UI.cityK = kc;
+      if (state) requestAnimationFrame(() => UI.renderMap());
+    }
   }
 
   // ---------- which painting of the map (S.MAP_ART, js/data/map.js) ----------
@@ -244,7 +251,7 @@
   // why: the user's design, the white flag of their icon sheet as the banner.
   // As in 삼국지4 (the user's reference): the banner stands at the castle's
   // upper left on a short pole (the picture's pole cut to a stub).
-  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 1.3 }; // size: x the building's height
+  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.33 }; // size: x the building's height
   const tintId = (fid) => "tint-" + (fid || "none");
   function flagDefs() {
     const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
@@ -268,7 +275,7 @@
     const name = UI.bannerName(fid), size = fh * (name.length > 1 ? 0.22 : 0.32);
     return `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
       `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/>` +
-      (name ? `<text class="banner" x="${left + fw * 0.52}" y="${top + fh * 0.44}" style="font-size:${size.toFixed(1)}px">${name}</text>` : "");
+      (name ? `<text class="flagname" x="${left + fw * 0.52}" y="${top + fh * 0.44}" style="font-size:${size.toFixed(1)}px">${name}</text>` : "");
   };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
@@ -403,18 +410,18 @@
       const icon = cityIcon(c), [iw, ih] = (art4() ? CITY_ICONS4 : CITY_ICONS)[icon];
       // The art already grows with the tier; bigger tiers are also drawn a little larger.
       const tier = icon.startsWith("palace") ? 5 : S.cityTier(c);
-      const w = iw * 0.2 * (0.9 + tier * 0.04) * k * (art4() ? 0.78 : 1), h = w * ih / iw;
+      const w = iw * 0.4 * (0.9 + tier * 0.04) * k * (art4() ? 0.78 : 1), h = w * ih / iw; // twice the first size (the user's choice)
       const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.home(c) ? "mine" : "", c.id === S.playerCity(state) ? "seat" : ""].join(" ");
       // The castle (and its banner) is drawn to the map's scale; its name and
       // numbers keep their size on screen, as the strongholds do.
-      const foot = { x: c.x, y: c.y + h * 0.4 };
-      return `<g class="${cls}" data-city="${c.id}">` +
-        `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
+      const foot = { x: c.x, y: c.y + h * 0.4 * UI.cityK };
+      return `<g class="${cls}" data-city="${c.id}"><g${scaleAt(c, UI.cityK)}>` +
+        `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${2 * r + 4}"/>` +
         // the owner: a flag in 4안 (below), a coloured ground under the castle otherwise
         (art4() ? "" : `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>`) +
         // the banner behind the castle, at its upper left
         (art4() && c.owner ? flagAt(c.owner, c.x - w * 0.4, c.y - h * 0.45, h * FLAG.size) : "") +
-        `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
+        `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/></g>` +
         // no numbers on the map: a place's troops are seen by opening it
         `<g${scaleAt(foot)}><text class="name" x="${c.x}" y="${foot.y + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text></g></g>`;
     }));
@@ -429,13 +436,15 @@
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
     const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
-    const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
+    const big = f.kind === "pass" && f.built ? 2 : 1; // passes drawn twice as large (the user's choice)
+    const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon].map((v) => v * big);
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.4, f.y - ih * 0.42, ih * FLAG.size) : "") +
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.4, f.y - ih * 0.42, (ih / big) * FLAG.size * 2) : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
-    return `<g class="${cls}" data-city="${f.id}"${scaleAt(f)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
-      `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
+    const kf = f.kind === "port" ? UI.iconK : UI.fortK, foot = { x: f.x, y: f.y + ih * 0.42 * kf };
+    return `<g class="${cls}" data-city="${f.id}"><g${scaleAt(f, kf)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="${13 * big}"/>${shape}</g>` +
+      `<g${scaleAt(foot)}><text class="name" x="${f.x}" y="${foot.y + 9}">${label}</text></g>` +
       `</g>`;
   }
 
