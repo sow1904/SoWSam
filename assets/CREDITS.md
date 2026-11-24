@@ -16,6 +16,10 @@
 
 - Made by the game's author for this game, a second painting of the map in a frame, to compare with the first (시스템 → 지도 그림). Saved as JPEG from the original 2048 x 2048 PNGs (`resources/map2_*.png`, kept out of the repository; the generator's corner mark taken out in `resources/clean2/` with `resources/clean/unmark3.js`); the small map is scaled to 1024 x 1024.
 
+## Fourth terrain maps and icons (`assets/map4/`)
+
+- Made by the game's author with Gemini over the plain latitude-longitude sketch of `tools/mapgen.js --geo`, in ink and colour: one map for each season, a small map, and a sheet of city and stronghold icons in the same style. Saved as JPEG from the original 2048 x 2048 PNGs (`resources/map4/`, kept out of the repository; the generator's corner mark taken out in `resources/clean4/`); icons cut from `resources/map4_assets.png` by `tools/cut_assets4.py` into `assets/map4/icons/`.
+
 ## Fallen city (`assets/ui/collapse.jpg`)
 
 - Made by the game's author for this game; shown when a force falls. Saved as JPEG (1280 px wide) from the original PNG (`resources/img_collapse.png`, kept out of the repository), cropped at the right and bottom to leave out the generator's corner mark (`resources/clean/`).

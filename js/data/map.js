@@ -199,7 +199,20 @@
   };
   // Where a city or stronghold is drawn: set by hand, or projected; then,
   // with the second painting (S.MAP_ART 2), carried over onto it.
-  S.placeXY = (id, lat, lon) => S.artXY((S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon));
+  S.placeXY = (id, lat, lon) => (S.MAP_ART === 4 ? S.geoXY(lat, lon) :
+    S.artXY((S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon)));
+  // The fourth painting (map4) was drawn over the plain latitude-longitude
+  // sketch of tools/mapgen.js --geo: places are where they truly are.
+  const GEO = { lon0: 96, lon1: 129, lat0: 16, lat1: 43.5 };
+  S.geoXY = function (lat, lon) {
+    const sx = 2048 / (GEO.lon1 - GEO.lon0), sy = sx / Math.cos((32 * Math.PI) / 180);
+    const top = (2048 - (GEO.lat1 - GEO.lat0) * sy) / 2;
+    return [Math.round((lon - GEO.lon0) * sx), Math.round(top + (GEO.lat1 - lat) * sy)];
+  };
+  const ART4 = {
+    seasons: ["spring", "summer", "autumn", "winter"].map((s) => `assets/map4/terrain_${s}.jpg`),
+    mini: "assets/map4/mini.jpg",
+  };
 
   // ---------- the second painting (map2) ----------
   // The user is choosing between two paintings of the map. Places are set on
@@ -258,8 +271,9 @@
     const t = (S.MAP || (S.MAPS && S.MAPS.main) || {}).terrain;
     if (!t) return;
     if (!t.art1) t.art1 = { image: t.image, seasons: t.seasons, mini: t.mini };
-    S.MAP_ART = n === 2 ? 2 : 1;
-    Object.assign(t, S.MAP_ART === 2 ? { image: ART2.seasons[1], seasons: ART2.seasons, mini: ART2.mini } : t.art1);
+    S.MAP_ART = n === 2 || n === 4 ? n : 1;
+    Object.assign(t, S.MAP_ART === 2 ? { image: ART2.seasons[1], seasons: ART2.seasons, mini: ART2.mini }
+      : S.MAP_ART === 4 ? { image: ART4.seasons[1], seasons: ART4.seasons, mini: ART4.mini } : t.art1);
     if (!state) return;
     for (const c of Object.values(state.cities)) { const m = S.MAP.cities[c.id]; [c.x, c.y] = S.placeXY(c.id, m[3], m[4]); }
     for (const f of Object.values(state.forts || {})) [f.x, f.y] = S.placeXY(f.id, f.lat, f.lon);

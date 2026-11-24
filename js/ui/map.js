@@ -71,7 +71,7 @@
 
   // ---------- which painting of the map (S.MAP_ART, js/data/map.js) ----------
   const ART_KEY = "sowsam.mapArt";
-  try { if (localStorage.getItem(ART_KEY) === "2") S.setMapArt(2); } catch (e) { /* the first painting */ }
+  try { const a = +localStorage.getItem(ART_KEY); if (a === 2 || a === 4) S.setMapArt(a); } catch (e) { /* the first painting */ }
   UI.setMapArt = function (n) {
     S.setMapArt(n, state);
     try { localStorage.setItem(ART_KEY, String(S.MAP_ART)); } catch (e) { /* not kept */ }
@@ -186,6 +186,14 @@
     c1: [150, 116], c2: [188, 155], c3: [186, 156], c4: [186, 169], c5: [187, 190], palace: [190, 188],
     c1_ruin: [163, 113], c2_ruin: [188, 160], c3_ruin: [185, 154], c4_ruin: [184, 137], c5_ruin: [184, 162], palace_ruin: [188, 165],
   };
+  // The fourth painting has its own icons (tools/cut_assets4.py), drawn a
+  // little smaller: its map is true to the land, the plain is crowded.
+  const CITY_ICONS4 = {
+    c1: [215, 157], c2: [215, 176], c3: [215, 176], c4: [215, 190], c5: [215, 189], palace: [220, 186],
+    c1_ruin: [215, 157], c2_ruin: [215, 165], c3_ruin: [215, 164], c4_ruin: [215, 177], c5_ruin: [218, 189], palace_ruin: [215, 187],
+  };
+  const art4 = () => S.MAP_ART === 4;
+  const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
   S.ruined = (p) => !!p && p.wallMax > 0 && p.wall < Math.max(150, p.wallMax * 0.2);
   // The tier a city is drawn at: its size, raised by growth. Each 40,000
@@ -309,15 +317,15 @@
     const k = T ? 0.72 : 1;
     setGlyphs($("#cityLayer"), S.cityList(state).map((c) => {
       const r = (6 + c.size * 1.5) * k;
-      const icon = cityIcon(c), [iw, ih] = CITY_ICONS[icon];
+      const icon = cityIcon(c), [iw, ih] = (art4() ? CITY_ICONS4 : CITY_ICONS)[icon];
       // The art already grows with the tier; bigger tiers are also drawn a little larger.
       const tier = icon.startsWith("palace") ? 5 : S.cityTier(c);
-      const w = iw * 0.2 * (0.9 + tier * 0.04) * k, h = w * ih / iw;
+      const w = iw * 0.2 * (0.9 + tier * 0.04) * k * (art4() ? 0.78 : 1), h = w * ih / iw;
       const cls = ["city", c.id === UI.selected ? "sel" : "", targets.has(c.id) ? "target" : "", UI.home(c) ? "mine" : "", c.id === S.playerCity(state) ? "seat" : ""].join(" ");
       return `<g class="${cls}" data-city="${c.id}">` +
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>` +
-        `<image class="icon" href="assets/cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
+        `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
         `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 9 * k + 11}">${UI.troopsText(c, true)}</text></g>`;
     }));
@@ -328,12 +336,13 @@
   // A stronghold on the map: a gatehouse for a pass, a walled square for a
   // fort. Unbuilt sites are drawn faintly.
   const FORT_ICONS = { pass: [28, 26], fort: [30, 22], port: [30, 22], site: [26, 15], fort_ruin: [26, 24] }; // display sizes
+  const FORT_ICONS4 = { pass: [24, 21], pass_ruin: [24, 20], fort: [24, 20], fort_ruin: [24, 22], port: [28, 20], site: [24, 17] };
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
-    const icon = !f.built ? "site" : S.ruined(f) ? "fort_ruin" : f.kind;
-    const [iw, ih] = FORT_ICONS[icon];
+    const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
+    const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      `<image class="ficon" href="assets/${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
+      `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
