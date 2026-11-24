@@ -7,7 +7,7 @@
 // usage: node tools/mapgen.js <out.png> [season] --ink [--places]
 const { execFileSync } = require("child_process");
 module.exports = function (ctx) {
-  const { W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out } = ctx;
+  const { W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf, lineOnly } = ctx;
   const N = 2048, k = N / W;
   // ---------- the fields at full size (bilinear) ----------
   const up = (src) => {
@@ -121,9 +121,9 @@ module.exports = function (ctx) {
   const img = Buffer.alloc(N * N * 3);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = y * N + x;
-    const grain = (fbm(x / 1.7, y / 1.7, 2) - 0.5) * 10 + (fbm(x / 40, y / 40, 3) - 0.5) * 8; // the paper's fibre and blotches
-    let base = PAPER;
-    if (!isLand(i) || lakeAt[i]) {
+    const grain = lineOnly ? 0 : (fbm(x / 1.7, y / 1.7, 2) - 0.5) * 10 + (fbm(x / 40, y / 40, 3) - 0.5) * 8; // the paper's fibre and blotches
+    let base = lineOnly ? [255, 255, 255] : PAPER;
+    if (lineOnly) { /* white paper, ink only */ } else if (!isLand(i) || lakeAt[i]) {
       // the water: bare paper with a faint wash, and wave strokes near the shore
       base = SEA;
     } else {
@@ -137,7 +137,7 @@ module.exports = function (ctx) {
   }
   if (withPlaces) {
     for (const [id, m] of Object.entries(M.cities)) {
-      const [px, py] = S.placeXY(id, m[3], m[4]);
+      const [px, py] = placeOf(id, m);
       for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
         const xx = Math.round(px) + dx, yy = Math.round(py) + dy;
         if (xx < 0 || yy < 0 || xx >= N || yy >= N || dx * dx + dy * dy > 16) continue;

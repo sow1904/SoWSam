@@ -6,7 +6,8 @@
 // usage: node tools/mapgen.js <out.png> [season] [--places]
 //   season: spring | summer | autumn | winter (default summer)
 //   --places: dots and names of the cities, to check the fit
-//   --ink: in ink and wash (tools/mapgen-ink.js)
+//   --ink: in ink and wash (tools/mapgen-ink.js); --lines: ink only, no paper or colour
+//   --geo: true latitude and longitude, the cities at their true places
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const { execFileSync } = require("child_process");
 for (const f of ["data/map.js"]) vm.runInThisContext(fs.readFileSync(path.join(__dirname, "..", "js", f), "utf8"), { filename: f });
@@ -17,7 +18,19 @@ const season = process.argv[3] && !process.argv[3].startsWith("--") ? process.ar
 const withPlaces = process.argv.includes("--places");
 
 const W = 1024, H = 1024, K = 2048 / W; // drawn at W x H, shown at 2048
-const P = (la, lo) => { const [x, y] = S.project(la, lo); return [x / K, y / K]; };
+// --geo: a plain map of the real latitude and longitude (each degree of
+// latitude 1/cos 32° as long as one of longitude), with the cities at their
+// true places, instead of the painting's warp and the hand-set places.
+const GEO = process.argv.includes("--geo");
+const GEO_BOX = { lon0: 96, lon1: 129, lat0: 16, lat1: 43.5 }; // the game's world: 주천 to 낙랑, 일남 to 현도
+const geoXY = (la, lo) => {
+  const sx = 2048 / (GEO_BOX.lon1 - GEO_BOX.lon0), sy = sx / Math.cos((32 * Math.PI) / 180);
+  const top = (2048 - (GEO_BOX.lat1 - GEO_BOX.lat0) * sy) / 2;
+  return [(lo - GEO_BOX.lon0) * sx, top + (GEO_BOX.lat1 - la) * sy];
+};
+const P = (la, lo) => { const [x, y] = GEO ? geoXY(la, lo) : S.project(la, lo); return [x / K, y / K]; };
+// Where a city is drawn (2048 px): its true place, or the game's.
+const placeOf = (id, m) => (GEO ? geoXY(m[3], m[4]) : S.placeXY(id, m[3], m[4]));
 
 // ---------- noise ----------
 let seed = 20261124;
@@ -185,7 +198,9 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
   const rough = fbm(x / 22 + 50, y / 22 + 50); // hills everywhere, mostly low
   const ridge = 1 - Math.abs(fbm(x / 10 + 7, y / 10 + 7) * 2 - 1); // crests inside the ranges
   h[i] = Math.min(1, m * (0.6 + 0.6 * ridge) * (0.8 + 0.4 * fbm(x / 40 + 9, y / 40 + 9)) + Math.max(0, rough - 0.5) * 0.7);
-  dry[i] = inPoly(desert, x, y) ? 1 : inPoly(ordos, x, y) ? 0.8 : 0;
+  // ragged edges for the dry lands
+  const jx = x + (fbm(x / 14 + 70, y / 14, 3) - 0.5) * 40, jy = y + (fbm(x / 14, y / 14 + 70, 3) - 0.5) * 40;
+  dry[i] = inPoly(desert, jx, jy) ? 1 : inPoly(ordos, jx, jy) ? 0.8 : 0;
 }
 // The great plains stay low: the north China plain, the 관중, the Yangzi
 // lowlands, the 사천 basin.
@@ -201,7 +216,7 @@ for (const [la, lo, r] of PLAINS) {
 
 // Ink and wash instead (tools/mapgen-ink.js).
 if (process.argv.includes("--ink")) {
-  require("./mapgen-ink.js")({ W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out });
+  require("./mapgen-ink.js")({ W, H, P, land, h, dry, riversLL, LAKES, fbm, season, withPlaces, S, M, out, placeOf, lineOnly: process.argv.includes("--lines") });
   process.exit(0);
 }
 // ---------- colour ----------
@@ -322,7 +337,7 @@ for (const [la, lo, r] of LAKES) {
 // Places, to check the fit.
 if (withPlaces) {
   for (const [id, m] of Object.entries(M.cities)) {
-    const [px, py] = S.placeXY(id, m[3], m[4]);
+    const [px, py] = placeOf(id, m);
     const x = Math.round(px / K), y = Math.round(py / K);
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
       const xx = x + dx, yy = y + dy;
