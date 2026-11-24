@@ -265,10 +265,10 @@
   // A flag whose pole foot is at (x, y), fh tall.
   const flagAt = (fid, x, y, fh) => {
     const fw = fh * FLAG.w / FLAG.h, left = x - fw * FLAG.pole, top = y - fh;
-    const name = UI.bannerName(fid), size = fh * (name.length > 1 ? 0.28 : 0.42);
+    const name = UI.bannerName(fid), size = fh * (name.length > 1 ? 0.22 : 0.32);
     return `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
       `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/>` +
-      (name ? `<text class="banner" x="${left + fw * 0.56}" y="${top + fh * 0.47}" style="font-size:${size.toFixed(1)}px">${name}</text>` : "");
+      (name ? `<text class="banner" x="${left + fw * 0.52}" y="${top + fh * 0.44}" style="font-size:${size.toFixed(1)}px">${name}</text>` : "");
   };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
@@ -413,10 +413,10 @@
         // the owner: a flag in 4안 (below), a coloured ground under the castle otherwise
         (art4() ? "" : `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>`) +
         // the banner behind the castle, at its upper left
-        (art4() && c.owner ? flagAt(c.owner, c.x - w * 0.36, c.y - h * 0.2, h * FLAG.size) : "") +
+        (art4() && c.owner ? flagAt(c.owner, c.x - w * 0.4, c.y - h * 0.45, h * FLAG.size) : "") +
         `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
-        `<g${scaleAt(foot)}><text class="name" x="${c.x}" y="${foot.y + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
-        `<text class="troops" x="${c.x}" y="${foot.y + 9 * k + 11}">${UI.troopsText(c, true)}</text></g></g>`;
+        // no numbers on the map: a place's troops are seen by opening it
+        `<g${scaleAt(foot)}><text class="name" x="${c.x}" y="${foot.y + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text></g></g>`;
     }));
     UI.renderMarches();
     if (!(drag && UI.dragged)) applyView();
@@ -431,12 +431,12 @@
     const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.36, f.y - ih * 0.18, ih * FLAG.size) : "") +
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.4, f.y - ih * 0.42, ih * FLAG.size) : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"${scaleAt(f)}><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +
-      (f.built && f.owner ? `<text class="troops" x="${f.x}" y="${f.y + 27}">${UI.troopsText(f, true)}</text>` : "") + `</g>`;
+      `</g>`;
   }
 
   UI.battleTitle = function (b) {
