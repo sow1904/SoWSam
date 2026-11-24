@@ -641,6 +641,7 @@
       `<button data-action="saveMenu"><b>저장</b><span>슬롯을 골라 지금 상태를 기록합니다. 매달 1일에는 자동 저장 칸에 저절로 저장됩니다.</span></button>` +
       `<button data-action="loadMenu" data-from="game"><b>불러오기</b><span>저장해 둔 게임을 골라 불러옵니다.</span></button>` +
       `<button data-action="clockSettings"><b>시간 설정</b><span>배속과 자동 일시정지를 정합니다.</span></button>` +
+      `<button data-action="mapArt"><b>지도 그림: ${S.MAP_ART === 2 ? "2안" : "1안"}</b><span>누르면 ${S.MAP_ART === 2 ? "1안(원래 그림)" : "2안(액자 그림, map2)"}으로 바꿉니다. 비교용이며 게임 내용은 그대로입니다.</span></button>` +
       (state.playerForce ? `<button data-action="auto"><b>세력 위임</b><span>${state.auto
         ? "지금 세력 전체를 맡겨 두었습니다. 누르면 다시 직접 다스립니다."
         : "세력 전체를 컴퓨터에 맡깁니다. 도시와 군대, 외교와 황실, 포로 처우까지 알아서 하고, 시간이 저절로 멈추지 않습니다. 언제든 되돌릴 수 있습니다."}</span></button>` : "") +

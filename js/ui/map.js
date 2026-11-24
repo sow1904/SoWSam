@@ -69,6 +69,20 @@
     miniBox();
   }
 
+  // ---------- which painting of the map (S.MAP_ART, js/data/map.js) ----------
+  const ART_KEY = "sowsam.mapArt";
+  try { if (localStorage.getItem(ART_KEY) === "2") S.setMapArt(2); } catch (e) { /* the first painting */ }
+  UI.setMapArt = function (n) {
+    S.setMapArt(n, state);
+    try { localStorage.setItem(ART_KEY, String(S.MAP_ART)); } catch (e) { /* not kept */ }
+    UI.__seasonPics = null;
+    const map = $("#map");
+    if (map) map.dataset.base = "";
+    const mini = $("#miniNav");
+    if (mini) mini.remove();
+    if (state) UI.renderAll();
+  };
+
   // ---------- the small map in the corner ----------
   // The whole land at a glance (assets/map/mini.jpg), the cities in their
   // owners' colours, and a box for what the big map shows. A press or drag

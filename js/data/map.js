@@ -197,8 +197,73 @@
     const f = 1 + (sp.k - 1) * (1 - d / sp.r);
     return [Math.round(sp.x + (x - sp.x) * f), Math.round(sp.y + (y - sp.y) * f)];
   };
-  // Where a city or stronghold is drawn: set by hand, or projected.
-  S.placeXY = (id, lat, lon) => (S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon);
+  // Where a city or stronghold is drawn: set by hand, or projected; then,
+  // with the second painting (S.MAP_ART 2), carried over onto it.
+  S.placeXY = (id, lat, lon) => S.artXY((S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon));
+
+  // ---------- the second painting (map2) ----------
+  // The user is choosing between two paintings of the map. Places are set on
+  // the first; the second is the same land drawn a little differently (in a
+  // frame, the north pressed down), so a place on the first is carried over
+  // by the landmarks found on both: each moves as the landmarks near it
+  // moved (weighted by 1/d^2).
+  S.MAP_ART = 1;
+  const ART2 = {
+    seasons: ["spring", "summer", "autumn", "winter"].map((s) => `assets/map2/terrain_${s}.jpg`),
+    mini: "assets/map2/mini.jpg",
+    // [x, y on the first, x, y on the second]
+    pairs: [
+      [1090, 180, 1000, 285], // 하투의 북동쪽 굽이
+      [860, 140, 745, 235], // 하투의 북서쪽 굽이
+      [578, 500, 500, 600], // 금성 부근의 황하
+      [1022, 628, 975, 695], // 동관
+      [1150, 612, 1100, 685], // 호로관 북쪽의 황하
+      [1290, 598, 1290, 615], // 복양 부근의 황하
+      [1406, 500, 1400, 525], // 제남 북쪽의 황하
+      [1528, 388, 1544, 440], // 황하 하구
+      [1418, 215, 1440, 355], // 발해 서쪽 해안
+      [1805, 410, 1784, 460], // 산동반도 끝
+      [1804, 126, 1760, 190], // 요동
+      [1993, 272, 1945, 330], // 낙랑
+      [1975, 342, 1915, 405], // 대방
+      [1555, 760, 1554, 770], // 홍택호
+      [1840, 895, 1830, 895], // 장강 하구
+      [1690, 930, 1714, 930], // 태호
+      [1300, 1010, 1300, 1000], // 한수가 장강에 드는 곳
+      [1190, 1150, 1200, 1120], // 동정호
+      [1450, 1130, 1460, 1100], // 파양호
+      [740, 1090, 745, 1085], // 강주
+      [580, 980, 585, 985], // 성도 평원
+      [1385, 1585, 1300, 1620], // 주강 하구
+      [1080, 1790, 1054, 1764], // 뇌주반도 끝
+      [1060, 1890, 1070, 1880], // 해남도
+      [1860, 1580, 1864, 1524], // 대만
+      [660, 1800, 730, 1800], // 홍하 삼각주
+      [0, 0, 62, 62], [2048, 0, 1986, 62], [0, 2048, 62, 1986], [2048, 2048, 1986, 1986], // the frame
+    ],
+  };
+  S.artXY = function ([x, y]) {
+    if (S.MAP_ART !== 2) return [x, y];
+    let wx = 0, wy = 0, w = 0;
+    for (const [ox, oy, nx, ny] of ART2.pairs) {
+      const d2 = (x - ox) ** 2 + (y - oy) ** 2;
+      if (d2 < 1) return [nx, ny];
+      const k = 1 / d2;
+      wx += k * (nx - ox); wy += k * (ny - oy); w += k;
+    }
+    return [Math.round(x + wx / w), Math.round(y + wy / w)];
+  };
+  // Show the map in painting n (1 or 2): the pictures and every place.
+  S.setMapArt = function (n, state) {
+    const t = (S.MAP || (S.MAPS && S.MAPS.main) || {}).terrain;
+    if (!t) return;
+    if (!t.art1) t.art1 = { image: t.image, seasons: t.seasons, mini: t.mini };
+    S.MAP_ART = n === 2 ? 2 : 1;
+    Object.assign(t, S.MAP_ART === 2 ? { image: ART2.seasons[1], seasons: ART2.seasons, mini: ART2.mini } : t.art1);
+    if (!state) return;
+    for (const c of Object.values(state.cities)) { const m = S.MAP.cities[c.id]; [c.x, c.y] = S.placeXY(c.id, m[3], m[4]); }
+    for (const f of Object.values(state.forts || {})) [f.x, f.y] = S.placeXY(f.id, f.lat, f.lon);
+  };
 
   // A thin-plate spline through anchor points, from (lat, lon) to picture
   // pixels. A little smoothing keeps a misplaced anchor from twisting the map.

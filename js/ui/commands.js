@@ -677,6 +677,7 @@
       const r = S.trade(state, UI.selected, p.good, num("trAmount"), p.sell);
       if (UI.result(r)) commands.trade();
     },
+    mapArt: () => { UI.setMapArt(S.MAP_ART === 2 ? 1 : 2); UI.showSystem(); },
     orderShips: () => UI.result(S.orderShips(state, UI.selected, $("#shipKind").value, num("shipN"))),
     stopShips: () => UI.result(S.orderShips(state, UI.selected, null, 0)),
     moveCapital: () => {
