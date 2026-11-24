@@ -436,7 +436,7 @@
   function fortGlyph(f, targets) {
     const cls = ["fort", f.built ? "" : "site", f.id === UI.selected ? "sel" : "", targets.has(f.id) ? "target" : "", UI.home(f) ? "mine" : ""].join(" ");
     const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
-    const big = f.kind === "pass" && f.built ? 2 : 1; // passes drawn twice as large (the user's choice)
+    const big = f.kind === "pass" && f.built ? (art4() ? 2 : 1.5) : 1; // passes drawn larger (the user's choice: 2x in 4안, 1.5x in 2안)
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon].map((v) => v * big);
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
       (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.4, f.y - ih * 0.42, (ih / big) * FLAG.size * 2) : "") +
