@@ -253,9 +253,9 @@
   // owner's colour (a filter per force over the white cloth; the pole and the
   // ink outline stay as drawn). The pole stands at 6/140 of the picture.
   // why: the user's design, the white flag of their icon sheet as the banner.
-  // As in 삼국지4 (the user's reference): the banner stands at the castle's
-  // upper left on a short pole (the picture's pole cut to a stub).
-  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.33 }; // size: x the building's height
+  // As in 삼국지4 (the user's reference): a banner on a short pole (the
+  // picture's pole cut to a stub) standing on the top of the icon.
+  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.5 }; // size: x the building's height
   const tintId = (fid) => "tint-" + (fid || "none");
   function flagDefs() {
     const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
@@ -413,8 +413,8 @@
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${2 * r + 4}"/>` +
         // the owner: a flag in 4안 (below), a coloured ground under the castle otherwise
         (art4() ? "" : `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>`) +
-        // the banner behind the castle, at its upper left
-        (art4() && c.owner ? flagAt(c.owner, c.x - w * 0.4, c.y - h * 0.45, h * FLAG.size) : "") +
+        // the banner behind the castle, its pole standing on the icon's topmost point
+        (art4() && c.owner ? flagAt(c.owner, c.x, c.y - h * 0.6, h * FLAG.size) : "") +
         `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/></g>` +
         // no numbers on the map: a place's troops are seen by opening it
         `<g${scaleAt(foot)}><text class="name" x="${c.x}" y="${foot.y + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text></g></g>`;
@@ -433,7 +433,7 @@
     const big = f.kind === "pass" && f.built ? (art4() ? 2 : 1.5) : 1; // passes drawn larger (the user's choice: 2x in 4안, 1.5x in 2안)
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon].map((v) => v * big);
     const shape = (f.built && !art4() ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      (art4() && f.built && f.owner ? flagAt(f.owner, f.x - iw * 0.4, f.y - ih * 0.42, (ih / big) * FLAG.size * 2) : "") +
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x, f.y - ih * 0.6, (ih / big) * FLAG.size * 2) : "") +
       `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     const kf = f.kind === "port" ? UI.portK : f.kind === "pass" ? UI.passK : UI.fortK, foot = { x: f.x, y: f.y + ih * 0.42 * kf };
