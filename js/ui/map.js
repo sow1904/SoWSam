@@ -255,7 +255,7 @@
   // why: the user's design, the white flag of their icon sheet as the banner.
   // As in 삼국지4 (the user's reference): a banner on a short pole (the
   // picture's pole cut to a stub) standing on the top of the icon.
-  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.5 }; // size: x the building's height
+  const FLAG = { w: 140, h: 132, pole: 6 / 140, size: 0.5, lean: 30 }; // size: x the building's height
   const tintId = (fid) => "tint-" + (fid || "none");
   function flagDefs() {
     const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
@@ -268,8 +268,10 @@
   // A flag whose pole foot is at (x, y), fh tall.
   const flagAt = (fid, x, y, fh) => {
     const fw = fh * FLAG.w / FLAG.h, left = x - fw * FLAG.pole, top = y - fh;
-    return `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
-      `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/>`;
+    // leaning to the right about the foot of its pole
+    return `<g transform="rotate(${FLAG.lean} ${x} ${y})">` +
+      `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
+      `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/></g>`;
   };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.

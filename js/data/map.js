@@ -216,8 +216,18 @@
   const ART4 = {
     seasons: ["spring", "summer", "autumn", "winter"].map((s) => `assets/map4/terrain_${s}.jpg`),
     mini: "assets/map4/mini.jpg",
-    // places moved by hand from their true latitude and longitude
-    pos: {},
+    // places moved by hand from their true latitude and longitude (tools/map-editor.html?art=4)
+    pos: {
+      henei: [1071, 620], hedong: [935, 627], dongjun: [1216, 595], taishan: [1330, 570], weijun: [1141, 560],
+      julu: [1180, 473], bohai: [1331, 417], lelang: [1844, 318], pengcheng: [1340, 668], guangling: [1482, 796],
+      donghai: [1428, 653], qiguo: [1397, 481], beihai: [1446, 535], donglai: [1542, 475], youfufeng: [729, 666],
+      jiuquan: [171, 266], zhangye: [319, 328], nanyang: [1025, 772], xinye: [1033, 834], xiangyang: [1001, 864],
+      nanjun: [1024, 979], changsha: [1069, 1136], wuchang: [1165, 995], hulao: [1077, 661], hangu: [979, 662],
+      tongguan: [883, 680], chencang: [701, 690], hefei: [1318, 877], wuzhang: [733, 699], luogu: [762, 709],
+      wulin: [1093, 1013], chanling: [1022, 1028], baqiu: [1068, 1065], shiyang: [1139, 961], chaisang: [1242, 1030],
+      chibi: [1119, 1007], wankou: [1306, 973], ruxu: [1371, 915], niuzhu: [1396, 890], guabu: [1433, 847],
+      louxian: [1562, 883], shangyu: [1576, 992], changyang: [1559, 439], liekou: [1805, 381],
+    },
   };
   // The paintings, for the map editor: n -> { image, pos }.
   S.artInfo = (n) => (n === 4 ? { image: ART4.seasons[1], pos: ART4.pos } : n === 2 ? { image: ART2.seasons[1], pos: ART2.pos } : null);
@@ -235,27 +245,28 @@
     // Where every place is drawn on it: carried over from the first painting
     // by the landmarks below, then set by hand (tools/map-editor.html?art=2).
     pos: {
-      henan: [1087, 695], henei: [1166, 648], hedong: [1004, 654], hongnong: [1021, 702], yingchuan: [1225, 746],
-      runan: [1277, 827], peiguo: [1435, 747], qiao: [1352, 753], chenliu: [1281, 678], dongjun: [1319, 594],
-      shanyang: [1394, 648], taishan: [1435, 568], weijun: [1262, 540], julu: [1261, 473], changshan: [1202, 420],
-      hejian: [1320, 413], bohai: [1410, 418], pingyuan: [1385, 475], zhuo: [1294, 350], guangyang: [1400, 366],
-      daijun: [1204, 272], liaoxi: [1542, 268], liaodong: [1760, 190], xuantu: [1739, 125], lelang: [1945, 330],
-      daifang: [1915, 405], shangdang: [1124, 564], taiyuan: [1087, 440], yanmen: [1102, 338], xihe: [987, 503],
-      xiapi: [1524, 732], pengcheng: [1476, 658], guangling: [1631, 762], donghai: [1573, 653], qiguo: [1527, 481],
-      beihai: [1588, 500], jinan: [1440, 511], donglai: [1693, 456], jingzhao: [878, 730], zuopingyi: [934, 675],
-      youfufeng: [818, 699], hanyang: [689, 645], longxi: [582, 653], wuwei: [537, 432], jincheng: [511, 574],
-      jiuquan: [226, 229], zhangye: [334, 304], shujun: [550, 1005], hanzhong: [768, 812], bajun: [745, 1085],
-      guanghan: [619, 940], badong: [936, 985], zangke: [740, 1349], yuexi: [422, 1236], yizhoujun: [430, 1496],
-      yongchang: [181, 1478], nanyang: [1141, 817], xinye: [1167, 880], xiangyang: [1157, 946], xincheng: [970, 902],
-      jiangxia: [1284, 921], nanjun: [1196, 1040], wuling: [1133, 1139], lingling: [1136, 1340],
-      changsha: [1239, 1207], guiyang: [1242, 1390], wuchang: [1327, 1031], jiujiang: [1461, 838],
-      lujiang: [1472, 977], wujun: [1743, 916], kuaiji: [1797, 984], danyang: [1622, 889], yuzhang: [1437, 1134],
-      nanhai: [1339, 1642], cangwu: [1136, 1571], jiaozhi: [775, 1813], rinan: [794, 1994], hulao: [1130, 697],
-      hangu: [1057, 692], tongguan: [974, 709], chencang: [811, 724], yangping: [687, 798], jiameng: [689, 858],
-      jiange: [664, 887], yiling: [1110, 1016], yijing: [1307, 382], hefei: [1471, 894], wulin: [1250, 1064],
-      chanling: [1195, 1110], baqiu: [1230, 1149], shiyang: [1315, 988], chaisang: [1432, 1056], chibi: [1288, 1049],
-      wankou: [1472, 1004], ruxu: [1561, 922], niuzhu: [1580, 891], guabu: [1611, 853], louxian: [1771, 878],
-      shangyu: [1845, 964], changyang: [1657, 426], tajin: [1706, 346], liekou: [1875, 430],
+      henan: [1101, 687], henei: [1159, 646], hedong: [1007, 643], hongnong: [1017, 701], yingchuan: [1167, 779],
+      runan: [1287, 844], peiguo: [1435, 747], qiao: [1352, 753], chenliu: [1263, 706], dongjun: [1352, 619],
+      shanyang: [1394, 679], taishan: [1467, 572], weijun: [1233, 557], julu: [1244, 476], changshan: [1202, 420],
+      hejian: [1325, 417], bohai: [1409, 416], pingyuan: [1385, 475], zhuo: [1318, 342], guangyang: [1377, 304],
+      daijun: [1228, 255], liaoxi: [1569, 250], liaodong: [1717, 190], xuantu: [1739, 125], lelang: [1933, 305],
+      daifang: [1939, 363], shangdang: [1144, 562], taiyuan: [1107, 464], yanmen: [1102, 338], xihe: [987, 503],
+      xiapi: [1524, 732], pengcheng: [1488, 672], guangling: [1635, 771], donghai: [1580, 661], qiguo: [1514, 488],
+      beihai: [1584, 522], jinan: [1458, 516], donglai: [1686, 455], jingzhao: [880, 734], zuopingyi: [934, 675],
+      youfufeng: [794, 696], hanyang: [676, 673], longxi: [589, 683], wuwei: [509, 503], jincheng: [521, 612],
+      jiuquan: [160, 318], zhangye: [316, 384], shujun: [549, 1014], hanzhong: [802, 822], bajun: [756, 1068],
+      guanghan: [619, 940], badong: [928, 964], zangke: [731, 1360], yuexi: [406, 1290], yizhoujun: [462, 1481],
+      yongchang: [166, 1454], nanyang: [1103, 823], xinye: [1163, 890], xiangyang: [1157, 946], xincheng: [982, 886],
+      jiangxia: [1292, 941], nanjun: [1196, 1040], wuling: [1132, 1147], lingling: [1125, 1343],
+      changsha: [1257, 1209], guiyang: [1221, 1373], wuchang: [1327, 1031], jiujiang: [1461, 838],
+      lujiang: [1472, 977], wujun: [1743, 916], kuaiji: [1774, 1028], danyang: [1636, 895], yuzhang: [1416, 1137],
+      nanhai: [1349, 1599], cangwu: [1119, 1575], jiaozhi: [732, 1784], rinan: [737, 1949], hulao: [1148, 691],
+      hangu: [1055, 694], tongguan: [967, 710], chencang: [778, 733], yangping: [722, 815], jiameng: [753, 871],
+      jiange: [704, 895], yiling: [1104, 1005], yijing: [1321, 374], hefei: [1471, 894], wuzhang: [812, 744],
+      luogu: [839, 755], ziwu: [879, 760], wulin: [1244, 1060], chanling: [1185, 1113], baqiu: [1218, 1142],
+      shiyang: [1315, 988], chaisang: [1438, 1071], chibi: [1287, 1048], wankou: [1476, 1021], ruxu: [1564, 926],
+      niuzhu: [1588, 891], guabu: [1622, 851], louxian: [1772, 886], shangyu: [1827, 1006], changyang: [1657, 426],
+      tajin: [1664, 342], liekou: [1896, 370],
     },
     // [x, y on the first, x, y on the second]
     pairs: [
