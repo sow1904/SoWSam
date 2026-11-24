@@ -1,4 +1,4 @@
 node_modules/
 .claude/
 resources/
-tools/sowsam-positions.json
+tools/sowsam-positions*.json

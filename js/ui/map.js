@@ -71,7 +71,8 @@
 
   // ---------- which painting of the map (S.MAP_ART, js/data/map.js) ----------
   const ART_KEY = "sowsam.mapArt";
-  try { const a = +localStorage.getItem(ART_KEY); if (a === 2 || a === 4) S.setMapArt(a); } catch (e) { /* the first painting */ }
+  // 4안 (ink and colour) by default; 2안 is the classic-game look, a choice in 시스템.
+  try { S.setMapArt(+localStorage.getItem(ART_KEY) === 2 ? 2 : 4); } catch (e) { S.setMapArt(4); }
   UI.setMapArt = function (n) {
     S.setMapArt(n, state);
     try { localStorage.setItem(ART_KEY, String(S.MAP_ART)); } catch (e) { /* not kept */ }
@@ -193,6 +194,26 @@
     c1_ruin: [215, 157], c2_ruin: [215, 165], c3_ruin: [215, 164], c4_ruin: [215, 177], c5_ruin: [218, 189], palace_ruin: [215, 187],
   };
   const art4 = () => S.MAP_ART === 4;
+  // 세력 깃발 (4안): a flag on a corner of the building, its cloth dyed the
+  // owner's colour (a filter per force over the white cloth; the pole and the
+  // ink outline stay as drawn). The pole stands at 6/140 of the picture.
+  // why: the user's design, the white flag of their icon sheet as the banner.
+  const FLAG = { w: 140, h: 183, pole: 6 / 140 };
+  const tintId = (fid) => "tint-" + (fid || "none");
+  function flagDefs() {
+    const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
+    const ids = Object.values(state.forces).filter((f) => f.alive).map((f) => f.id);
+    return ids.map((fid) => {
+      const [r, g, b] = hex(UI.forceColor(fid));
+      return `<filter id="${tintId(fid)}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${r} 0 0 0 0 0 ${g} 0 0 0 0 0 ${b} 0 0 0 0 0 1 0"/></filter>`;
+    }).join("");
+  }
+  // A flag whose pole foot is at (x, y), fh tall.
+  const flagAt = (fid, x, y, fh) => {
+    const fw = fh * FLAG.w / FLAG.h, left = x - fw * FLAG.pole, top = y - fh;
+    return `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
+      `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/>`;
+  };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
   S.ruined = (p) => !!p && p.wallMax > 0 && p.wall < Math.max(150, p.wallMax * 0.2);
@@ -312,6 +333,12 @@
     }
     UI.setHTML($("#roadLayer"), svg);
 
+    if (art4()) {
+      let defs = $("#flagDefs");
+      if (!defs) { defs = document.createElementNS("http://www.w3.org/2000/svg", "defs"); defs.id = "flagDefs"; $("#map").prepend(defs); }
+      const html = flagDefs();
+      if (defs.__html !== html) { defs.innerHTML = html; defs.__html = html; }
+    }
     setGlyphs($("#fortLayer"), Object.values(state.forts || {}).map((f) => fortGlyph(f, targets)));
     // The terrain picture packs the north China plain tightly, so icons shrink there.
     const k = T ? 0.72 : 1;
@@ -326,6 +353,7 @@
         `<circle class="ring" cx="${c.x}" cy="${c.y}" r="${r + 4}"/>` +
         `<ellipse class="node" cx="${c.x}" cy="${c.y + h * 0.16}" rx="${w * 0.62}" ry="${w * 0.33}" fill="${UI.forceColor(c.owner)}"/>` +
         `<image class="icon" href="${iconDir()}cities/${icon}.png" x="${c.x - w / 2}" y="${c.y - h * 0.6}" width="${w}" height="${h}"/>` +
+        (art4() && c.owner ? flagAt(c.owner, c.x + w * 0.3, c.y - h * 0.18, h * 0.62) : "") +
         `<text class="name" x="${c.x}" y="${c.y + h * 0.4 + 9 * k}">${S.isCapital(state, c.id) ? "★" : ""}${c.name}</text>` +
         `<text class="troops" x="${c.x}" y="${c.y + h * 0.4 + 9 * k + 11}">${UI.troopsText(c, true)}</text></g>`;
     }));
@@ -342,7 +370,8 @@
     const icon = !f.built ? "site" : S.ruined(f) ? (art4() && f.kind === "pass" ? "pass_ruin" : "fort_ruin") : f.kind;
     const [iw, ih] = (art4() ? FORT_ICONS4 : FORT_ICONS)[icon];
     const shape = (f.built ? `<ellipse class="fnode" cx="${f.x}" cy="${f.y + ih * 0.16}" rx="${iw * 0.6}" ry="${iw * 0.3}" fill="${UI.forceColor(f.owner)}"/>` : "") +
-      `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>`;
+      `<image class="ficon" href="${iconDir()}${icon === "port" ? "cities" : "forts"}/${icon}.png" x="${f.x - iw / 2}" y="${f.y - ih * 0.6}" width="${iw}" height="${ih}"/>` +
+      (art4() && f.built && f.owner ? flagAt(f.owner, f.x + iw * 0.3, f.y - ih * 0.15, ih * 0.62) : "");
     const label = f.built ? `${f.name}` : f.building ? `${f.name} (공사 중)` : `${f.name} (터)`;
     return `<g class="${cls}" data-city="${f.id}"><circle class="ring" cx="${f.x}" cy="${f.y}" r="13"/>${shape}` +
       `<text class="name" x="${f.x}" y="${f.y + 17}">${label}</text>` +

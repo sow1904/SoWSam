@@ -199,8 +199,12 @@
   };
   // Where a city or stronghold is drawn: set by hand, or projected; then,
   // with the second painting (S.MAP_ART 2), carried over onto it.
-  S.placeXY = (id, lat, lon) => (S.MAP_ART === 4 ? S.geoXY(lat, lon) :
-    S.artXY((S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon)));
+  // Each painting keeps its own places, set by hand in tools/map-editor.html
+  // (?art=2, ?art=4); a place not set there is carried over (2안) or put at
+  // its true latitude and longitude (4안).
+  S.placeXY = (id, lat, lon) => S.MAP_ART === 4 ? (ART4.pos[id] || S.geoXY(lat, lon))
+    : S.MAP_ART === 2 ? (ART2.pos[id] || S.artXY((S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon)))
+    : (S.MAP && S.MAP.terrain && S.MAP.terrain.pos[id]) || S.project(lat, lon);
   // The fourth painting (map4) was drawn over the plain latitude-longitude
   // sketch of tools/mapgen.js --geo: places are where they truly are.
   const GEO = { lon0: 96, lon1: 129, lat0: 16, lat1: 43.5 };
@@ -212,7 +216,11 @@
   const ART4 = {
     seasons: ["spring", "summer", "autumn", "winter"].map((s) => `assets/map4/terrain_${s}.jpg`),
     mini: "assets/map4/mini.jpg",
+    // places moved by hand from their true latitude and longitude
+    pos: {},
   };
+  // The paintings, for the map editor: n -> { image, pos }.
+  S.artInfo = (n) => (n === 4 ? { image: ART4.seasons[1], pos: ART4.pos } : n === 2 ? { image: ART2.seasons[1], pos: ART2.pos } : null);
 
   // ---------- the second painting (map2) ----------
   // The user is choosing between two paintings of the map. Places are set on
@@ -224,6 +232,31 @@
   const ART2 = {
     seasons: ["spring", "summer", "autumn", "winter"].map((s) => `assets/map2/terrain_${s}.jpg`),
     mini: "assets/map2/mini.jpg",
+    // Where every place is drawn on it: carried over from the first painting
+    // by the landmarks below, then set by hand (tools/map-editor.html?art=2).
+    pos: {
+      henan: [1087, 695], henei: [1166, 648], hedong: [1004, 654], hongnong: [1021, 702], yingchuan: [1225, 746],
+      runan: [1277, 827], peiguo: [1435, 747], qiao: [1352, 753], chenliu: [1281, 678], dongjun: [1319, 594],
+      shanyang: [1394, 648], taishan: [1435, 568], weijun: [1262, 540], julu: [1261, 473], changshan: [1202, 420],
+      hejian: [1320, 413], bohai: [1410, 418], pingyuan: [1385, 475], zhuo: [1294, 350], guangyang: [1400, 366],
+      daijun: [1204, 272], liaoxi: [1542, 268], liaodong: [1760, 190], xuantu: [1739, 125], lelang: [1945, 330],
+      daifang: [1915, 405], shangdang: [1124, 564], taiyuan: [1087, 440], yanmen: [1102, 338], xihe: [987, 503],
+      xiapi: [1524, 732], pengcheng: [1476, 658], guangling: [1631, 762], donghai: [1573, 653], qiguo: [1527, 481],
+      beihai: [1588, 500], jinan: [1440, 511], donglai: [1693, 456], jingzhao: [878, 730], zuopingyi: [934, 675],
+      youfufeng: [818, 699], hanyang: [689, 645], longxi: [582, 653], wuwei: [537, 432], jincheng: [511, 574],
+      jiuquan: [226, 229], zhangye: [334, 304], shujun: [550, 1005], hanzhong: [768, 812], bajun: [745, 1085],
+      guanghan: [619, 940], badong: [936, 985], zangke: [740, 1349], yuexi: [422, 1236], yizhoujun: [430, 1496],
+      yongchang: [181, 1478], nanyang: [1141, 817], xinye: [1167, 880], xiangyang: [1157, 946], xincheng: [970, 902],
+      jiangxia: [1284, 921], nanjun: [1196, 1040], wuling: [1133, 1139], lingling: [1136, 1340],
+      changsha: [1239, 1207], guiyang: [1242, 1390], wuchang: [1327, 1031], jiujiang: [1461, 838],
+      lujiang: [1472, 977], wujun: [1743, 916], kuaiji: [1797, 984], danyang: [1622, 889], yuzhang: [1437, 1134],
+      nanhai: [1339, 1642], cangwu: [1136, 1571], jiaozhi: [775, 1813], rinan: [794, 1994], hulao: [1130, 697],
+      hangu: [1057, 692], tongguan: [974, 709], chencang: [811, 724], yangping: [687, 798], jiameng: [689, 858],
+      jiange: [664, 887], yiling: [1110, 1016], yijing: [1307, 382], hefei: [1471, 894], wulin: [1250, 1064],
+      chanling: [1195, 1110], baqiu: [1230, 1149], shiyang: [1315, 988], chaisang: [1432, 1056], chibi: [1288, 1049],
+      wankou: [1472, 1004], ruxu: [1561, 922], niuzhu: [1580, 891], guabu: [1611, 853], louxian: [1771, 878],
+      shangyu: [1845, 964], changyang: [1657, 426], tajin: [1706, 346], liekou: [1875, 430],
+    },
     // [x, y on the first, x, y on the second]
     pairs: [
       [1090, 180, 1000, 285], // 하투의 북동쪽 굽이
