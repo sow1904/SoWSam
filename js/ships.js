@@ -260,9 +260,10 @@
     return { ok: true, msg: `${f.name} 수군 정원을 ${S.navyGoal(state, f).toLocaleString()}명으로 정했습니다. 매달 ${state.cities[f.home].name}에서 채우거나 돌려보냅니다.` };
   };
   // The lands south of the 장강 whose men knew the water: where 누선 are
-  // built (S.SPECIAL.louchuan), and 예장 (시상, the 파양호) and 회계 (the
-  // coast), which built no 누선 but drilled navies all the same.
-  S.SOUTH_WATER = ["yuzhang", "kuaiji"];
+  // built (S.SPECIAL.louchuan), and 예장 (시상, the 파양호), 회계 (the
+  // coast) and 무릉 (잔릉, the 동정호), which built no 누선 but drilled
+  // navies all the same.
+  S.SOUTH_WATER = ["yuzhang", "kuaiji", "wuling"];
   S.southWater = (c) => !!c && ((S.specialLand && S.specialLand("louchuan", c)) || S.SOUTH_WATER.includes(c.id));
   // A port's navy at the start of a game: its ships part manned, drilled as
   // the waters it knows.

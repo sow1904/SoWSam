@@ -10,10 +10,23 @@
   const footer = (go) => `<div class="footer"><button data-action="close">취소</button>${go || ""}</div>`;
   UI.winTitle = title;
 
-  function checkList(list, max) {
-    return `<div class="row top"><label>무장</label><div class="checks">${list.map((o, i) =>
-      `<label><input type="checkbox" class="pickOfficer" value="${o.id}"${max && i === 0 ? " checked" : ""}> ` +
-      `${o.name} <span class="hint">무${o.war} 용${o.cmd} 군${o.strat}</span></label>`).join("")}</div></div>`;
+  // at: officers stationed elsewhere (a port), {id: the port}, shown only
+  // when the order can take them (syncPortOfficers).
+  function checkList(list, max, at) {
+    return `<div class="row top"><label>무장</label><div class="checks">${list.map((o, i) => {
+      const port = at && at[o.id];
+      return `<label${port ? ` class="portOfficer" data-port="${port.id}"` : ""}><input type="checkbox" class="pickOfficer" value="${o.id}"${max && i === 0 && !port ? " checked" : ""}> ` +
+        `${o.name}${port ? ` <span class="hint">(${port.name} 주둔)</span>` : ""} <span class="hint">무${o.war} 용${o.cmd} 군${o.strat}</span></label>`;
+    }).join("")}</div></div>`;
+  }
+  // Officers stationed at a port may go only with its navy: shown when the
+  // target is across the water from it, hidden (and unticked) otherwise.
+  function syncPortOfficers(nav) {
+    for (const el of document.querySelectorAll(".portOfficer")) {
+      const on = !!nav && el.dataset.port === nav.id;
+      el.style.display = on ? "" : "none";
+      if (!on) el.querySelector("input").checked = false;
+    }
   }
   function rangeRow(id, label, max, value) {
     return `<div class="row"><label>${label}</label><input type="range" id="${id}" min="0" max="${max}" step="1" value="${value || 0}">` +
@@ -336,6 +349,11 @@
       if (!targets.length) { UI.toast("길로 이어진 적 도시나 거점이 없습니다."); return; }
       if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { UI.toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
+      // The officers of the own ports a navy would sail from (js/ships.js).
+      const at = {};
+      const ports = [...new Set(S.attackTargets(state, c.id).map((w) => S.navalPort(state, w.path, c.owner)).filter((p) => p && p.id !== c.id))];
+      const water = (o) => (S.hasSkill(o, "수전") ? 50 : 0) + o.cmd;
+      const stationed = ports.flatMap((p) => S.idle(state, p.id).sort((a, b) => water(b) - water(a)).map((o) => { at[o.id] = p; return o; }));
       UI.openModal(title("출진") + `<p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. ` +
         `군단은 하루 ${S.SPEED.army}km(기병만이면 ${S.SPEED.cavalry}km, 공성 병기가 섞이면 ${S.SPEED.siege}km)를 행군하고, 도착한 날 그 도시의 병력과 싸웁니다. 군량은 병사 10명당 1에 행군 일수만큼 더 듭니다.</p>` +
         `<div class="row"><label>목표</label><select id="atTarget">${targets.map((d) => {
@@ -343,7 +361,7 @@
           return `<option value="${d}">${UI.placeLabel(d)} (${t.owner || t.troops > 0 ? S.forceName(state, t.owner) : "비어 있음"}, ${UI.guess(t) ? UI.troopsText(t) : `${S.unitName(S.garrisonUnit(t))} ${t.troops}`})</option>`;
         }).join("")}</select></div>` +
         `<p class="hint">${UNIT_HINT}</p>` +
-        checkList(idle, S.MAX_SORTIE_OFFICERS) +
+        checkList(idle.concat(stationed), S.MAX_SORTIE_OFFICERS, at) +
         unitRows("atU_", c, 0.7) +
         (c.retainers ? `<p class="hint">호족 사병 ${c.retainers}명은 출진하지 않고 성에 남습니다.</p>` : "") +
         `<div class="row"><label>전력</label><span id="atEst" class="est"></span></div>` + teamAdvice(idle, S.MAX_SORTIE_OFFICERS) +
@@ -525,6 +543,8 @@
   }
 
   function updateEstimate() {
+    const way0 = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
+    syncPortOfficers(way0 && S.landingLink(way0.path) ? S.navalPort(state, way0.path, S.place(state, UI.selected).owner) : null);
     const ids = checked();
     const el = $("#atEst");
     if (!ids.length) { el.textContent = "무장을 골라 주세요."; return; }
