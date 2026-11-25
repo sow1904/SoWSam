@@ -44,6 +44,14 @@
     want: { top: 1.3, rest: 0.5, min: 5000 },
     gold: { keep: 300, perSize: 100 }, // gold a city keeps back
     food: { months: 6, plus: 2000, borderMonths: 24, borderPlus: 15000 }, // food a city keeps back (garrison months + a store)
+    // Rations short for a march (S.foodWait): how many months a force will
+    // look ahead to gather them, by trade and the harvest (harvest: the part
+    // of its land's autumn harvest that reaches the seat); cost: how much a
+    // month's wait counts against a target (what else could be done in it).
+    // why: the user's design. A target the stores cannot reach now is weighed
+    // against one they can: the months to gather the grain, and how much
+    // both sides grow meanwhile (S.trendOf).
+    wait: { max: 12, harvest: 0.5, cost: 0.03, days: 45 },
     // 군량 수송: a computer seat sends grain to a city of its corps with less
     // than short months of food for its garrison, up to fill months, from what
     // the seat holds beyond its own keep (S.keepFood); and gold the same way
@@ -154,6 +162,8 @@
   // Each month: the cities send their surplus to the capital (상납), and
   // soldiers beyond a city's cap march to the main army.
   S.runTribute = function (state) {
+    // The troops of every place, the last six months (S.trendOf).
+    for (const p of S.cityList(state).concat(Object.values(state.forts || {}))) p.past = [Math.round(p.troops || 0)].concat(p.past || []).slice(0, 6);
     for (const c of S.cityList(state)) {
       c.sent = null;
       if (!c.owner || S.isSeatCity(state, c) || S.besieged(state, c.id)) continue;
@@ -602,15 +612,65 @@
   // (S.navyPlan); on land the place's men. null if it cannot go (fewer than
   // min men, no own port, or a crossing that would fail).
   //   {unit, est, go: the officers who would go}
-  function judgeWay(state, fid, fromId, t, way, ids, troops, min) {
+  //   {unit, est, go, wait: months to gather the rations (0: now),
+  //    fromHere: the rations the place sets out with}
+  //   canWait: a target the rations cannot reach yet is judged as it would
+  //   stand once they are gathered (an army in the field cannot wait).
+  function judgeWay(state, fid, fromId, t, way, ids, troops, min, canWait) {
     const nav = S.navyPlan(state, way, fid, ids);
     if (nav ? !nav.port || nav.men < min || (nav.land && !nav.land.pass) : troops < min) return null;
-    const unit = nav ? nav.unit : S.pickAttackUnit(state, S.place(state, fromId), t, troops);
+    const from = S.place(state, fromId);
+    const unit = nav ? nav.unit : S.pickAttackUnit(state, from, t, troops);
     const go = nav ? nav.go : ids;
+    const men = nav ? nav.men : troops;
     const est = S.estimate(state, nav ? nav.port.id : fromId, t.id, go, nav ? nav.left : troops, unit);
     if (nav && nav.land && nav.land.lostD) { const seen = S.seenTroops(state, fid, t); est.ratio *= seen / Math.max(1, seen - nav.land.lostD); }
-    return { unit, est, go };
+    // The rations, as S.attack will ask for them.
+    const plan = S.marchPlan(state, way, nav ? S.mixCounts(unit, men) : unit, men, nav && nav.port);
+    const fromHere = S.drawFood(state, way.path, fid, plan.food, true);
+    const wait = S.foodWait(state, from, fromHere - from.food);
+    if (wait > 0 && (!canWait || wait === Infinity)) return null;
+    if (wait > 0) {
+      // Both sides grow while the grain comes in.
+      const grow = (p) => Math.max(0, S.trendOf(p)) / Math.max(1, p.troops);
+      est.ratio *= (1 + grow(nav ? nav.port : from) * wait) / (1 + grow(t) * wait);
+    }
+    return { unit, est, go, wait, fromHere };
   }
+  // Troops a place gained (or lost) a month of late (runTribute keeps the
+  // last six months).
+  S.trendOf = (p) => (p.past && p.past.length > 1 ? (p.past[0] - p.past[p.past.length - 1]) / (p.past.length - 1) : 0);
+  // Months until a city holds short more food than it does now: what its
+  // trade can buy each month with the gold it has and earns (its own, and
+  // what its corps sends), and the autumn harvest of its land, less what
+  // its garrison eats. 0 if nothing is short; Infinity beyond wait.max.
+  S.foodWait = function (state, c, short) {
+    if (!(short > 0)) return 0;
+    if (!state.cities[c.id] || !c.owner) return Infinity;
+    const V = W.wait;
+    const realm = S.corpsCities(state, c.owner, S.cityCorps(state, c));
+    const price = S.tradePrice(state, c, "food");
+    const room = c.trade * S.TRADE.volume * S.houseTrade(c); // gold of goods a month
+    const income = realm.reduce((s, x) => s + Math.max(0, S.balance(x)), 0);
+    const harvest = V.harvest * realm.reduce((s, x) => s + S.harvestOf(state, x), 0);
+    const eat = S.foodUse(c.troops);
+    let gold = Math.max(0, c.gold - S.keepGold(c)), got = 0, m = state.month;
+    for (let i = 1; i <= V.max; i++) {
+      m = (m % 12) + 1;
+      gold += income;
+      const spend = Math.min(room, gold);
+      gold -= spend;
+      got += spend / price - eat + (m === 9 ? harvest : 0);
+      if (got >= short) return i;
+    }
+    return Infinity;
+  };
+  // A force waits for the rations of a march: the city buys grain and keeps
+  // what it has (marketAI, js/ai.js) until it holds them, or the time is up.
+  S.gatherFood = function (state, c, need, months) {
+    c.foodAim = { need: Math.ceil(need), until: S.today(state) + months * S.DAYS_PER_MONTH + W.wait.days };
+  };
+  S.foodAimOf = (state, c) => (c.foodAim && c.foodAim.until > S.today(state) && c.food < c.foodAim.need ? c.foodAim.need : 0);
   S.judgeWay = judgeWay;
   function aimTarget(state, fid, war, ways, judge) {
     let best = null;
@@ -621,7 +681,7 @@
       const j = judge(t, way);
       if (!j) continue;
       const near = foeCap ? S.nodeKm(state, t.id, foeCap) : 0;
-      j.score = foeCap ? -near / 300 + Math.min(j.est.ratio, 2) - (t.id === foeCap ? 0 : 0.2) : j.est.ratio;
+      j.score = (foeCap ? -near / 300 + Math.min(j.est.ratio, 2) - (t.id === foeCap ? 0 : 0.2) : j.est.ratio) - (j.wait || 0) * W.wait.cost;
       if (!best || j.score > best.score) best = Object.assign(j, { t, way });
     }
     return best;
@@ -684,7 +744,7 @@
     // A small main army can still send a navy over the river.
     const troops = Math.floor(S.marchable(cap) - keep);
     const best = aimTarget(state, fid, war, ways, (t, way) => {
-      const j = judgeWay(state, fid, capId, t, way, ids, troops, E.min);
+      const j = judgeWay(state, fid, capId, t, way, ids, troops, E.min, true);
       if (!j) return null;
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       return Object.assign(j, { pull: S.courtPull(state, fid, t), risk: threat ? threat.pct / 50 : 0 });
@@ -700,6 +760,13 @@
     // 원정 의지 (js/will.js): a lord who has long meant to go asks less of the odds.
     const will = best.t.owner && S.willOdds ? S.willOdds(state, fid, best.t.owner) : 0;
     if (best.est.ratio < W.aim.odds[aim] + w / 40 - best.pull + nerve + amity + best.risk - opening - advice - will) return note("odds too low: " + aim);
+    // Worth going, but the stores are short: gather the grain first.
+    if (best.wait > 0) {
+      const fresh = !S.foodAimOf(state, cap);
+      S.gatherFood(state, cap, best.fromHere, best.wait);
+      if (fresh && fid === state.playerForce) S.addLog(state, `${S.corpsLabel(state, fid, n)}이 ${S.ro(best.t.name)} 원정할 군량을 모읍니다. (약 ${best.wait}개월)`, "sys");
+      return note("gather food " + best.wait);
+    }
     if (!S.chance(state, E.chance * (best.t.owner && S.willOf ? 0.5 + S.willOf(state, fid, best.t.owner) / 100 : 1))) return note("dice");
     // The council debates it first (js/council.js); a 도독 decides alone.
     const council = S.conveneWar && n === 1 ? S.conveneWar(state, fid, { foe: best.t.owner, target: best.t.id, aim, ratio: best.est.ratio, team: ids }) : null;
@@ -786,7 +853,10 @@
     const P = W.press;
     const men = S.serving(state, t.id).filter((o) => o.force === fid && !o.transit);
     const governor = men.length > 1 ? men.reduce((a, x) => (x.pol > a.pol ? x : a)) : null;
-    const team = men.filter((o) => o !== governor);
+    // Those who lead on: the ablest, as many as may go (officers already in
+    // the city may have joined the army's own).
+    const crew = men.filter((o) => o !== governor);
+    const team = [...crew].sort((a, b) => S.leadScore(state, b) - S.leadScore(state, a)).slice(0, S.MAX_SORTIE_OFFICERS);
     // Facing the foe, the city keeps an occupation force for a while (less
     // when the foe's main army is broken).
     const front = S.isBorder(state, t);
@@ -804,7 +874,7 @@
     p = clamp(p, homeHit ? 0 : P.min, aim === "border" ? P.max : 97);
     if (homeHit) note("home under attack");
     if (S.WARLOG) note(!team.length ? "home: no officer left" : spare < P.troops ? "home: too few left" : "press roll");
-    if (team.length && spare >= P.troops && S.chance(state, p)) {
+    if (team.length && spare >= P.troops && !S.besieged(state, t.id) && S.chance(state, p)) {
       const dom = fid === state.playerForce ? null : S.domainOf(state, fid);
       const ways = S.attackTargets(state, t.id).filter((w) => {
         const x = S.place(state, w.id);
@@ -838,7 +908,7 @@
     const unit = S.takeTroops(t, counts);
     if (!unit) return;
     S.launch(state, { kind: "move", force: fid, path: route.path, km: route.km, speed: S.unitSpeed(counts),
-      officers: team.map((o) => o.id), troops: S.countsTotal(counts), unit, train: t.train, origin: t.id, target: capId });
+      officers: crew.map((o) => o.id), troops: S.countsTotal(counts), unit, train: t.train, origin: t.id, target: capId });
   };
 
   // ---------- peace (강화) ----------

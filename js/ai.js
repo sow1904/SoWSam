@@ -224,15 +224,15 @@
       const way = ways.find((w) => w.id === t.id);
       if (!way) continue;
       const troops = Math.min(c.troops - garrisonFor(t), S.marchable(c));
-      const j = S.judgeWay(state, c.owner, c.id, t, way, ids, troops, 3000);
+      const j = S.judgeWay(state, c.owner, c.id, t, way, ids, troops, 3000, true);
       if (!j) continue;
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull + S.titlePull(state, c.owner, t); // vacant cities are easy pickings
       // A fierce officer inside who may sortie makes the place look harder.
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       const risk = threat ? threat.pct / 50 : 0;
-      const score = j.est.ratio + bonus - risk;
-      if (!best || score > best.score) best = { t, unit: j.unit, score, est: j.est, pull, risk, troops, go: j.go };
+      const score = j.est.ratio + bonus - risk - j.wait * S.WAR.wait.cost; // a month's wait for rations costs too
+      if (!best || score > best.score) best = { t, unit: j.unit, score, est: j.est, pull, risk, troops, go: j.go, wait: j.wait, fromHere: j.fromHere };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
@@ -244,6 +244,8 @@
     const amity = best && best.t.owner ? Math.max(-0.15, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
     if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity + best.risk) return;
     if (!S.chance(state, 45)) return;
+    // The stores are short: the city gathers the grain first.
+    if (best.wait > 0) return S.gatherFood(state, c, best.fromHere, best.wait);
     S.attack(state, c.id, best.t.id, best.go, best.troops, best.unit);
   }
 
@@ -339,13 +341,17 @@
   // away from the herds buys horses, and any city short of iron buys some.
   function marketAI(state, c, frontier) {
     if (S.besieged(state, c.id)) return;
-    const keep = S.foodUse(c.troops) * 36 + 8000;
+    // Rations being gathered for a march (S.gatherFood, js/war.js): buy
+    // grain before anything else, and sell none.
+    const aim = S.foodAimOf(state, c);
+    const keep = Math.max(S.foodUse(c.troops) * 36 + 8000, aim);
     if (c.food > keep) S.trade(state, c.id, "food", Math.min(c.food - keep, S.tradeMax(state, c, "food", true)), true);
     const buy = (k, upTo, spare) => {
       const price = S.tradePrice(state, c, k);
-      const n = Math.min(upTo - c.res[k], Math.floor((c.gold - spare) / price), S.tradeMax(state, c, k, false));
+      const n = Math.min(upTo - S.goodStock(c, k), Math.floor((c.gold - spare) / price), S.tradeMax(state, c, k, false));
       if (n >= 100) S.trade(state, c.id, k, n, false);
     };
+    if (aim) buy("food", aim, S.keepGold(c));
     if (c.res.iron < 400) buy("iron", 1200, 800);
     if (frontier && !S.horseCountry(c) && S.canRaise(state, c.owner, "lighthorse")) buy("horse", 1500, 1500);
   }
