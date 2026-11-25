@@ -138,6 +138,9 @@
     return `<h3>함선 건조${helpTip(H.ships)}</h3>` +
       `<div class="row"><label>함대</label><span>${UI.fleetText(f)} <span class="hint">(병사 ${fmt(f.ships || 0)}명, 자리 ${fmt(Math.round(S.roomUsed(f)))} / ${fmt(S.portMax(state, f))}, 유지비 매달 금 ${S.shipUpkeep(f)})</span></span></div>` +
       `<div class="row"><label>건조 중</label><span>${cur}${o && !ai ? ` <button data-action="stopShips">멈춤</button>` : ""}</span></div>` +
+      `<div class="row"><label>수군${helpTip(H.navy)}</label><span>${fmt(Math.floor(f.troops))}명 · 숙련 ${f.train} / ${S.navyTop(state, f)} · 정원 ${fmt(S.navyGoal(state, f))}` +
+        ` <span class="hint">(출진 가능 ${fmt(S.navySortie(state, f))}명)</span>` +
+        (ai ? "" : ` <input id="navyGoal" type="number" min="0" step="500" value="${S.navyGoal(state, f)}" style="width:6em"> <button data-action="navyGoal">정원</button>`) + `</span></div>` +
       (ai ? `<p class="hint">도독에게 맡긴 군단의 항구는 도독이 알아서 짓습니다.</p>` :
         `<div class="row"><label>새 건조</label><span><select id="shipKind">${kinds.map((k) => `<option value="${k}">${S.unitName(k)} (100명분에 ${S.shipCostText(k, 100)})</option>`).join("")}</select> ` +
         `<input id="shipN" type="number" min="100" step="500" value="${Math.max(500, Math.round(S.roomFree(state, f)))}" style="width:6em"> 명분 <button data-action="orderShips">건조</button></span></div>`);
@@ -324,13 +327,14 @@
         `축성 특기가 있는 무장이 ${ends.join(", ")} 중 한 곳에서 금 ${S.BUILD_COST}으로 ${S.BUILD_DAYS}일 동안 쌓을 수 있습니다.</p>` +
         `<h3>축성 특기</h3><p class="hint">${Object.keys(S.SKILLS).filter((n) => S.SKILLS[n].includes("축성")).join(", ")}</p>`;
     }
-    html += `<div class="stats">` + stat("병력", UI.troopsText(f)) + stat("훈련", f.train) +
+    html += `<div class="stats">` + stat(f.kind === "port" ? "수군" : "병력", UI.troopsText(f)) + stat(f.kind === "port" ? "숙련" : "훈련", f.kind === "port" && f.owner ? `${f.train} / ${S.navyTop(state, f)}` : f.train) +
       stat("성벽", `${f.wall}/${f.wallMax}`) + stat("군량", f.food.toLocaleString()) +
       (f.kind === "port" ? stat("배", `병사 ${Math.floor(f.ships || 0).toLocaleString()}명분 (자리 ${Math.round(S.roomUsed(f)).toLocaleString()} / ${S.portMax(state, f).toLocaleString()})`) : "") + `</div>` +
       (f.kind === "port" && f.owner && (UI.mine(f) || !UI.guess(f)) ? `<p class="hint">함대: ${UI.fleetText(f)}</p>` : "");
     const why = f.kind === "pass" ? "지형이 험해 지키기 쉽습니다."
-      : f.kind === "port" ? `강 건너 항구로 출진할 때는 이 항구의 배에 태울 수 있는 만큼만 건넙니다. 배는 건조 명령에 따라 ${state.cities[f.home].name}의 금과 목재로 짓고, 유지비도 그 도시가 냅니다(최대 조선 1단계마다 ${S.PORT.per.toLocaleString()}명분). ` +
-        `적이 건너오면 항구와 ${state.cities[f.home].name}의 병사가 배에 오를 수 있는 만큼 나가 막습니다. 항구에는 병사를 ${S.PORT.cap.toLocaleString()}명까지만 둡니다. 빼앗긴 항구의 배는 불탑니다.`
+      : f.kind === "port" ? `이 항구의 병사가 곧 수군입니다. 강 건너 적 항구는 수군만 칠 수 있고, 적이 건너오면 수군이 배에 오를 수 있는 만큼 나가 막습니다. ` +
+        `배는 건조 명령에 따라 ${state.cities[f.home].name}의 금과 목재로 짓고, 유지비도 그 도시가 냅니다(최대 조선 1단계마다 ${S.PORT.per.toLocaleString()}명분). ` +
+        `수군은 ${state.cities[f.home].name}에서 매달 채우고 조련합니다. 수군이 빼앗은 항구에는 그 배가 남고, 뭍에서 빼앗긴 항구의 배는 불탑니다.`
       : "성벽이 높고 군량을 많이 쌓아 오래 버팁니다.";
     return html + `<p class="hint">${why} ` +
       `거점에는 백성과 내정이 없습니다. 지키는 병사는 한 달에 병사 25명당 군량 1을 먹고, 군량은 길로 이어진 아군 도시에서 채웁니다. ` +

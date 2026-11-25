@@ -222,12 +222,16 @@
     for (const t of targets) {
       const troops = Math.min(c.troops - garrisonFor(t), S.marchable(c));
       if (troops < 3000) continue;
-      const unit = pickUnit(state, c, t, troops);
-      // Over water, what is likely left once ashore, if it gets ashore at all.
+      // Over water only the navy of the port goes (js/ships.js): what is
+      // likely left once ashore, if it gets ashore at all.
       const way = ways.find((w) => w.id === t.id);
-      const land = way && S.landingLink(way.path) ? S.landingForecast(state, t.id, c.owner, team, troops, c.train, S.waterMen(state, way.path, c.owner, troops)) : null;
+      const nav = way && S.landingLink(way.path) ? S.navalPort(state, way.path, c.owner) : null;
+      if (way && S.landingLink(way.path) && (!nav || S.navySortie(state, nav) < 3000)) continue;
+      const men = nav ? S.navySortie(state, nav) : troops;
+      const unit = nav ? S.garrisonUnit(nav) : pickUnit(state, c, t, troops);
+      const land = nav ? S.landingForecast(state, t.id, c.owner, team, men, nav.train, men) : null;
       if (land && !land.pass) continue;
-      const est = S.estimate(state, c.id, t.id, ids, land ? land.left : troops, unit);
+      const est = S.estimate(state, nav ? nav.id : c.id, t.id, ids, land ? land.left : men, unit);
       if (land && land.lostD) { const seen = S.seenTroops(state, c.owner, t); est.ratio *= seen / Math.max(1, seen - land.lostD); }
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull + S.titlePull(state, c.owner, t); // vacant cities are easy pickings
@@ -551,6 +555,15 @@
       const front = near.some((n) => { const p = S.place(state, n); return p.owner !== fid && !(p.owner && S.allied(state, fid, p.owner)); });
       const staff = S.serving(state, f.id);
       const home = near.map((n) => state.cities[n]).filter((x) => x && x.owner === fid).sort((a, b) => S.marchable(b) - S.marchable(a))[0];
+      // A port fills its own navy (js/ships.js); at the front it wants an
+      // officer, one skilled on the water if there is one.
+      if (f.kind === "port") {
+        if (front && !staff.length && home && S.idle(state, home.id).length > 1) {
+          const o = S.idle(state, home.id).sort((a, b) => (S.hasSkill(b, "수전") ? 50 : 0) + b.cmd - ((S.hasSkill(a, "수전") ? 50 : 0) + a.cmd))[0];
+          S.relocate(state, home.id, f.id, [o.id]);
+        }
+        continue;
+      }
       const keep = front ? 4000 : 1000;
       const idle = S.idle(state, f.id);
       if (front && (f.troops < 3000 || !staff.length)) {

@@ -361,6 +361,9 @@
         if (!seat || seat.owner !== g.id) continue;
         for (const way of S.attackTargets(state, seat.id)) {
           if (way.days > W.alert.days || !S.landingLink(way.path)) continue;
+          // Only a navy meets a crossing on the water (js/ships.js): men sent
+          // to the bank would not help. A port's navy is filled by the port.
+          if (S.isPort(state, way.id)) continue;
           const t = S.place(state, way.id);
           if (!t || !t.owner || t.owner === g.id || S.allied(state, g.id, t.owner) || S.truceLeft(state, g.id, t.owner)) continue;
           if (S.rel(state, g.id, t.owner) >= W.alert.rel && !S.atWarWith(state, g.id, t.owner)) continue;
@@ -462,7 +465,9 @@
   S.corpsMen = function (state, fid, n, realm) {
     realm = realm || S.corpsCities(state, fid, n);
     const mine = (x) => x && x.force === fid && (x.corps || 1) === (n || 1) ? x.troops || 0 : 0;
-    return realm.reduce((s, c) => s + c.troops, 0) +
+    const ids = new Set(realm.map((c) => c.id));
+    const navy = Object.values(state.forts || {}).reduce((s, f) => s + (f.kind === "port" && f.owner === fid && ids.has(f.home) ? f.troops : 0), 0);
+    return realm.reduce((s, c) => s + c.troops, 0) + navy + // the navy too (js/ships.js)
       (state.marches || []).reduce((s, m) => s + mine(m), 0) +
       (state.battles || []).reduce((s, b) => s + mine(b.att) + mine(b.relief), 0);
   };
@@ -664,10 +669,14 @@
     const troops = Math.floor(S.marchable(cap) - keep);
     if (troops < E.min) return note("main army too small");
     const best = aimTarget(state, fid, war, ways, (t, way) => {
-      const unit = S.pickAttackUnit(state, cap, t, troops);
-      const land = S.landingLink(way.path) ? S.landingForecast(state, t.id, fid, team, troops, cap.train, S.waterMen(state, way.path, fid, troops)) : null;
+      // Over the river only the navy of the port goes (js/ships.js).
+      const nav = S.landingLink(way.path) ? S.navalPort(state, way.path, fid) : null;
+      if (S.landingLink(way.path) && (!nav || S.navySortie(state, nav) < E.min)) return null;
+      const men = nav ? S.navySortie(state, nav) : troops;
+      const unit = nav ? S.garrisonUnit(nav) : S.pickAttackUnit(state, cap, t, troops);
+      const land = nav ? S.landingForecast(state, t.id, fid, team, men, nav.train, men) : null;
       if (land && !land.pass) return null;
-      const est = S.estimate(state, capId, t.id, ids, land ? land.left : troops, unit);
+      const est = S.estimate(state, nav ? nav.id : capId, t.id, ids, land ? land.left : men, unit);
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       return { unit, est, pull: S.courtPull(state, fid, t), risk: threat ? threat.pct / 50 : 0 };
     });
@@ -702,12 +711,12 @@
         S.addLog(state, `${S.josa(me, "이", "가")} 동맹 ${S.forceName(state, war.joint)}의 청에 따라 ${S.forceName(state, war.foe)}의 ${S.ro(best.t.name)} 군을 냅니다.`, tone(war.foe));
       } else if (aim !== "border") {
         const foe = S.forceName(state, war.foe);
-        S.addLog(state, `${S.josa(me, "이", "가")} ${S.josa(foe, "을", "를")} 상대로 ${AIMS[aim]}을 벌입니다. 주력군 ${troops}명이 ${S.ro(best.t.name)} 향합니다.`, tone(war.foe));
+        S.addLog(state, `${S.josa(me, "이", "가")} ${S.josa(foe, "을", "를")} 상대로 ${AIMS[aim]}을 벌입니다. ${r.march.navy ? "수군" : "주력군"} ${r.march.troops}명이 ${S.ro(best.t.name)} 향합니다.`, tone(war.foe));
       } else if (n > 1 && fid === state.playerForce) {
-        S.addLog(state, `${me} 주력군 ${troops}명이 ${S.forceName(state, best.t.owner)}의 ${S.ro(best.t.name)} 출진합니다.`, "sys");
+        S.addLog(state, `${me} ${r.march.navy ? "수군" : "주력군"} ${r.march.troops}명이 ${S.forceName(state, best.t.owner)}의 ${S.ro(best.t.name)} 출진합니다.`, "sys");
       }
     } else if (n > 1 && fid === state.playerForce) {
-      S.addLog(state, `${me} 주력군 ${troops}명이 ${S.ro(best.t.name)} 출진합니다.`, "sys");
+      S.addLog(state, `${me} ${r.march.navy ? "수군" : "주력군"} ${r.march.troops}명이 ${S.ro(best.t.name)} 출진합니다.`, "sys");
     }
   };
 

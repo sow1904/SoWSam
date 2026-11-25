@@ -20,13 +20,14 @@
   // and the coast are crossed only from port to port.
   // why: the user's design (항구망). Ports joined as a mesh, not city to city;
   // the routes between ports are not drawn on the map.
-  // An army crosses from an own port to an enemy port, as many men as the
-  // port has ships for (ships are counted in the men they carry). Ships lost
-  // on the water are gone; the rest sail home. The defenders of a port meet
-  // a crossing with the men of the port and of its city, as many as their
-  // own ships carry. A port holds few men, so one taken without a main army
-  // behind it is soon taken back.
-  //   cap: most men a port keeps (the rest go to its city); per: ships a port
+  // The men of a port are its navy (수군, js/ships.js): only they cross to an
+  // enemy port, as many as the port has ships for (ships are counted in the
+  // men they carry), and only they meet a crossing on the water. The
+  // soldiers of the cities cross only to a port already held. A navy that
+  // takes a port keeps its ships there; a port taken from the land side
+  // loses its ships. A port taken without a main army behind it is soon
+  // taken back.
+  //   cap: (unused: a port keeps its navy, js/ships.js); per: ships a port
   //   can hold per level of 조선; build: ships built a month per level;
   //   cost: gold per ship (from the port's city); start: ships at the start, of what it can hold
   S.PORT = { cap: 3000, per: 10000, build: 1000, cost: 0.2, start: 0.5 };
@@ -140,6 +141,7 @@
     if (!f.owner) return;
     const kind = ["louchuan", "douhan", "mengchong"].find((k) => S.canBuildShip(state, f, k)) || "mengchong";
     S.addShips(state, f, kind, Math.round(S.portMax(state, f) * S.PORT.start / S.SHIPS[kind].room));
+    S.startNavy(state, f);
   }
   // The places a stronghold's roads join: [a, b] or [a, b1, b2, ...].
   S.siteRoad = (site) => [site[2], ...[].concat(site[3] == null ? [] : site[3])];
@@ -235,14 +237,13 @@
     }
   };
   // A port: ships burnt when it changes hands (and the orders with them),
-  // men over its cap sent to its city, ships built and kept (js/ships.js).
+  // ships built and kept, its navy filled and drilled (js/ships.js).
   function runPort(state, f) {
-    if (f.shipsOf !== f.owner) { f.fleet = {}; f.ships = 0; f.shipOrder = null; f.shipsOf = f.owner; }
+    if (f.shipsOf !== f.owner) { f.fleet = {}; f.ships = 0; f.shipOrder = null; f.navyGoal = null; f.shipsOf = f.owner; }
     const home = state.cities[f.home];
     if (!f.owner || !home || home.owner !== f.owner) return;
-    const over = Math.floor(f.troops - S.PORT.cap);
-    if (over > 0) { S.addTroops(home, S.garrisonUnit(f), over); f.troops -= over; }
     S.runShipyard(state, f);
+    S.runNavy(state, f);
   }
   // Ships come back to a port (of the kinds in mix): only to one still held.
   S.returnShips = function (state, force, portId, n, mix) {

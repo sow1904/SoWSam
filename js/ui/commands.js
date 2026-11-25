@@ -513,10 +513,14 @@
   function landingLine(way, t, ids, sent) {
     if (!way || !S.landingLink(way.path)) return "";
     const from = S.place(state, UI.selected);
-    const o = S.landingForecast(state, t.id, from.owner, ids.map((id) => state.officers[id]), sent, from.train, S.waterMen(state, way.path, from.owner, sent));
+    const nav = S.navalPort(state, way.path, from.owner);
+    if (!nav) return `<span class="bad">강 건너 적 항구는 우리 항구의 수군만 칠 수 있습니다.</span><br>`;
+    const men = Math.min(sent, S.navySortie(state, nav));
+    const o = S.landingForecast(state, t.id, from.owner, ids.map((id) => state.officers[id]), men, nav.train, men);
+    const crew = `<b>${nav.name} 수군 ${fmt(men)}명</b>(숙련 ${nav.train})이 건너고, 고른 병사는 도시에 남습니다.<br>`;
     const fleets = `아군 ${S.unitName(o.aFleet)} · 적 ${S.unitName(o.dFleet)}, 물 위 전력 ${edgeLabel(1 / Math.max(0.01, o.ratio))}`;
-    if (!o.commit) return `상륙전: 적은 물가를 지키지 않을 것 같습니다 (${fleets})<br>`;
-    return `<span class="bad">상륙전: 적 함대 ${fmt(o.dTroops)}명이 막아섭니다</span> (${fleets})<br>` +
+    if (!o.commit) return crew + `상륙전: 적은 물가를 지키지 않을 것 같습니다 (${fleets})<br>`;
+    return crew + `<span class="bad">상륙전: 적 함대 ${fmt(o.dTroops)}명이 막아섭니다</span> (${fleets})<br>` +
       (o.pass ? `<span class="hint">예상: 상륙 성공, 뭍에 오르는 병사 약 ${fmt(o.left)}명</span><br>` : `<span class="bad">예상: 상륙 실패</span><br>`);
   }
 
@@ -525,13 +529,16 @@
     const el = $("#atEst");
     if (!ids.length) { el.textContent = "무장을 골라 주세요."; return; }
     if (ids.length > S.MAX_SORTIE_OFFICERS) { el.innerHTML = `<span class="bad">무장은 ${S.MAX_SORTIE_OFFICERS}명까지입니다.</span>`; return; }
-    const unit = unitPick("atU_");
-    const sent = S.countsTotal(unit);
+    let unit = unitPick("atU_");
+    let sent = S.countsTotal(unit);
     if (!sent) { el.textContent = "보낼 병사를 정해 주세요."; return; }
-    const e = S.estimate(state, UI.selected, $("#atTarget").value, ids, sent, unit);
+    const way = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
+    // Over the river the navy of the port goes instead (js/ships.js).
+    const nav = way && S.landingLink(way.path) ? S.navalPort(state, way.path, S.place(state, UI.selected).owner) : null;
+    if (nav) { sent = Math.min(sent, S.navySortie(state, nav)); unit = S.mixCounts(S.garrisonUnit(nav), sent); }
+    const e = S.estimate(state, nav ? nav.id : UI.selected, $("#atTarget").value, ids, sent, unit);
     const label = e.ratio >= 1.6 ? `<span class="good">압도적 우세</span>` : e.ratio >= 1.2 ? `<span class="good">우세</span>`
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
-    const way = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
     const days = way ? S.travelDays(way.km, S.unitSpeed(unit)) : 0;
     // Who inside might sortie against us, and how our soldiers fare in the open.
     const t = S.place(state, $("#atTarget").value);
@@ -680,6 +687,7 @@
     mapArt: () => { UI.setMapArt(S.MAP_ART === 2 ? 4 : 2); UI.showSystem(); },
     orderShips: () => UI.result(S.orderShips(state, UI.selected, $("#shipKind").value, num("shipN"))),
     stopShips: () => UI.result(S.orderShips(state, UI.selected, null, 0)),
+    navyGoal: () => UI.result(S.setNavyGoal(state, UI.selected, num("navyGoal"))),
     moveCapital: () => {
       const c = state.cities[UI.selected];
       if (!confirm(`${S.capitalLabel(state, c.owner)}를 ${S.ro(c.name)} 옮길까요?`)) return;

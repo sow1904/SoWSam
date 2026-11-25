@@ -257,28 +257,33 @@
   };
 
   // What an army from here can march on: along each road, the first place
-  // that is neither ours nor passable. Returns [{ id, path, km, days }].
+  // that is neither ours nor passable; at an own port every water out of it
+  // is followed (a place reached more than one way: the shortest is kept).
+  // Returns [{ id, path, km, days }].
   S.attackTargets = function (state, from) {
     const me = S.place(state, from).owner;
-    const out = [];
-    for (const first of S.links(state, from)) {
-      let prev = from, cur = first;
-      const path = [from];
-      for (let guard = 0; guard < 20; guard++) {
-        path.push(cur);
-        const p = S.place(state, cur);
-        if (state.cities[cur]) {
-          if (p.owner !== me && !S.allied(state, me, p.owner)) out.push({ id: cur, path: path.slice() });
-          break;
-        }
-        if (!S.passable(state, cur, me)) { out.push({ id: cur, path: path.slice() }); break; }
-        const next = S.links(state, cur).find((x) => x !== prev);
-        if (!next) break;
-        prev = cur;
-        cur = next;
+    const best = {}, seen = {};
+    const walk = (path, depth) => {
+      const cur = path[path.length - 1], prev = path[path.length - 2];
+      const p = S.place(state, cur);
+      // A place already reached a shorter way leads nowhere new.
+      const sofar = S.pathKm(state, path);
+      if (seen[cur] != null && seen[cur] <= sofar) return;
+      seen[cur] = sofar;
+      const hit = () => { best[cur] = { id: cur, path: path.slice(), km: sofar }; };
+      if (state.cities[cur]) {
+        if (p.owner !== me && !S.allied(state, me, p.owner)) hit();
+        return;
       }
-    }
-    for (const t of out) { t.km = S.pathKm(state, t.path); t.days = S.travelDays(t.km, "army"); }
+      if (!S.passable(state, cur, me)) { hit(); return; }
+      if (depth >= 20) return;
+      const next = S.links(state, cur).filter((x) => x !== prev && !path.includes(x));
+      // A road goes on one way; a port's waters go every way.
+      for (const n of S.isPort(state, cur) ? next : next.slice(0, 1)) walk(path.concat([n]), depth + 1);
+    };
+    for (const first of S.links(state, from)) walk([from, first], 0);
+    const out = Object.values(best);
+    for (const t of out) t.days = S.travelDays(t.km, "army");
     return out;
   };
 
@@ -348,6 +353,8 @@
       S.addTroops(c, m.unit || S.garrisonUnit(c), m.troops);
     }
     if (m.wounded && m.wounded.n > 0) S.addWounded(c, m.care || "mid", m.wounded.n, m.wounded.unit);
+    // Ships at sea put in here (a navy's own fleet), or sail home.
+    if (m.ships > 0 && m.shipPort && S.returnShips) S.returnShips(state, m.force, m.navy && c.kind === "port" ? c.id : m.shipPort, m.ships, m.shipMix);
     c.gold += m.gold || 0;
     c.food += m.food || 0;
     S.addRes(c, m.res);
@@ -377,7 +384,7 @@
     release(state, m);
     if (!survivors && !team.length && !(wounded && wounded.n)) return;
     S.launch(state, { kind: "return", force: m.force, path: m.path.slice().reverse(), speed: S.unitSpeed(m.unit),
-      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, wounded: wounded && wounded.n ? wounded : null, care: "mid", origin: m.target, target: m.origin });
+      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, wounded: wounded && wounded.n ? wounded : null, care: "mid", origin: m.target, target: m.origin, navy: !!m.navy });
   };
 
   function arrive(state, m, onEvent) {

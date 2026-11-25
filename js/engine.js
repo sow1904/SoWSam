@@ -1038,24 +1038,28 @@
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
     }
-    const counts = S.sortieCounts(c, troops, unit);
-    troops = S.countsTotal(counts);
-    if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
-      return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
-    }
-    if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
-    // Over the river from a port: as many as its ships carry (js/forts.js).
-    const portId = S.isPort && S.landingLink(way.path) && S.isPort(state, way.path[way.path.length - 2]) ? way.path[way.path.length - 2] : null;
-    if (portId) {
-      const port = state.forts[portId];
-      const ships = port.owner === c.owner ? Math.floor(port.ships || 0) : 0;
-      if (ships < S.MIN_SORTIE_TROOPS) return fail(`${port.name}에 배가 모자랍니다. (병사 ${ships}명분)`);
-      if (troops > ships) {
-        const k = ships / troops;
-        for (const id of Object.keys(counts)) counts[id] = Math.floor(counts[id] * k);
-        troops = S.countsTotal(counts);
+    // Over the river to an enemy port: the navy of the own port it leaves
+    // from sails, as many as its ships carry; the city's soldiers stay
+    // (js/ships.js). The officers go with it.
+    const navy = S.navalPort ? S.navalPort(state, way.path, c.owner) : null;
+    if (S.landingLink(way.path) && !navy) return fail("강 건너 적 항구로는 우리 항구의 수군만 건널 수 있습니다.");
+    const src = navy || c;
+    let counts;
+    if (navy) {
+      const can = S.navySortie(state, navy);
+      if (can < S.MIN_SORTIE_TROOPS) return fail(`${navy.name}의 수군이 모자랍니다. (배를 타고 나설 수 있는 수군 ${can}명)`);
+      counts = S.mixCounts(S.garrisonUnit(navy), Math.min(can, troops > 0 ? troops : can));
+      troops = S.countsTotal(counts);
+      if (troops < S.MIN_SORTIE_TROOPS) return fail(`수군을 ${S.MIN_SORTIE_TROOPS}명 이상 보내야 합니다.`);
+    } else {
+      counts = S.sortieCounts(c, troops, unit);
+      troops = S.countsTotal(counts);
+      if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
+        return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
       }
+      if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
     }
+    const portId = navy ? navy.id : null;
     const speed = S.unitSpeed(counts);
     // On a voyage the ships set the pace (js/ships.js): 몽충 quick, 누선 slow.
     const sail = portId ? S.fleetTrait(S.shipMix(state.forts[portId]), "speed") : 1;
@@ -1065,16 +1069,22 @@
     // The cities on the way supply what they can, the border first (js/war.js).
     const fromHere = S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed, true) : foodNeed;
     if (c.food < fromHere) return fail(`군량이 부족합니다. (필요 ${foodNeed}, 지나는 성에서 ${foodNeed - fromHere}, 출발지에서 ${fromHere})`);
-    unit = S.takeTroops(c, counts);
+    const train = src.train;
+    unit = S.takeTroops(src, counts);
     c.food -= S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed) : foodNeed;
     if (t.owner) S.relAdd(state, c.owner, t.owner, S.DIPLO.attack);
-    const m = S.launch(state, { kind: "army", force: c.owner, path: way.path, km: way.km, speed,
-      officers: oids, troops, unit, train: c.train, origin: cid, target: targetCid });
+    // A navy sails from its port and comes back to it.
+    const at = navy ? way.path.indexOf(portId) : 0;
+    const path = way.path.slice(at);
+    const km = navy ? Math.max(1, way.km - S.pathKm(state, way.path.slice(0, at + 1))) : way.km;
+    const m = S.launch(state, { kind: "army", force: c.owner, path, km, speed, days,
+      officers: oids, troops, unit, train, origin: navy ? portId : cid, target: targetCid, navy: !!navy });
     // The supply base, and when the target hears of it (js/war.js).
     if (S.marchBase) { m.base = S.marchBase(state, m.path, m.force); m.seen = S.spotDay(state, m); }
     if (portId) { m.shipMix = S.takeShips(state.forts[portId], troops); m.ships = troops; m.shipPort = portId; }
     const names = oids.map((id) => state.officers[id].name).join(", ");
-    return { ok: true, march: m, msg: `${names}의 ${S.unitName(unit)} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
+    const who = navy ? `${navy.name} 수군(${S.unitName(m.shipMix)})` : S.unitName(unit);
+    return { ok: true, march: m, msg: `${names}의 ${who} ${troops}명이 ${S.ro(t.name)} 출진했습니다. ${days}일 뒤 도착합니다. (군량 ${foodNeed})` };
   };
 
   // An army in the field eats twice what a garrison does: one food a day for

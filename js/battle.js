@@ -274,7 +274,7 @@
       kind: "siege", place: m.target, x: t.x, y: t.y, from: S.placeName(state, m.origin),
       att: { force: m.force, officers: ids, troops: m.troops, troops0: m.troops, unit: m.unit, train: m.train, morale: startMorale(atk) + S.houseMorale(state, m.force, m.target),
         rations: m.troops / 10, supply: newSupply(), origin: m.origin, path: m.path, base: m.base || m.origin, campaign: m.campaign || null, corps: m.corps || 1,
-        ships: m.ships || 0, shipPort: m.shipPort || null, shipMix: m.shipMix || null },
+        ships: m.ships || 0, shipPort: m.shipPort || null, shipMix: m.shipMix || null, navy: !!m.navy },
       def: { force: t.owner, troops0: Math.max(1, t.troops), morale: startMorale(defs) },
     });
     hold(state, b, ids);
@@ -300,10 +300,11 @@
   //   share: of the garrison that puts out; favour/keen: the edge on the water
   //   the defenders want before they do (on their own / told to strike out);
   //   rate: daily losses; days: the longest the fight on the water lasts;
-  //   skill: 수전 on the water; green: men in 몽충, with no naval leader nor
-  //   shipwrights, who are not at home on the water; fail/beaten: the share of the attackers / of
+  //   skill: 수전 on the water; fail/beaten: the share of the attackers / of
   //   the defenders' fleet left when that side gives up; broken: morale
-  S.LANDING = { share: 0.8, min: 1000, favour: 1, keen: 0.8, rate: 0.06, days: 8, skill: 1.2, green: 0.75, fail: 0.65, beaten: 0.5, broken: 40 };
+  // Both sides on the water are navies (수군, js/ships.js): their drill is
+  // what makes them at home there.
+  S.LANDING = { share: 0.8, min: 1000, favour: 1, keen: 0.8, rate: 0.06, days: 8, skill: 1.2, fail: 0.65, beaten: 0.5, broken: 40 };
   // Whether a march ends by crossing water.
   S.landingLink = (path) => !!path && path.length >= 2 && S.isWater(path[path.length - 2], path[path.length - 1]);
   // Men a force can put on the water where it has no port, by its level of
@@ -312,22 +313,24 @@
   S.FERRY = { 1: 8000, 2: 15000, 3: 25000 };
   S.ferryOf = (state, fid) => S.FERRY[Math.min(3, S.lineLevel ? S.lineLevel(state, fid, "navy") : 1)] || S.FERRY[1];
   // Of an army crossing by this road, how many fight on the water: from an
-  // own port, as many as its ships carry; elsewhere, what the force can ferry.
+  // own port, the navy that can sail (S.navySortie); elsewhere, what the
+  // force can ferry.
   S.waterMen = function (state, path, force, troops) {
     const p = state.forts && state.forts[path[path.length - 2]];
-    if (p && p.kind === "port") return Math.min(troops, p.owner === force ? p.ships || 0 : 0);
+    if (p && p.kind === "port") return Math.min(troops, p.owner === force ? S.navySortie(state, p) : 0);
     return Math.min(troops, S.ferryOf(state, force));
   };
-  // Who meets a crossing: a port's men and its city's, as many as the port's
-  // ships carry; elsewhere the garrison, as many as the force can ferry.
+  // Who meets a crossing: a port's navy (js/ships.js), as many as its ships
+  // carry, led by the officers of the port and of its city; elsewhere the
+  // garrison, as many as the force can ferry.
   //   pool: the men they could put out; cap: the most the boats carry
   function shoreGuard(state, t) {
     const home = t.kind === "port" ? state.cities[t.home] : null;
     const withHome = !!home && !!t.owner && home.owner === t.owner;
     const mine = (id) => S.serving(state, id).filter((o) => o.force === t.owner);
     return {
-      home: withHome ? home : null,
-      pool: t.troops + (withHome ? home.troops : 0),
+      home: null,
+      pool: t.troops,
       defs: mine(t.id).concat(withHome ? mine(home.id) : []),
       cap: t.kind === "port" ? t.ships || 0 : t.owner ? S.ferryOf(state, t.owner) : 0,
     };
@@ -366,13 +369,15 @@
       }
     }
   };
+  // Soldiers carried over own waters, not a navy, are cargo (S.NAVY.cargo).
   function intercept(state, m, p) {
     const crew = crewOf(state, m.officers, m.force);
-    const odds = S.landingOdds(state, p.id, m.force, crew, m.troops, m.train || 50, 100, m.troops, m.shipMix ? { fleet: m.shipMix } : null);
+    const cargo = m.navy ? 1 : S.NAVY.cargo;
+    const odds = S.landingOdds(state, p.id, m.force, crew, m.troops, m.train || 50, 100, m.troops, Object.assign({ aq: cargo }, m.shipMix ? { fleet: m.shipMix } : {}));
     if (!odds.commit) return;
     const g = shoreGuard(state, p);
     const rnd = () => 0.8 + S.rand(state) * 0.4;
-    const aPow = navalPower(state, m.force, m.troops, crew, 30, m.train || 50, odds.aFleet, odds.dFleet, 100);
+    const aPow = navalPower(state, m.force, m.troops, crew, 30, m.train || 50, odds.aFleet, odds.dFleet, 100) * cargo;
     // 몽충 hunt down a fleet going by; 누선 are slow to come about.
     const dPow = navalPower(state, p.owner, odds.dTroops, g.defs, 40, p.train, odds.dFleet, odds.aFleet, 100) * (1 + S.fleetTrait(odds.dFleet, "chase"));
     const I = S.INTERCEPT;
@@ -395,19 +400,18 @@
     if (g.home && n > here) S.loseTroops(g.home, Math.min(g.home.troops, n - here));
     if (t.kind === "port") S.takeShips(t, n);
   }
-  // The attackers' ships that are left sail home.
-  function shipsHome(state, b) {
+  // The attackers' ships that are left sail home (a navy ashore keeps them
+  // by it: stay).
+  function shipsHome(state, b, stay) {
     const A = b.att;
+    if (stay && A.navy) return;
     if (A.ships > 0 && A.shipPort) S.returnShips(state, A.force, A.shipPort, A.ships, A.shipMix);
     A.ships = 0;
   }
-  // A side's strength on the water: its men, its leaders, its ships (a mix
-  // of kinds, js/ships.js). Crews with no naval leader of a force without
-  // 조선 2단계 are not at home on the water (green).
-  S.greenCrew = (state, fid, list) => !has(list, "수전") && (S.lineLevel ? S.lineLevel(state, fid, "navy") : 1) < 2;
+  // A side's strength on the water: its men and their drill (a navy's,
+  // js/ships.js), its leaders, its ships (a mix of kinds).
   function navalPower(state, fid, troops, list, fallback, train, fleet, foeFleet, morale) {
-    return S.power(troops, S.sideStats(list, fallback), train, 1) * S.unitMul(fleet, foeFleet, "water", 1) * (has(list, "수전") ? S.LANDING.skill : 1) *
-      (fid && S.greenCrew(state, fid, list) ? S.LANDING.green : 1) * moraleMul(morale);
+    return S.power(troops, S.sideStats(list, fallback), train, 1) * S.unitMul(fleet, foeFleet, "water", 1) * (has(list, "수전") ? S.LANDING.skill : 1) * moraleMul(morale);
   }
   // Whether the defenders of a place would meet a crossing army on the water.
   //   ratio: their strength on the water against the attackers'
@@ -466,7 +470,7 @@
     const odds = S.landingOdds(state, b.place, A.force, atk, A.troops, A.train, A.morale, A.shipPort ? A.ships : S.waterMen(state, A.path, A.force, A.troops),
       Object.assign(look ? { a: look.t, aq: look.q } : {}, A.shipMix ? { fleet: A.shipMix } : {}));
     if (!odds.commit) {
-      shipsHome(state, b);
+      shipsHome(state, b, true);
       if (t.owner) say(b, `${S.josa(S.forceName(state, t.owner), "은", "는")} 물가를 지키지 않고 성에 틀어박혔습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} 무사히 뭍에 올랐습니다.`);
       return false;
     }
@@ -533,7 +537,7 @@
     if (beaten || (L.day >= S.LANDING.days && aPow >= dPow)) {
       say(b, `상륙 성공! ${S.forceName(state, D.force)}의 함대가 성으로 물러났습니다. ${S.josa(S.forceName(state, A.force), "이", "가")} ${S.josa(t.name, "을", "를")} 에워쌉니다.`);
       b.landing = null;
-      shipsHome(state, b);
+      shipsHome(state, b, true);
       return null;
     }
     if (L.day >= S.LANDING.days) {
@@ -974,7 +978,23 @@
     }
     if (defForce && !fort && state.forces[defForce].capital === t.id && S.citiesOf(state, defForce).length) S.capitalFell(state, defForce, A.force, report);
     if (defForce) S.checkForce(state, defForce, report, A.force);
+    fleetIn(state, b, t);
     if (S.afterCapture) S.afterCapture(state, t, b); // press on, or go home (js/war.js)
+  }
+  // A navy that took a port keeps its ships there (the old ones are burnt);
+  // elsewhere they sail home.
+  function fleetIn(state, b, t) {
+    const A = b.att;
+    if (A.navy && t.kind === "port" && A.ships > 0) {
+      t.fleet = {};
+      t.ships = 0;
+      t.shipOrder = null;
+      t.navyGoal = null;
+      t.shipsOf = A.force;
+      S.putShips(state, t, A.ships, A.shipMix);
+      A.ships = 0;
+    }
+    shipsHome(state, b);
   }
 
   // ---------- relief armies (원군) ----------
@@ -1207,13 +1227,13 @@
       say(b, `공격 실패. ${S.josa(foe, "이", "가")} ${troops}명${w ? `과 부상병 ${w.n}명` : ""}을 이끌고 물러납니다.`);
     }
     letGo(state, b, A.officers);
-    S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train, unit: A.unit }, troops, w);
+    S.sendHome(state, { officers: A.officers, force: A.force, path: A.path, target: b.place, origin: A.origin, train: A.train, unit: A.unit, navy: A.navy }, troops, w);
   }
 
   function finish(state, b, outcome, onEvent) {
     state.battles = state.battles.filter((x) => x !== b);
     const A = b.att, D = b.def;
-    shipsHome(state, b);
+    shipsHome(state, b, outcome === "capture" || outcome === "joined");
     const report = { kind: b.kind, landing: !!b.landing, lines: b.log, attackerWon: false, from: b.from, to: S.placeName(state, b.place), captured: [], attacker: A.force, defender: D.force, days: b.day };
     const origin = S.place(state, A.origin || (b.march && b.march.origin));
     if (b.kind === "siege") {
@@ -1222,6 +1242,8 @@
         say(b, `${S.josa(S.placeName(state, b.place), "은", "는")} 이미 아군의 손에 들어왔습니다. 포위군이 성에 들어갑니다.`);
         letGo(state, b, A.officers);
         const t = S.place(state, b.place);
+        if (A.navy && t.kind === "port" && A.ships > 0) { S.returnShips(state, A.force, t.id, A.ships, A.shipMix); A.ships = 0; }
+        shipsHome(state, b);
         S.addTroops(t, A.unit, A.troops);
         if (A.wounded) S.addWounded(t, "fast", A.wounded.n, A.wounded.unit);
         for (const o of crewOf(state, A.officers, A.force)) o.city = b.place;
