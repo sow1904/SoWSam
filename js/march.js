@@ -364,6 +364,9 @@
       S.addLog(state, `${who ? S.josa(who, "이", "가") + " " : ""}${c.name}에 도착했습니다.${cargo ? " (" + cargo + ")" : ""}`, "mine");
     }
   }
+  // The ships a march still has at sea go back with it (deliver puts them
+  // into port); a battle hands its ships back itself (js/battle.js).
+  const shipsAboard = (m) => (m.ships > 0 && m.shipPort ? { ships: m.ships, shipPort: m.shipPort, shipMix: m.shipMix } : {});
   // The destination was lost on the way: head for the nearest own city.
   function reroute(state, m, from) {
     const own = S.citiesOf(state, m.force);
@@ -373,7 +376,8 @@
     const here = S.place(state, from);
     const to = own.reduce((a, b) => (Math.hypot(b.x - here.x, b.y - here.y) < Math.hypot(a.x - here.x, a.y - here.y) ? b : a));
     S.launch(state, { kind: "return", force: m.force, path: [from, to.id], km: S.nodeKm(state, from, to.id), speed: m.troops ? S.unitSpeed(m.unit) : "officer",
-      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, res: m.res, wounded: m.wounded, care: m.care, origin: from, target: to.id });
+      officers: team.map((o) => o.id), troops: m.troops, unit: m.unit, train: m.train, gold: m.gold, food: m.food, res: m.res, wounded: m.wounded, care: m.care, origin: from, target: to.id,
+      ...shipsAboard(m) });
     if (m.force === state.playerForce) S.addLog(state, `${here.name}에 갈 수 없게 되어 ${S.ro(to.name)} 방향을 돌립니다.`, "warn");
   }
   S.reroute = reroute;
@@ -384,7 +388,8 @@
     release(state, m);
     if (!survivors && !team.length && !(wounded && wounded.n)) return;
     S.launch(state, { kind: "return", force: m.force, path: m.path.slice().reverse(), speed: S.unitSpeed(m.unit),
-      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, wounded: wounded && wounded.n ? wounded : null, care: "mid", origin: m.target, target: m.origin, navy: !!m.navy });
+      officers: team.map((o) => o.id), troops: survivors, unit: m.unit, train: m.train, wounded: wounded && wounded.n ? wounded : null, care: "mid", origin: m.target, target: m.origin, navy: !!m.navy,
+      ...shipsAboard(m) });
   };
 
   function arrive(state, m, onEvent) {

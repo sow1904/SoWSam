@@ -239,7 +239,7 @@
   // A port: ships burnt when it changes hands (and the orders with them),
   // ships built and kept, its navy filled and drilled (js/ships.js).
   function runPort(state, f) {
-    if (f.shipsOf !== f.owner) { f.fleet = {}; f.ships = 0; f.shipOrder = null; f.navyGoal = null; f.shipsOf = f.owner; }
+    if (f.shipsOf !== f.owner) { f.fleet = {}; f.ships = 0; f.shipOrder = null; f.navyGoal = null; f.navyAim = null; f.shipsOf = f.owner; }
     const home = state.cities[f.home];
     if (!f.owner || !home || home.owner !== f.owner) return;
     S.runShipyard(state, f);

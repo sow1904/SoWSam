@@ -212,7 +212,6 @@
     // Gentry retainers stay home, so only state troops can march. Enough
     // stay behind to face the other neighbours (the target is busy).
     const garrisonFor = (t) => Math.max(1500, Math.round(c.troops * 0.25), guardNeed(state, c, t && t.id));
-    if (Math.min(c.troops - Math.max(1500, Math.round(c.troops * 0.25)), S.marchable(c)) < 3000) return;
     const team = [...idle].sort((a, b) => b.cmd + b.war - (a.cmd + a.war)).slice(0, S.MAX_SORTIE_OFFICERS);
     // Keep at least one officer home when possible.
     if (team.length === S.idle(state, c.id).length && S.serving(state, c.id).length > 1 && team.length > 1) team.pop();
@@ -220,28 +219,20 @@
     let best = null;
     const ways = S.attackTargets(state, c.id);
     for (const t of targets) {
-      const troops = Math.min(c.troops - garrisonFor(t), S.marchable(c));
-      if (troops < 3000) continue;
-      // Over water only the navy of the port goes (js/ships.js): what is
-      // likely left once ashore, if it gets ashore at all.
+      // Over water only the navy of the port goes (js/ships.js), whatever
+      // the city holds.
       const way = ways.find((w) => w.id === t.id);
-      const nav = way && S.landingLink(way.path) ? S.navalPort(state, way.path, c.owner) : null;
-      if (way && S.landingLink(way.path) && (!nav || S.navySortie(state, nav) < 3000)) continue;
-      const men = nav ? S.navySortie(state, nav) : troops;
-      const unit = nav ? S.garrisonUnit(nav) : pickUnit(state, c, t, troops);
-      // A navy is led by the officers of its port first.
-      const go = nav ? S.navyTeam(state, nav, ids) : ids;
-      const land = nav ? S.landingForecast(state, t.id, c.owner, go.map((id) => state.officers[id]), men, nav.train, men) : null;
-      if (land && !land.pass) continue;
-      const est = S.estimate(state, nav ? nav.id : c.id, t.id, go, land ? land.left : men, unit);
-      if (land && land.lostD) { const seen = S.seenTroops(state, c.owner, t); est.ratio *= seen / Math.max(1, seen - land.lostD); }
+      if (!way) continue;
+      const troops = Math.min(c.troops - garrisonFor(t), S.marchable(c));
+      const j = S.judgeWay(state, c.owner, c.id, t, way, ids, troops, 3000);
+      if (!j) continue;
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull + S.titlePull(state, c.owner, t); // vacant cities are easy pickings
       // A fierce officer inside who may sortie makes the place look harder.
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       const risk = threat ? threat.pct / 50 : 0;
-      const score = est.ratio + bonus - risk;
-      if (!best || score > best.score) best = { t, unit, score, est, pull, risk, troops, go };
+      const score = j.est.ratio + bonus - risk;
+      if (!best || score > best.score) best = { t, unit: j.unit, score, est: j.est, pull, risk, troops, go: j.go };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
@@ -564,6 +555,9 @@
     const seat = S.seatOfCity(state, c) === c.id ? S.MAX_SORTIE_OFFICERS + 1 : 0;
     return S.idle(state, c.id).length - (frontier ? 3 : 1) - empty - seat;
   }
+  // The idle officers of a place who may be sent off to a stronghold: not
+  // the ruler, nor the head of a corps.
+  const sendable = (state, cid) => S.idle(state, cid).filter((o) => !S.isRuler(state, o) && !S.corpsOfHead(state, o));
   // Who goes to a stronghold: one fit for it, and not much use at home.
   const fitFor = (f) => (f.kind === "port" ? (o) => (S.hasSkill(o, "수전") ? 100 : 0) + o.cmd - o.pol / 2 : (o) => o.cmd + o.war - o.pol);
   function manageForts(state, fid) {
@@ -582,8 +576,8 @@
           .map((x) => ({ x, n: spareOfficers(state, x) })).sort((a, b) => b.n - a.n)[0];
         if (from && from.n > 0) {
           const fit = fitFor(f);
-          const go = S.idle(state, from.x.id).sort((a, b) => fit(b) - fit(a)).slice(0, Math.min(from.n, want - have));
-          S.relocate(state, from.x.id, f.id, go.map((o) => o.id));
+          const go = sendable(state, from.x.id).sort((a, b) => fit(b) - fit(a)).slice(0, Math.min(from.n, want - have));
+          if (go.length) S.relocate(state, from.x.id, f.id, go.map((o) => o.id));
         }
       } else if (have > want + 1 && home) {
         // More than it wants (back from a sortie): the rest go home.
@@ -596,8 +590,8 @@
     // Take over empty strongholds next to our cities.
     for (const f of Object.values(state.forts || {})) {
       if (!f.built || f.owner || f.troops > 0) continue;
-      const c = S.links(state, f.id).map((n) => state.cities[n]).find((x) => x && x.owner === fid && S.idle(state, x.id).length > 1 && S.marchable(x) > 5000);
-      if (c && S.chance(state, 25)) S.move(state, c.id, f.id, [S.idle(state, c.id)[0].id], 2000, 0, 1500);
+      const c = S.links(state, f.id).map((n) => state.cities[n]).find((x) => x && x.owner === fid && S.idle(state, x.id).length > 1 && sendable(state, x.id).length && S.marchable(x) > 5000);
+      if (c && S.chance(state, 25)) S.move(state, c.id, f.id, [sendable(state, c.id)[0].id], 2000, 0, 1500);
     }
     for (const c of S.citiesOf(state, fid)) {
       const sites = S.buildSites(state, c.id);
@@ -611,9 +605,9 @@
     const keep = front ? 4000 : 1000;
     const idle = S.idle(state, f.id);
     if (front && (f.troops < 3000 || !staff.length)) {
-      if (home && S.idle(state, home.id).length > 1) {
+      const o = home && S.idle(state, home.id).length > 1 ? sendable(state, home.id).sort((a, b) => b.cmd - a.cmd)[0] : null;
+      if (o) {
         const send = Math.max(0, Math.min(keep - f.troops, S.marchable(home) - 3000));
-        const o = S.idle(state, home.id).sort((a, b) => b.cmd - a.cmd)[0];
         if (send >= 500 || !staff.length) S.move(state, home.id, f.id, [o.id], send, 0, Math.min(2000, Math.max(0, home.food - 4000)));
       }
     } else if (f.troops > keep * 1.5 && home && idle.length && (front ? idle.length > 1 : true)) {

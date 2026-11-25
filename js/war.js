@@ -597,6 +597,21 @@
   // Where the campaign should go next among ways (from a city): for a border
   // war the best odds; otherwise the place nearest the foe's capital that
   // the army can hope to take.
+  // How an attack from a place along a way would go: over the river only
+  // the navy of the port goes, led by the officers of that port first
+  // (S.navyPlan); on land the place's men. null if it cannot go (fewer than
+  // min men, no own port, or a crossing that would fail).
+  //   {unit, est, go: the officers who would go}
+  function judgeWay(state, fid, fromId, t, way, ids, troops, min) {
+    const nav = S.navyPlan(state, way, fid, ids);
+    if (nav ? !nav.port || nav.men < min || (nav.land && !nav.land.pass) : troops < min) return null;
+    const unit = nav ? nav.unit : S.pickAttackUnit(state, S.place(state, fromId), t, troops);
+    const go = nav ? nav.go : ids;
+    const est = S.estimate(state, nav ? nav.port.id : fromId, t.id, go, nav ? nav.left : troops, unit);
+    if (nav && nav.land && nav.land.lostD) { const seen = S.seenTroops(state, fid, t); est.ratio *= seen / Math.max(1, seen - nav.land.lostD); }
+    return { unit, est, go };
+  }
+  S.judgeWay = judgeWay;
   function aimTarget(state, fid, war, ways, judge) {
     let best = null;
     const foeCap = war && war.aim !== "border" ? S.capitalOf(state, war.foe) : null;
@@ -666,23 +681,15 @@
       war = pick ? { foe: pick.foe, aim, since: S.monthsElapsed(state), joint: pick.called ? call.by : null } : null;
     }
     const keep = Math.max(E.guardMin, Math.round(cap.troops * W.aim.guard[aim]));
+    // A small main army can still send a navy over the river.
     const troops = Math.floor(S.marchable(cap) - keep);
-    if (troops < E.min) return note("main army too small");
     const best = aimTarget(state, fid, war, ways, (t, way) => {
-      // Over the river only the navy of the port goes (js/ships.js).
-      const nav = S.landingLink(way.path) ? S.navalPort(state, way.path, fid) : null;
-      if (S.landingLink(way.path) && (!nav || S.navySortie(state, nav) < E.min)) return null;
-      const men = nav ? S.navySortie(state, nav) : troops;
-      const unit = nav ? S.garrisonUnit(nav) : S.pickAttackUnit(state, cap, t, troops);
-      // A navy is led by the officers of its port first.
-      const go = nav ? S.navyTeam(state, nav, ids) : ids;
-      const land = nav ? S.landingForecast(state, t.id, fid, go.map((id) => state.officers[id]), men, nav.train, men) : null;
-      if (land && !land.pass) return null;
-      const est = S.estimate(state, nav ? nav.id : capId, t.id, go, land ? land.left : men, unit);
+      const j = judgeWay(state, fid, capId, t, way, ids, troops, E.min);
+      if (!j) return null;
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
-      return { unit, est, go, pull: S.courtPull(state, fid, t), risk: threat ? threat.pct / 50 : 0 };
+      return Object.assign(j, { pull: S.courtPull(state, fid, t), risk: threat ? threat.pct / 50 : 0 });
     });
-    if (!best) return note("no target in reach");
+    if (!best) return note(troops < E.min ? "main army too small" : "no target in reach");
     const w = f.weariness;
     const ruler = rulerOf(state, fid);
     const nerve = (S.hasTrait(ruler, "과감") ? -0.15 : S.hasTrait(ruler, "신중") ? 0.2 : 0) + (S.hasTrait(ruler, "야심") ? -0.1 : 0);
@@ -806,14 +813,11 @@
       });
       const ids = team.map((o) => o.id);
       for (const o of team) o.done = false;
-      const best = aimTarget(state, fid, war, ways, (x) => {
-        const unit = S.pickAttackUnit(state, t, x, spare);
-        return { unit, est: S.estimate(state, t.id, x.id, ids, spare, unit) };
-      });
+      const best = aimTarget(state, fid, war, ways, (x, way) => judgeWay(state, fid, t.id, x, way, ids, spare, P.troops));
       const need = (aim === "border" ? P.odds : W.aim.odds[aim] - 0.1) + f.weariness / 60;
       if (S.WARLOG) note(!best ? "home: no next target" : best.est.ratio < need ? "home: next too hard" : "next ok");
       if (best && best.est.ratio >= need) {
-        const r = S.attack(state, t.id, best.t.id, ids, spare, best.unit);
+        const r = S.attack(state, t.id, best.t.id, best.go, spare, best.unit);
         if (r.ok) {
           note("PRESS ON " + aim);
           r.march.corps = k;

@@ -252,6 +252,19 @@
     const go = here.slice(0, here.length > 1 ? here.length - 1 : here.length).map((o) => o.id);
     return [...new Set([...go, ...ids])].slice(0, S.MAX_SORTIE_OFFICERS);
   };
+  // An attack along a way, if it crosses to an enemy port: the own port it
+  // sails from (null if none, and then it cannot go), the men who sail, the
+  // team (officers of the port first), the navy's mix, and how the crossing
+  // would go (S.landingForecast). null if the way stays on land.
+  S.navyPlan = function (state, way, fid, ids) {
+    if (!way || !S.landingLink(way.path)) return null;
+    const port = S.navalPort(state, way.path, fid);
+    if (!port) return { port: null, men: 0 };
+    const men = S.navySortie(state, port);
+    const go = S.navyTeam(state, port, ids || []);
+    const land = men > 0 ? S.landingForecast(state, way.id, fid, go.map((id) => state.officers[id]), men, port.train, men) : null;
+    return { port, men, go, unit: S.garrisonUnit(port), land, left: land ? land.left : men };
+  };
   // The player's number for a port's navy (the ships manned if none).
   S.setNavyGoal = function (state, portId, n) {
     const f = state.forts && state.forts[portId];

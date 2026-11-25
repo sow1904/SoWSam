@@ -345,13 +345,16 @@
     attack() {
       const c = S.place(state, UI.selected);
       if (S.besieged(state, c.id)) { UI.toast("포위당한 곳에서는 출진할 수 없습니다. 다른 도시에서 원군을 보내야 합니다."); return; }
-      const targets = S.attackTargets(state, c.id).map((w) => w.id);
+      const ways = S.attackTargets(state, c.id);
+      const targets = ways.map((w) => w.id);
       if (!targets.length) { UI.toast("길로 이어진 적 도시나 거점이 없습니다."); return; }
-      if (S.marchable(c) < S.MIN_SORTIE_TROOPS) { UI.toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
+      // A navy can sail whatever the city holds (js/ships.js).
+      const fleetReady = ways.some((w) => { const n = S.navyPlan(state, w, c.owner); return n && n.port && n.men >= S.MIN_SORTIE_TROOPS; });
+      if (S.marchable(c) < S.MIN_SORTIE_TROOPS && !fleetReady) { UI.toast(`출진 가능한 병사가 ${S.MIN_SORTIE_TROOPS}명 이상 있어야 합니다. 호족 사병은 출진하지 않습니다.`); return; }
       const idle = S.idle(state, c.id).sort((a, b) => b.cmd + b.war - a.cmd - a.war);
       // The officers of the own ports a navy would sail from (js/ships.js).
       const at = {};
-      const ports = [...new Set(S.attackTargets(state, c.id).map((w) => S.navalPort(state, w.path, c.owner)).filter((p) => p && p.id !== c.id))];
+      const ports = [...new Set(ways.map((w) => S.navalPort(state, w.path, c.owner)).filter((p) => p && p.id !== c.id))];
       const water = (o) => (S.hasSkill(o, "수전") ? 50 : 0) + o.cmd;
       const stationed = ports.flatMap((p) => S.idle(state, p.id).sort((a, b) => water(b) - water(a)).map((o) => { at[o.id] = p; return o; }));
       UI.openModal(title("출진") + `<p class="hint">무장은 최대 ${S.MAX_SORTIE_OFFICERS}명입니다. 용병·군략·무력이 가장 높은 무장의 능력이 각각 전투에 반영됩니다. ` +
@@ -528,14 +531,12 @@
   }
 
   // Over water: whether the defenders would meet us on it, and how the fleets compare.
-  function landingLine(way, t, ids, sent) {
-    if (!way || !S.landingLink(way.path)) return "";
-    const from = S.place(state, UI.selected);
-    const nav = S.navalPort(state, way.path, from.owner);
-    if (!nav) return `<span class="bad">강 건너 적 항구는 우리 항구의 수군만 칠 수 있습니다.</span><br>`;
-    const men = Math.min(sent, S.navySortie(state, nav));
-    const o = S.landingForecast(state, t.id, from.owner, ids.map((id) => state.officers[id]), men, nav.train, men);
-    const crew = `<b>${nav.name} 수군 ${fmt(men)}명</b>(숙련 ${nav.train})이 건너고, 고른 병사는 도시에 남습니다.<br>`;
+  function landingLine(nav) {
+    if (!nav) return "";
+    if (!nav.port) return `<span class="bad">강 건너 적 항구는 우리 항구의 수군만 칠 수 있습니다.</span><br>`;
+    const o = nav.land;
+    const crew = `<b>${nav.port.name} 수군 ${fmt(nav.men)}명</b>(숙련 ${nav.port.train})이 모두 건너고, 도시의 병사는 남습니다.<br>`;
+    if (!o) return crew;
     const fleets = `아군 ${S.unitName(o.aFleet)} · 적 ${S.unitName(o.dFleet)}, 물 위 전력 ${edgeLabel(1 / Math.max(0.01, o.ratio))}`;
     if (!o.commit) return crew + `상륙전: 적은 물가를 지키지 않을 것 같습니다 (${fleets})<br>`;
     return crew + `<span class="bad">상륙전: 적 함대 ${fmt(o.dTroops)}명이 막아섭니다</span> (${fleets})<br>` +
@@ -543,23 +544,25 @@
   }
 
   function updateEstimate() {
-    const way0 = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
-    syncPortOfficers(way0 && S.landingLink(way0.path) ? S.navalPort(state, way0.path, S.place(state, UI.selected).owner) : null);
+    const from = S.place(state, UI.selected);
+    const way = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
+    // Over the river the navy of the port goes instead (js/ships.js).
+    const nav = S.navyPlan(state, way, from.owner, []);
+    syncPortOfficers(nav && nav.port);
     const ids = checked();
     const el = $("#atEst");
     if (!ids.length) { el.textContent = "무장을 골라 주세요."; return; }
     if (ids.length > S.MAX_SORTIE_OFFICERS) { el.innerHTML = `<span class="bad">무장은 ${S.MAX_SORTIE_OFFICERS}명까지입니다.</span>`; return; }
+    // The crossing as led by the officers chosen.
+    if (nav && nav.port && nav.men > 0) nav.land = S.landingForecast(state, way.id, from.owner, ids.map((id) => state.officers[id]), nav.men, nav.port.train, nav.men);
     let unit = unitPick("atU_");
     let sent = S.countsTotal(unit);
-    if (!sent) { el.textContent = "보낼 병사를 정해 주세요."; return; }
-    const way = S.attackTargets(state, UI.selected).find((x) => x.id === $("#atTarget").value);
-    // Over the river the navy of the port goes instead (js/ships.js).
-    const nav = way && S.landingLink(way.path) ? S.navalPort(state, way.path, S.place(state, UI.selected).owner) : null;
-    if (nav) { sent = Math.min(sent, S.navySortie(state, nav)); unit = S.mixCounts(S.garrisonUnit(nav), sent); }
-    const e = S.estimate(state, nav ? nav.id : UI.selected, $("#atTarget").value, ids, sent, unit);
+    if (nav && nav.port) { sent = nav.men; unit = S.mixCounts(nav.unit, sent); }
+    if (!sent) { el.textContent = nav && nav.port ? "배를 타고 나설 수군이 없습니다." : "보낼 병사를 정해 주세요."; return; }
+    const e = S.estimate(state, nav && nav.port ? nav.port.id : UI.selected, $("#atTarget").value, ids, nav && nav.land ? nav.land.left : sent, unit);
     const label = e.ratio >= 1.6 ? `<span class="good">압도적 우세</span>` : e.ratio >= 1.2 ? `<span class="good">우세</span>`
       : e.ratio >= 0.9 ? "백중세" : `<span class="bad">열세</span>`;
-    const days = way ? S.travelDays(way.km, S.unitSpeed(unit)) : 0;
+    const plan = way ? S.marchPlan(state, way, unit, sent, nav && nav.port) : null;
     // Who inside might sortie against us, and how our soldiers fare in the open.
     const t = S.place(state, $("#atTarget").value);
     const threat = S.sortieThreat(state, t.id);
@@ -568,8 +571,8 @@
       (threat && threat.pct > 0
         ? `출격 위험: ${threat.leader.name}${S.hasSkill(threat.leader, "야전") ? " (야전)" : ""} 하루 ${threat.pct}% · 성 밖 싸움 상성 ${edgeLabel(field)}<br>`
         : `출격 위험: 없음<br>`) +
-      landingLine(way, t, ids, sent) +
-      `<span class="hint">병사 ${fmt(sent)}명 · ${days}일 뒤 도착 · 군량 ${S.marchFood(sent, days, way ? S.pathRough(state, way.path) : 1)}${way && S.pathRough(state, way.path) > 1.05 ? " (험로)" : ""} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
+      landingLine(nav) +
+      `<span class="hint">병사 ${fmt(sent)}명 · ${plan ? plan.days : 0}일 뒤 도착 · 군량 ${plan ? plan.food : 0}${plan && S.pathRough(state, plan.path) > 1.05 ? " (험로)" : ""} · 지금 기준이며 도착할 때까지 적 병력이 바뀔 수 있습니다.</span>`;
   }
 
   function updateScheme() {

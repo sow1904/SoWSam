@@ -990,6 +990,7 @@
       t.ships = 0;
       t.shipOrder = null;
       t.navyGoal = null;
+      t.navyAim = null;
       t.shipsOf = A.force;
       S.putShips(state, t, A.ships, A.shipMix);
       A.ships = 0;

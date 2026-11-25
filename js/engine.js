@@ -1025,6 +1025,20 @@
     return Object.entries(counts).every(([k, v]) => (have[k] || 0) >= v);
   };
 
+  // How an attack goes along its way: a navy sets out from its port (the
+  // path and km from there), at the pace of its ships on the water (몽충
+  // quick, 누선 slow; js/ships.js). Returns {path, km, speed, days, food}.
+  S.marchPlan = function (state, way, counts, troops, port) {
+    const at = port ? Math.max(0, way.path.indexOf(port.id)) : 0;
+    const path = way.path.slice(at);
+    const km = at ? Math.max(1, way.km - S.pathKm(state, way.path.slice(0, at + 1))) : way.km;
+    const speed = S.unitSpeed(counts);
+    const sail = port ? S.fleetTrait(S.shipMix(port), "speed") : 1;
+    const wet = port ? path.slice(1).reduce((s, id, i) => s + (S.isPortLink(path[i], id) ? S.legKm(state, path[i], id) : 0), 0) : 0;
+    const days = S.travelDays(Math.max(1, km - wet + wet * sail), speed);
+    return { path, km, speed, days, food: S.marchFood(troops, days, S.pathRough(state, path), S.landDays(state, path, speed)) };
+  };
+
   S.attack = function (state, cid, targetCid, oids, troops, unit) {
     const c = S.place(state, cid);
     const t = S.place(state, targetCid);
@@ -1048,38 +1062,33 @@
     const src = navy || c;
     let counts;
     if (navy) {
+      // The whole navy that can sail goes; the city's soldiers stay.
       const can = S.navySortie(state, navy);
       if (can < S.MIN_SORTIE_TROOPS) return fail(`${navy.name}의 수군이 모자랍니다. (배를 타고 나설 수 있는 수군 ${can}명)`);
-      counts = S.mixCounts(S.garrisonUnit(navy), Math.min(can, troops > 0 ? troops : can));
+      counts = S.mixCounts(S.garrisonUnit(navy), can);
       troops = S.countsTotal(counts);
-      if (troops < S.MIN_SORTIE_TROOPS) return fail(`수군을 ${S.MIN_SORTIE_TROOPS}명 이상 보내야 합니다.`);
     } else {
       counts = S.sortieCounts(c, troops, unit);
       troops = S.countsTotal(counts);
       if (troops < S.MIN_SORTIE_TROOPS || troops > S.marchable(c)) {
         return fail(`출진 병력은 ${S.MIN_SORTIE_TROOPS}~${S.marchable(c)}명이어야 합니다. 호족 사병 ${c.retainers}명은 출진하지 않습니다.`);
       }
-      if (!S.hasTroops(c, counts)) return fail("그만큼의 병사가 없습니다.");
     }
-    const portId = navy ? navy.id : null;
-    const speed = S.unitSpeed(counts);
-    // On a voyage the ships set the pace (js/ships.js): 몽충 quick, 누선 slow.
-    const sail = portId ? S.fleetTrait(S.shipMix(state.forts[portId]), "speed") : 1;
-    const wet = portId ? way.path.slice(1).reduce((s, id, i) => s + (S.isPortLink(way.path[i], id) ? S.legKm(state, way.path[i], id) : 0), 0) : 0;
-    const days = S.travelDays(way.km - wet + wet * sail, speed);
-    const foodNeed = S.marchFood(troops, days, S.pathRough(state, way.path), S.landDays(state, way.path, speed));
+    if (!S.hasTroops(src, counts)) return fail("그만큼의 병사가 없습니다.");
+    const plan = S.marchPlan(state, way, counts, troops, navy);
+    const { days, speed } = plan;
+    const foodNeed = plan.food;
     // The cities on the way supply what they can, the border first (js/war.js).
     const fromHere = S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed, true) : foodNeed;
     if (c.food < fromHere) return fail(`군량이 부족합니다. (필요 ${foodNeed}, 지나는 성에서 ${foodNeed - fromHere}, 출발지에서 ${fromHere})`);
     const train = src.train;
     unit = S.takeTroops(src, counts);
+    if (!unit) return fail("그만큼의 병사가 없습니다.");
     c.food -= S.drawFood ? S.drawFood(state, way.path, c.owner, foodNeed) : foodNeed;
     if (t.owner) S.relAdd(state, c.owner, t.owner, S.DIPLO.attack);
     // A navy sails from its port and comes back to it.
-    const at = navy ? way.path.indexOf(portId) : 0;
-    const path = way.path.slice(at);
-    const km = navy ? Math.max(1, way.km - S.pathKm(state, way.path.slice(0, at + 1))) : way.km;
-    const m = S.launch(state, { kind: "army", force: c.owner, path, km, speed, days,
+    const portId = navy ? navy.id : null;
+    const m = S.launch(state, { kind: "army", force: c.owner, path: plan.path, km: plan.km, speed, days,
       officers: oids, troops, unit, train, origin: navy ? portId : cid, target: targetCid, navy: !!navy });
     // The supply base, and when the target hears of it (js/war.js).
     if (S.marchBase) { m.base = S.marchBase(state, m.path, m.force); m.seen = S.spotDay(state, m); }
