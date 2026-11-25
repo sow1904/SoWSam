@@ -289,6 +289,7 @@
     qing: ["qiguo", "donglai"],
     xu: ["donghai", "guangling"],
     yu: ["runan", "jiujiang"],
+    yan: ["taishan", "shanyang"],
     yang: ["danyang", null, 0, 70], // below 단양
     jiao: [null, null, -40, 40], // a little down and to the left
   };
