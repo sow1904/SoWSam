@@ -118,7 +118,11 @@
     if (!heirs.length) return { ok: false, msg: "뒤를 이을 사람이 없습니다." };
     S.retire(state, ruler);
     ruler.back = 1e9; // he does not come back into the world
+    // Still of his force while the succession is weighed (the 한조파 lean on
+    // whom he served, js/factions.js).
+    ruler.force = fid;
     const msgs = S.succeed(state, fid, ruler, heirs, { by });
+    ruler.force = null;
     const kind = fid === state.playerForce ? "warn" : "fall";
     for (const m of msgs) S.addLog(state, m, kind);
     S.capitalOf(state, fid);
@@ -137,7 +141,7 @@
       if (ruler.status !== "serving") continue;
       const out = S.forcedOutlook(state, f.id);
       if (out.g && S.chance(state, out.p)) { S.stepDown(state, f.id, out.g); continue; }
-      if (state.month === 1 && f.id !== state.playerForce && S.heirCandidates(state, f.id).length) {
+      if (state.month === 1 && (f.id !== state.playerForce || !S.playerRules(state)) && S.heirCandidates(state, f.id).length) {
         let p = (S.age(state, ruler) - R.old) * R.oldRate;
         for (const t of S.traitsOf(ruler)) p *= { 무욕: 2, 야심: 0.3 }[t] || 1;
         if (p > 0 && S.chance(state, p)) { S.stepDown(state, f.id); continue; }

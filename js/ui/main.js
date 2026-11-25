@@ -36,7 +36,7 @@
     if (UI.modalOnInput) UI.modalOnInput();
   });
   $("#modal").addEventListener("click", (ev) => {
-    if (ev.target.id === "modal" && state) UI.closeModal();
+    if (ev.target.id === "modal" && state && !UI.modalLocked) UI.closeModal();
   });
 
   // Keys: Space runs or pauses, 1-4 set the speed, Esc closes the window on
@@ -46,7 +46,7 @@
   document.addEventListener("keydown", (ev) => {
     if (!state || state.over || ev.ctrlKey || ev.altKey || ev.metaKey || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.code === "Escape") {
-      if (UI.modalOpen()) UI.closeModal();
+      if (UI.modalOpen()) { if (!UI.modalLocked) UI.closeModal(); }
       else if (UI.cityWinOpen()) UI.closeCity();
       return;
     }

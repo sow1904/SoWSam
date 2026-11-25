@@ -624,11 +624,7 @@
     },
     doResearch: (d) => tryRun(S.research(state, d.oid, UI.selected, $("#rsField").value)),
     doDraft: (d) => tryRun(S.draft(state, d.oid, UI.selected, UI.pending.unit)),
-    doSimple: (d) => {
-      const r = SIMPLE[UI.pending.cmd].run(d.oid, UI.selected);
-      UI.closeModal();
-      UI.result(r);
-    },
+    doSimple: (d) => tryRun(SIMPLE[UI.pending.cmd].run(d.oid, UI.selected)),
     recruitTarget: (d) => {
       const target = state.officers[d.oid];
       UI.pending = { target: d.oid };
@@ -637,11 +633,7 @@
         (o) => `성공률 ${S.recruitChance(state, o, target)}%`,
         pickAdvice("chancellor", list, (o) => S.recruitChance(state, o, target), (o) => `성공률 ${S.recruitChance(state, o, target)}%`, "doRecruit"));
     },
-    doRecruit: (d) => {
-      const r = S.recruit(state, d.oid, UI.selected, UI.pending.target);
-      UI.closeModal();
-      UI.result(r);
-    },
+    doRecruit: (d) => tryRun(S.recruit(state, d.oid, UI.selected, UI.pending.target)),
     // Following the 군사's choice of team: tick those officers and no others.
     adviseCheck: (d) => {
       const ids = String(d.ids || "").split(",");
@@ -713,7 +705,7 @@
     navyGoal: () => UI.result(S.setNavyGoal(state, UI.selected, num("navyGoal"))),
     moveCapital: () => {
       const c = state.cities[UI.selected];
-      if (!confirm(`${S.capitalLabel(state, c.owner)}를 ${S.ro(c.name)} 옮길까요?`)) return;
+      if (!confirm(`${S.josa(S.capitalLabel(state, c.owner), "을", "를")} ${S.ro(c.name)} 옮길까요?`)) return;
       UI.result(S.moveCapital(state, state.playerForce, c.id));
     },
   });

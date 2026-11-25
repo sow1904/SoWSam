@@ -5,6 +5,9 @@
   const { fmt, stat } = UI;
   let state = null;
   UI.bind((s) => { state = s; });
+  // The ruler's own decisions are the player's only while he rules and has
+  // not left the force to the computer.
+  const rules = () => !!state.playerForce && S.playerRules(state) && !S.spectating(state);
 
   const title = (text) => UI.winTitle(text);
   const closeBar = `<div class="footer"><button class="primary" data-action="close">닫기</button></div>`;
@@ -415,7 +418,7 @@
       `<td>${Math.round(x.share * 100)}%</td></tr>`).join("");
     const second = out.find((x) => !x.named) || null;
     const risk = second ? S.splitChance(state, fid, second.o, second.share) : 0;
-    const mine = fid === state.playerForce && kin;
+    const mine = fid === state.playerForce && rules() && kin;
     const pick = mine ? `<p>후계자 지명 <select id="heirPick"><option value="">가문의 서열대로</option>` +
       S.heirCandidates(state, fid).map((o) => `<option value="${o.id}"${state.forces[fid].heir === o.id ? " selected" : ""}>${o.name}</option>`).join("") + `</select></p>` : "";
     return `<h3>후계 구도</h3>${pick}<table class="tbl"><tr><th>${kin ? "후보" : "후보 (가문 없음)"}</th><th>소재</th><th>파벌 지지</th></tr>${rows}</table>` +
@@ -431,7 +434,7 @@
       `<td>${S.rebelCities(state, x.o, x.c).map((c) => c.name).join(" ")}</td><td>월 ${x.p}%</td></tr>`).join("");
     const out = S.forcedOutlook(state, fid);
     const forced = out.g ? `<p class="bad">${S.josa(out.g.name, "이", "가")} 군주를 몰아낼 위험이 있습니다 (월 ${out.p}%, 수장 ${out.g.leader.name}, 유대 ${Math.round(out.g.leader.bond || 0)}).</p>` : "";
-    const mine = fid === state.playerForce && S.canStepDown(state, fid);
+    const mine = fid === state.playerForce && rules() && S.canStepDown(state, fid);
     const wait = S.rebelWait(state, fid);
     const size = wait == null ? `<p>성이 ${S.REBEL.big.cities}개가 안 되는 세력이라 반란은 일어나지 않습니다.</p>`
       : wait > 0 ? `<p>성을 ${S.REBEL.big.cities}개 이상 가진 지 오래지 않아 ${wait}달 뒤부터 반란이 일어날 수 있습니다.</p>` : "";
@@ -445,7 +448,7 @@
     const out = S.strifeOutlook(state, fid);
     const fav = S.favored(state, fid);
     const f = state.forces[fid];
-    const sl = fid === state.playerForce && f.slander;
+    const sl = fid === state.playerForce && rules() && f.slander;
     return `<h3>알력다툼과 참소</h3>` +
       (out ? `<p>${S.josa(out.a.name, "과", "와")} ${out.b.name} 사이 긴장 ${out.tension}, 알력다툼 위험 석 달에 ${out.p}%.</p>` : `<p>맞설 만큼 큰 파벌이 둘이 되지 않아 알력다툼은 없습니다.</p>`) +
       (fav ? `<p>${S.josa(fav.name, "이", "가")} 군주의 총애를 받고 있습니다 (${fav.until - S.monthsElapsed(state)}달 남음).</p>` : "") +
@@ -526,7 +529,7 @@
   // ---------- the Han court ----------
   function courtPending() {
     const han = state.han;
-    if (!han || !han.pending || !state.playerForce || han.holder !== state.playerForce) return "";
+    if (!han || !han.pending || !rules() || han.holder !== state.playerForce) return "";
     const p = han.pending;
     if (p.type === "abdicate") {
       return `<h3>선양 조서</h3><p>헌제가 제위를 물려주겠다고 합니다. 받으면 황제에 오르고 한 왕조는 끝납니다. ` +
@@ -602,7 +605,7 @@
         stat("헌제의 우호도", `${han.favor} ${S.favorLabel(han.favor)}`) +
         (h ? stat("옹립 세력 영토", `${Math.round(S.cityShare(state, h) * 100)}%`) : "") + `</div>`;
       html += courtPending();
-      if (me && h === me) {
+      if (me && h === me && rules()) {
         const dist = S.reachable(state, state.emperor);
         const dests = Object.keys(dist).sort((a, b) => dist[a] - dist[b]);
         const wait = han.movedAt != null ? han.movedAt + S.COURT.moveCooldown - S.monthsElapsed(state) : 0;
@@ -620,7 +623,7 @@
     const emperors = Object.values(state.forces).filter((f) => f.alive && f.emperor);
     html += `<h3>황제</h3><p>${emperors.length ? emperors.map((f) => `${f.name} (${f.emperorYear}년${f.hanHeir ? ", 한 황실 계승" : ""})`).join(", ") : "아직 황제를 칭한 군주가 없습니다."}</p>`;
     const can = me ? S.canProclaim(state, me) : { ok: false };
-    if (me && !state.forces[me].emperor) {
+    if (me && rules() && !state.forces[me].emperor) {
       const heir = S.isHanHeir(state, me);
       html += `<p class="hint">${heir
         ? "한 왕조가 끝났으므로, 한조를 중시하는 군주는 한 황실을 잇는다는 명분으로 칭제할 수 있습니다. 무장의 충성이 떨어지지 않습니다."
@@ -642,7 +645,7 @@
       `<button data-action="loadMenu" data-from="game"><b>불러오기</b><span>저장해 둔 게임을 골라 불러옵니다.</span></button>` +
       `<button data-action="clockSettings"><b>시간 설정</b><span>배속과 자동 일시정지를 정합니다.</span></button>` +
       `<button data-action="mapArt"><b>그래픽: ${S.MAP_ART === 2 ? "고전 게임" : "수묵 채색"}</b><span>누르면 ${S.MAP_ART === 2 ? "수묵 채색(기본)" : "고전 게임 스타일(픽셀 그림)"}으로 바꿉니다. 지도와 성 그림만 바뀌고 게임 내용은 그대로입니다.</span></button>` +
-      (state.playerForce ? `<button data-action="auto"><b>세력 위임</b><span>${state.auto
+      (state.playerForce && S.playerRules(state) ? `<button data-action="auto"><b>세력 위임</b><span>${state.auto
         ? "지금 세력 전체를 맡겨 두었습니다. 누르면 다시 직접 다스립니다."
         : "세력 전체를 컴퓨터에 맡깁니다. 도시와 군대, 외교와 황실, 포로 처우까지 알아서 하고, 시간이 저절로 멈추지 않습니다. 언제든 되돌릴 수 있습니다."}</span></button>` : "") +
       `<button data-action="title"><b>타이틀로</b><span>자동 저장한 뒤 메인 메뉴로 돌아갑니다.</span></button>` +

@@ -134,9 +134,11 @@
       for (const [pid, e] of Object.entries(mine)) {
         const p = S.place(state, pid);
         if (!p || p.owner === fid) { delete mine[pid]; continue; }
+        // Draws of their own (13, 17): those of a new error (errorOf, 7 and
+        // 11) in the same month would only double it.
         const k = [salt(state), strHash(fid), strHash(pid), mo];
-        e.t = e.t * I.keep + gauss(...k, 7) * S.intelSpread(state, fid, pid, false) * fresh;
-        e.q = e.q * I.keep + gauss(...k, 11) * S.intelSpread(state, fid, pid, true) * fresh;
+        e.t = e.t * I.keep + gauss(...k, 13) * S.intelSpread(state, fid, pid, false) * fresh;
+        e.q = e.q * I.keep + gauss(...k, 17) * S.intelSpread(state, fid, pid, true) * fresh;
       }
     }
   };

@@ -530,14 +530,14 @@
     S.addLog(state, `포로 ${S.josa(o.name, "이", "가")} ${S.forceName(state, to)}에 투항했습니다.`, "info");
     return { ok: true, msg: `${S.forceName(state, to)}에 투항했습니다.` };
   };
-  S.escapeChance = (state) => { const o = S.playerChar(state); return o ? clamp(Math.round(P.escape.base + o.war / P.escape.war + o.wit / P.escape.wit), 5, 60) : 0; };
+  S.selfEscapeChance = (state) => { const o = S.playerChar(state); return o ? clamp(Math.round(P.escape.base + o.war / P.escape.war + o.wit / P.escape.wit), 5, 60) : 0; };
   S.pEscape = function (state) {
     const o = S.playerChar(state);
     const err = blocked(state, o);
     if (err) return fail(err);
     if (o.status !== "captive") return fail("포로일 때만 달아날 수 있습니다.");
     spend(state, o);
-    if (!S.chance(state, S.escapeChance(state))) return { ok: true, msg: "달아나려 했으나 붙잡혔습니다." };
+    if (!S.chance(state, S.selfEscapeChance(state))) return { ok: true, msg: "달아나려 했으나 붙잡혔습니다." };
     S.freeCaptive(state, o);
     S.syncPlayer(state);
     return { ok: true, msg: o.status === "serving" ? `탈출해 ${S.forceName(state, o.force)}의 ${S.ro(state.cities[o.city].name)} 돌아왔습니다.` : "탈출해 재야로 떠돌게 되었습니다." };

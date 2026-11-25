@@ -519,9 +519,9 @@
     A.troops -= lossA;
     if (A.shipPort) A.ships = Math.max(0, (A.ships || 0) - lossA);
     b.killedA = (b.killedA || 0) + lossA;
-    b.killedD = (b.killedD || 0) + lossD;
+    b.killedD = (b.killedD || 0) + lossD - lossR; // the relief's own losses are in killedR
     hurt(A, lossA, A.unit);
-    S.addWounded(t, "fast", lossD * S.WOUNDED.share, gu);
+    S.addWounded(t, "fast", (lossD - lossR) * S.WOUNDED.share, gu);
     A.morale += swing(lossA, lossD, 8);
     D.morale += swing(lossD, lossA, 8);
     say(b, `상륙 ${L.day}일째: 공격 함대 -${lossA} (${L.aw}), 수비 함대 -${lossD} (${L.troops})`);

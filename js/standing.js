@@ -204,10 +204,10 @@
     const r = rulerOf(state, fid);
     const before = S.seatValue(state, o);
     const pushed = seat(state, fid, key, o);
-    if (S.seatValue(state, o) >= before) { S.opAdd(o, r, ST.op.appointed); o.content = clamp((o.content || 50) + 8, 0, 100); }
+    if (S.seatValue(state, o) >= before) { S.opAdd(o, r, ST.op.appointed); o.content = clamp((o.content ?? 50) + 8, 0, 100); }
     if (pushed) {
       S.opAdd(pushed, r, ST.op.pushed);
-      pushed.content = clamp((pushed.content || 50) - 10, 0, 100);
+      pushed.content = clamp((pushed.content ?? 50) - 10, 0, 100);
     }
     return { ok: true, pushed, msg: `${S.josa(o.name, "을", "를")} ${off.name}에 임명했습니다.` + (pushed ? ` ${S.josa(pushed.name, "은", "는")} 자리에서 물러나 불만을 품습니다.` : "") };
   };
@@ -216,7 +216,7 @@
     if (!o) return fail("그 자리는 비어 있습니다.");
     vacate(state, fid, key);
     S.opAdd(o, rulerOf(state, fid), ST.op.dismissed);
-    o.content = clamp((o.content || 50) - 12, 0, 100);
+    o.content = clamp((o.content ?? 50) - 12, 0, 100);
     return { ok: true, msg: `${S.josa(o.name, "을", "를")} ${OFF[key].name}에서 파면했습니다. 그는 불만을 품습니다.` };
   };
   // A computer ruler fills each empty seat with the fittest man.
@@ -374,7 +374,7 @@
     o.askAt = now(state);
     if (!yes) {
       S.opAdd(o, r, ST.op.refused);
-      o.content = clamp((o.content || 50) - 8, 0, 100);
+      o.content = clamp((o.content ?? 50) - 8, 0, 100);
       return { ok: true, msg: `${o.name}의 ${off.name} 요구를 물리쳤습니다. 그는 불만을 품습니다.` };
     }
     const res = S.appoint(state, fid, key, o.id);

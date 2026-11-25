@@ -358,7 +358,7 @@
       }
     }
     if (state.month === 1) for (const f of Object.values(state.forces)) {
-      if (f.alive && (f.id !== state.playerForce || state.auto)) splitAI(state, f.id);
+      if (f.alive && (f.id !== state.playerForce || state.auto || !S.playerRules(state))) splitAI(state, f.id);
     }
   };
   // The man a computer force trusts with a corps: able, loyal, kin first.

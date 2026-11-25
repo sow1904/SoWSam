@@ -139,6 +139,8 @@
       }
     }
     lord.liege = null;
+    // Captives now held by their own side go free to it.
+    for (const o of Object.values(state.officers)) if (o.status === "captive" && o.captor === o.force) S.freeCaptive(state, o);
     for (const m of state.marches || []) if (m.force === loser) m.force = winner;
     for (const b of state.battles || []) for (const side of [b.att, b.def, b.relief]) if (side && side.force === loser) side.force = winner;
     // Treaties and wars of the force that is no more.

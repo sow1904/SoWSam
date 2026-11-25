@@ -248,7 +248,7 @@
     const out = {};
     for (const id in dist) {
       const p = S.place(state, id);
-      const empty = !state.cities[id] && !p.owner && p.troops <= 0;
+      const empty = !state.cities[id] && p.built && !p.owner && p.troops <= 0; // a site not yet built is only a road
       if (id === cid || (p.owner !== owner && !empty)) continue;
       if (!withForts && !state.cities[id]) continue;
       out[id] = S.travelDays(dist[id], kind || "officer");

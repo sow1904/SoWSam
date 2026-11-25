@@ -975,8 +975,12 @@
   S.makePeace = function (state, winner, loser, cede) {
     const now = S.monthsElapsed(state);
     const P = W.peace;
+    // Never the capital, and the loser keeps a city: an offer answered a
+    // month late may name what has changed since (S.cedable).
+    const capNow = S.capitalOf(state, loser);
+    cede = cede.filter((c) => c.owner === loser && c.id !== capNow);
+    while (cede.length && cede.length >= S.citiesOf(state, loser).length) cede.pop();
     for (const c of cede) {
-      if (c.owner !== loser) continue;
       // The loser's soldiers and officers withdraw; the families stay.
       // To its corps' seat, or the capital when that seat is itself given up.
       const keeps = (id) => !!id && !!state.cities[id] && state.cities[id].owner === loser && !cede.includes(state.cities[id]);
@@ -991,6 +995,13 @@
           officers: [], troops: S.countsTotal(counts), unit, train: c.train, origin: c.id, target: capId });
       }
       for (const o of S.serving(state, c.id).filter((x) => x.force === loser)) o.city = capId || o.city;
+      S.officersMoved(state);
+      // The captives go with the city, as when a capital falls (js/capital.js).
+      for (const p of S.officersIn(state, c.id, (x) => x.status === "captive" && x.captor === loser)) {
+        if (p.force === winner) { p.status = "serving"; p.captor = null; }
+        else if (p.lord) S.freeCaptive(state, p);
+        else p.captor = winner;
+      }
       c.owner = winner;
       c.lost = null; // given by treaty: not to be taken back
       c.delegate = null;

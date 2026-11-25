@@ -126,8 +126,10 @@
         row("거병", S.canRise(state) ? `<span class="hint">${S.canRise(state)}</span>` : go("rise", `${c.name}에서 거병한다`), "아무도 다스리지 않는 도시에서 세력을 세웁니다. 나를 좋게 보는 재야 인물이 따릅니다.");
     }
     if (role === "captive") {
-      html += `<h3>포로</h3>` + row("투항", go("surrender", `${S.forceName(state, o.captor)}에 투항한다`)) +
-        row("탈주", go("escape", `달아난다 (${pct(S.escapeChance(state))})`), "성공하면 내 세력의 가까운 도시로 돌아가고, 세력이 없으면 재야가 됩니다.");
+      // A ruler does not go over (S.pSurrender).
+      const lord = o.lord || S.isRuler(state, o);
+      html += `<h3>포로</h3>` + (lord ? "" : row("투항", go("surrender", `${S.forceName(state, o.captor)}에 투항한다`))) +
+        row("탈주", go("escape", `달아난다 (${pct(S.selfEscapeChance(state))})`), "성공하면 내 세력의 가까운 도시로 돌아가고, 세력이 없으면 재야가 됩니다.");
     }
     html += `<p class="hint">자세한 것은 도움말 「장수제」를 보세요.</p><div class="footer"><button class="primary" data-action="close">닫기</button></div>`;
     UI.openModal(html, true);
@@ -169,6 +171,7 @@
       `<div class="otable"><table><tr><th>이름</th><th>자리</th><th>있는 곳</th>${UI.abilityHead()}<th>명성</th><th>야망</th><th></th></tr>${rows}</table></div>` +
       `<div class="footer"><button data-action="newGame">뒤로</button></div>`, true);
     $("#modal .box").classList.add("titlebox");
+    UI.modalLocked = true; // the new game begins only with a pick (or 뒤로)
   };
 
   Object.assign(UI.actions, {

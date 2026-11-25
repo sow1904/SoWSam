@@ -62,7 +62,7 @@
     c.gold -= S.CAPITAL.moveCost;
     f.capital = cid;
     f.capitalMovedAt = S.monthsElapsed(state);
-    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} ${S.capitalLabel(state, fid)}를 ${from.name}에서 ${S.ro(c.name)} 옮겼습니다.`;
+    const msg = `${S.josa(S.forceName(state, fid), "이", "가")} ${S.josa(S.capitalLabel(state, fid), "을", "를")} ${from.name}에서 ${S.ro(c.name)} 옮겼습니다.`;
     if (fid !== state.playerForce) S.addLog(state, msg, "info");
     return { ok: true, msg };
   };
@@ -138,7 +138,7 @@
       say(`${S.josa(c.name, "이", "가")} ${S.forceName(state, captor)}에 항복했습니다.${who ? " " + who : ""}`,
         mine || captor === state.playerForce ? "warn" : "info");
     }
-    say(`${S.josa(S.forceName(state, fid), "은", "는")} ${S.ro(capital.name)} ${S.capitalLabel(state, fid)}를 옮겼습니다.`, mine ? "warn" : "info");
+    say(`${S.josa(S.forceName(state, fid), "은", "는")} ${S.ro(capital.name)} ${S.josa(S.capitalLabel(state, fid), "을", "를")} 옮겼습니다.`, mine ? "warn" : "info");
   };
 
   // Computer forces keep the capital away from the front: when it borders an

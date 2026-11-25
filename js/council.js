@@ -221,7 +221,7 @@
     const fame = (o, d) => { o.fame = clamp((o.fame || 0) + d, 0, 100); };
     if (won) {
       for (const o of pro) { S.addMerit(o, K.won.merit); fame(o, K.won.fame); }
-      for (const o of con) o.content = clamp((o.content || 50) + K.wrong.content, 0, 100);
+      for (const o of con) o.content = clamp((o.content ?? 50) + K.wrong.content, 0, 100);
       return;
     }
     const r = rulerOf(state, fid);

@@ -100,7 +100,7 @@
   };
   S.runWill = function (state) {
     for (const f of Object.values(state.forces)) {
-      if (!f.alive || f.id === state.playerForce) continue;
+      if (!f.alive || (f.id === state.playerForce && !S.spectating(state))) continue; // a force the computer runs for the player builds will too
       const foes = S.willFoes(state, f.id);
       for (const foe of foes) {
         const before = S.willOf(state, f.id, foe);

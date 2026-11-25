@@ -35,6 +35,9 @@
     try { localStorage.setItem(CLOCK_KEY, JSON.stringify(clock.settings)); } catch (e) { /* ignore */ }
   }
   function setRunning(on) {
+    // What was logged while it stood still came of the player's own orders:
+    // it does not stop the clock again once it runs.
+    if (on && !clock.running && state) clock.seenN = state.logN || clock.seenN;
     clock.running = !!on && !!state && !state.over;
     clock.acc = 0;
     clock.last = 0;
@@ -175,7 +178,9 @@
     const meP = S.playerChar(state);
     if (meP && !S.playerRules(state)) {
       clock.pending = state.han && state.han.pending;
-      const about = fresh.find((e) => e.kind !== "mine" && e.text.includes(meP.name));
+      // His name, not his force's (유비군).
+      const named = new RegExp(meP.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?!군)");
+      const about = fresh.find((e) => e.kind !== "mine" && named.test(e.text));
       if (s.bad && about) return pause(about.text);
       const pc = S.playerCity(state);
       const hit = pc && (state.battles || []).find((b) => b.place === pc && !seen.has("p" + b.id));

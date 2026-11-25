@@ -163,7 +163,7 @@
       t.order = Math.max(0, t.order - L.order);
       S.addMerit(o, R.merit);
       o.fame = clamp((o.fame || 0) + R.fame, 0, 100);
-      o.content = clamp((o.content || 50) + R.content, 0, 100);
+      o.content = clamp((o.content ?? 50) + R.content, 0, 100);
     }
     const relBefore = S.rel(state, fid, foe);
     S.relAdd(state, fid, foe, won ? R.rel.won : R.rel.lost);
@@ -188,7 +188,7 @@
     const P = R.reprove;
     S.addMerit(o, P.merit);
     S.opAdd(o, rulerOf(state, fid), P.op);
-    o.content = clamp((o.content || 50) + P.content, 0, 100);
+    o.content = clamp((o.content ?? 50) + P.content, 0, 100);
     if (state.forces[foe] && state.forces[foe].alive) S.relAdd(state, fid, foe, R.rel.reproved);
   }
   S.answerRaid = function (state, id, scold) {

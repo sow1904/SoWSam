@@ -96,6 +96,7 @@
   function slander(state, fid, by, target) {
     const msg = `${S.josa(by.name, "이", "가")} ${S.josa(target.name, "을", "를")} 참소했습니다.`;
     if (fid === state.playerForce && !S.spectating(state)) {
+      if (state.forces[fid].slander) return; // one accusation at a time, the first still unanswered
       state.forces[fid].slander = { by: by.id, target: target.id, until: S.monthsElapsed(state) + T.wait };
       S.addLog(state, msg + " 믿을지 정해야 합니다.", "warn");
       return;

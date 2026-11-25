@@ -117,6 +117,9 @@
     const f = state.forces[fid];
     const msgs = [];
     const r = contest(state, fid, ruler, () => S.rand(state), opts.by);
+    // The faction that forced him out, as the contest counted it afresh.
+    const byG = opts.by ? [...r.sides.keys()].find((g) => g.key === opts.by.key) : null;
+    const bySide = byG ? r.sides.get(byG) : null;
     let heir = r.named || S.pickHeir(ruler, heirs);
     const how = ruler.beheaded ? "참수되어" : ruler.status === "dead" ? "세상을 떠나" : "물러나";
     const top = [...r.backing.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -124,9 +127,9 @@
     if (opts.by && opts.take) {
       // Those who struck him down take the seat themselves.
       heir = opts.by.leader;
-    } else if (opts.by && r.sides.get(opts.by)) {
+    } else if (opts.by && bySide) {
       // Those who forced him out choose who follows.
-      heir = r.sides.get(opts.by);
+      heir = bySide;
     } else if (top && top[0] !== heir && top[1] > (r.backing.get(heir) || 0) * C.usurp) {
       // Within the clan a rival with clearly more backing seizes power; with
       // no clan, the best backed simply takes the lead.

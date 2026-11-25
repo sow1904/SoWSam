@@ -131,6 +131,7 @@
     $("#modal").classList.remove("hidden");
     UI.modalOnInput = null;
     UI.modalOnClose = null;
+    UI.modalLocked = false; // a window that must be answered (Esc and the backdrop leave it open)
     // Time stands still while a window is open, and runs again when it closes.
     UI.holdClock();
     UI.renderClock();

@@ -147,7 +147,7 @@
   }
   // Moving the force capital here.
   function capitalRow(c) {
-    if (S.isCapital(state, c.id)) return "";
+    if (S.isCapital(state, c.id) || !S.playerRules(state) || S.spectating(state)) return ""; // the ruler's decision
     const can = S.canMoveCapital(state, c.owner, c.id);
     return `<div class="links"><button data-action="moveCapital"${can.ok ? "" : " disabled"}>이곳으로 ${S.capitalLabel(state, c.owner)} 이전</button>` +
       ` <span class="hint">${can.ok ? `이 도시의 금 ${S.CAPITAL.moveCost}이 들고, ${S.CAPITAL.moveCooldown}개월 동안 다시 옮길 수 없습니다.` : can.msg}</span></div>`;

@@ -220,7 +220,7 @@
     : fromId === S.COURT.home ? S.COURT.moveFavor.leave : S.COURT.moveFavor.other);
 
   // ---------- escape and secret letters ----------
-  S.escapeChance = (state) => {
+  S.emperorEscapeChance = (state) => {
     const c = state.cities[state.emperor];
     return Math.max(0, (30 - state.han.favor) / 10 + (c.order < 40 ? 1 : 0));
   };
@@ -268,7 +268,7 @@
     const gone = [];
     const ruler = rulerOf(state, holder);
     for (const o of S.officersOf(state, holder)) {
-      if (o.han !== "H" || S.isRuler(state, o) || sameClan(o, ruler) || o.loyalty >= 70 || !S.chance(state, 30)) continue;
+      if (o.han !== "H" || o.transit || S.isRuler(state, o) || sameClan(o, ruler) || o.loyalty >= 70 || !S.chance(state, 30)) continue;
       const k = S.postOf(state, o);
       if (k) state.cities[o.city].posts[k] = null;
       o.force = to;
@@ -347,7 +347,7 @@
       const t = S.monthsElapsed(state);
       if (share >= S.COURT.strong) {
         if (state.month % 3 === 1 && (han.letterAt == null || t - han.letterAt >= 12) && S.chance(state, (30 - han.favor) * 1.5)) secretLetter(state);
-      } else if (S.chance(state, S.escapeChance(state))) {
+      } else if (S.chance(state, S.emperorEscapeChance(state))) {
         escape(state);
       }
     }

@@ -862,7 +862,7 @@
       const [, , err] = act(state, id, cid);
       if (err) return fail(err);
     }
-    const m = S.launch(state, { kind: "move", force: t.owner, path: route.path, km: route.km, speed: "officer",
+    const m = S.launch(state, { kind: "move", force: S.place(state, cid).owner, path: route.path, km: route.km, speed: "officer",
       officers: oids, origin: cid, target: targetCid });
     const names = oids.map((id) => state.officers[id].name).join(", ");
     return { ok: true, march: m, msg: `${S.josa(names, "이", "가")} ${S.ro(t.name)} 떠났습니다. ${route.days}일 뒤 도착합니다.` };
@@ -1437,7 +1437,8 @@
   function runDeaths(state) {
     for (const o of Object.values(state.officers)) {
       if (o.status === "dead" || !o.death || o.death.year !== state.year || o.death.month !== state.month) continue;
-      const wasRuler = S.isRuler(state, o) && (o.status === "serving" || o.status === "captive");
+      // A captive ruler of a force already fallen dies as anyone else.
+      const wasRuler = S.isRuler(state, o) && (o.status === "serving" || o.status === "captive") && !!state.forces[o.force] && state.forces[o.force].alive;
       const fid = o.force;
       const prev = o.status;
       o.status = "dead";

@@ -364,7 +364,7 @@
     for (const t of S.visibleFree(state, c.id).concat(S.captivesIn(state, c.id, fid))) {
       if (t.status === "captive" && S.judgeCaptive(state, t)) continue;
       const o = take(byDesc("speech"));
-      if (!o) return;
+      if (!o) break; // no one to send; the rest of the month's work goes on
       if (S.recruitChance(state, o, t) > 0) S.recruit(state, o.id, c.id, t.id);
       else idle.unshift(o);
     }
