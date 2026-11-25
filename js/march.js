@@ -33,6 +33,8 @@
     "guangyang|liaoxi": 1.5, // 노룡새, 조조의 오환 정벌길
     "liaoxi|liaodong": 1.4, "liaoxi|xuantu": 1.5, // 요택
     "hedong|shangdang": 1.3, "shangdang|taiyuan": 1.3, // 태항산
+    "henei|shangdang": 1.6, // 태항형: 천정관과 양장판, 조조가 206년 고간을 치러 넘은 길
+    "weijun|shangdang": 1.5, // 부구형: 업에서 서쪽으로 태항산을 넘는 길
     "changshan|taiyuan": 1.3, // 정형
   };
   const key = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
