@@ -229,9 +229,11 @@
       if (way && S.landingLink(way.path) && (!nav || S.navySortie(state, nav) < 3000)) continue;
       const men = nav ? S.navySortie(state, nav) : troops;
       const unit = nav ? S.garrisonUnit(nav) : pickUnit(state, c, t, troops);
-      const land = nav ? S.landingForecast(state, t.id, c.owner, team, men, nav.train, men) : null;
+      // A navy is led by the officers of its port first.
+      const go = nav ? S.navyTeam(state, nav, ids) : ids;
+      const land = nav ? S.landingForecast(state, t.id, c.owner, go.map((id) => state.officers[id]), men, nav.train, men) : null;
       if (land && !land.pass) continue;
-      const est = S.estimate(state, nav ? nav.id : c.id, t.id, ids, land ? land.left : men, unit);
+      const est = S.estimate(state, nav ? nav.id : c.id, t.id, go, land ? land.left : men, unit);
       if (land && land.lostD) { const seen = S.seenTroops(state, c.owner, t); est.ratio *= seen / Math.max(1, seen - land.lostD); }
       const pull = S.courtPull(state, c.owner, t); // the emperor, or a secret letter's target
       const bonus = (t.owner ? 0 : 0.2) + pull + S.titlePull(state, c.owner, t); // vacant cities are easy pickings
@@ -239,7 +241,7 @@
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
       const risk = threat ? threat.pct / 50 : 0;
       const score = est.ratio + bonus - risk;
-      if (!best || score > best.score) best = { t, unit, score, est, pull, risk, troops };
+      if (!best || score > best.score) best = { t, unit, score, est, pull, risk, troops, go };
     }
     // A war-weary force needs a clearer edge before it marches again.
     const w = state.forces[c.owner].weariness;
@@ -251,7 +253,7 @@
     const amity = best && best.t.owner ? Math.max(-0.15, (S.rel(state, c.owner, best.t.owner) - 50) / 80) : 0;
     if (w > 70 || !best || best.est.ratio < 1.3 + w / 40 - best.pull + nerve + amity + best.risk) return;
     if (!S.chance(state, 45)) return;
-    S.attack(state, c.id, best.t.id, ids, best.troops, best.unit);
+    S.attack(state, c.id, best.t.id, best.go, best.troops, best.unit);
   }
 
   // The soldiers for an attack, by type: those good against the walls, and
@@ -547,37 +549,48 @@
     S.capitalAI(state, fid);
   };
 
-  // Keep frontline strongholds manned from the city behind them, call idle
-  // officers home from quiet ones, and build where a builder is free.
+  // Keep frontline strongholds manned from the city behind them, station
+  // the officers the cities can spare in them, and build where a builder is
+  // free.
+  // why: the user's design. An officer not needed to run a city (its posts,
+  // its seat's main army) waits in a 관문, 요새 or 항구 rather than idle at
+  // home; one skilled on the water (수전) serves where the navy sails from.
+  S.FORT_STAFF = { front: 2, quiet: 1 };
+  // The officers a city can give up: its idle ones, less those its posts
+  // and its own business want, and at a corps seat the main army's.
+  function spareOfficers(state, c) {
+    const frontier = enemyNeighbors(state, c).length > 0;
+    const empty = S.DEV_KEYS.filter((k) => !c.posts[k]).length;
+    const seat = S.seatOfCity(state, c) === c.id ? S.MAX_SORTIE_OFFICERS + 1 : 0;
+    return S.idle(state, c.id).length - (frontier ? 3 : 1) - empty - seat;
+  }
+  // Who goes to a stronghold: one fit for it, and not much use at home.
+  const fitFor = (f) => (f.kind === "port" ? (o) => (S.hasSkill(o, "수전") ? 100 : 0) + o.cmd - o.pol / 2 : (o) => o.cmd + o.war - o.pol);
   function manageForts(state, fid) {
     for (const f of S.fortsOf(state, fid)) {
       const near = S.links(state, f.id);
       const front = near.some((n) => { const p = S.place(state, n); return p.owner !== fid && !(p.owner && S.allied(state, fid, p.owner)); });
       const staff = S.serving(state, f.id);
+      const want = front ? S.FORT_STAFF.front : S.FORT_STAFF.quiet;
       const home = near.map((n) => state.cities[n]).filter((x) => x && x.owner === fid).sort((a, b) => S.marchable(b) - S.marchable(a))[0];
-      // A port fills its own navy (js/ships.js); at the front it wants an
-      // officer, one skilled on the water if there is one.
-      if (f.kind === "port") {
-        if (front && !staff.length && home && S.idle(state, home.id).length > 1) {
-          const o = S.idle(state, home.id).sort((a, b) => (S.hasSkill(b, "수전") ? 50 : 0) + b.cmd - ((S.hasSkill(a, "수전") ? 50 : 0) + a.cmd))[0];
-          S.relocate(state, home.id, f.id, [o.id]);
+      // A port fills its own navy (js/ships.js); it only takes officers.
+      if (f.kind !== "port") manTroops(state, f, front, staff, home);
+      // Officers: the city next to it with the most to spare sends them.
+      const have = S.serving(state, f.id).length;
+      if (have < want) {
+        const from = near.map((n) => state.cities[n]).filter((x) => x && x.owner === fid && !S.besieged(state, x.id))
+          .map((x) => ({ x, n: spareOfficers(state, x) })).sort((a, b) => b.n - a.n)[0];
+        if (from && from.n > 0) {
+          const fit = fitFor(f);
+          const go = S.idle(state, from.x.id).sort((a, b) => fit(b) - fit(a)).slice(0, Math.min(from.n, want - have));
+          S.relocate(state, from.x.id, f.id, go.map((o) => o.id));
         }
-        continue;
-      }
-      const keep = front ? 4000 : 1000;
-      const idle = S.idle(state, f.id);
-      if (front && (f.troops < 3000 || !staff.length)) {
-        if (home && S.idle(state, home.id).length > 1) {
-          const send = Math.max(0, Math.min(keep - f.troops, S.marchable(home) - 3000));
-          const o = S.idle(state, home.id).sort((a, b) => b.cmd - a.cmd)[0];
-          if (send >= 500 || !staff.length) S.move(state, home.id, f.id, [o.id], send, 0, Math.min(2000, Math.max(0, home.food - 4000)));
-        }
-      } else if (f.troops > keep * 1.5 && home) {
-        // Too many men sitting in the stronghold: an officer leads the surplus home.
-        if (idle.length && (front ? idle.length > 1 : true)) S.move(state, f.id, home.id, [idle[0].id], f.troops - keep, 0, 0);
-        else if (!staff.length && S.idle(state, home.id).length > 1) S.relocate(state, home.id, f.id, [S.idle(state, home.id)[0].id]);
-      } else if (!front && idle.length && home) {
-        S.relocate(state, f.id, home.id, idle.map((o) => o.id));
+      } else if (have > want + 1 && home) {
+        // More than it wants (back from a sortie): the rest go home.
+        const idle = S.idle(state, f.id);
+        const fit = fitFor(f);
+        const back = idle.sort((a, b) => fit(a) - fit(b)).slice(0, Math.min(idle.length, have - want));
+        if (back.length) S.relocate(state, f.id, home.id, back.map((o) => o.id));
       }
     }
     // Take over empty strongholds next to our cities.
@@ -590,6 +603,23 @@
       const sites = S.buildSites(state, c.id);
       const who = S.builders(state, c.id);
       if (sites.length && who.length && c.gold > S.BUILD_COST + 800 && S.chance(state, 10)) S.buildFort(state, c.id, sites[0].id, who[0].id);
+    }
+  }
+  // The soldiers of a 관문 or 요새: filled from the city behind it at the
+  // front, the surplus led home.
+  function manTroops(state, f, front, staff, home) {
+    const keep = front ? 4000 : 1000;
+    const idle = S.idle(state, f.id);
+    if (front && (f.troops < 3000 || !staff.length)) {
+      if (home && S.idle(state, home.id).length > 1) {
+        const send = Math.max(0, Math.min(keep - f.troops, S.marchable(home) - 3000));
+        const o = S.idle(state, home.id).sort((a, b) => b.cmd - a.cmd)[0];
+        if (send >= 500 || !staff.length) S.move(state, home.id, f.id, [o.id], send, 0, Math.min(2000, Math.max(0, home.food - 4000)));
+      }
+    } else if (f.troops > keep * 1.5 && home && idle.length && (front ? idle.length > 1 : true)) {
+      // Too many men sitting in the stronghold: an officer leads the
+      // surplus home (another comes back to it when the city can spare one).
+      S.move(state, f.id, home.id, [idle[0].id], f.troops - keep, 0, 0);
     }
   }
 

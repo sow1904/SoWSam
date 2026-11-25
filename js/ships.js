@@ -191,7 +191,7 @@
   //   navy that stays when it sails to attack; cargo: the strength on the
   //   water of soldiers carried by ships, not their crews; start: navy at
   //   the start, of the ships; south/north: drill at the start, + for a port
-  //   south of the 장강 (where 누선 are built); share: of all the men of its
+  //   of the lands south of the 장강 (S.southWater); share: of all the men of its
   //   corps a computer lord gives to its navies, by how its waters stand at
   //   the most (S.portMood), x (1 + water) by the part of its front that is
   //   on the water; weight: how the navy is shared among its ports, by their
@@ -243,6 +243,15 @@
     const p = state.forts && state.forts[path[path.length - 2]];
     return p && p.kind === "port" && p.owner === fid ? p : null;
   };
+  // The officers who lead a navy out of its port: those stationed there
+  // first, the most skilled on the water (수전) foremost, one left behind
+  // when there are more; then those of the city (ids) to fill the team.
+  S.navyTeam = function (state, port, ids) {
+    const water = (o) => (S.hasSkill(o, "수전") ? 50 : 0) + o.cmd;
+    const here = S.idle(state, port.id).sort((a, b) => water(b) - water(a));
+    const go = here.slice(0, here.length > 1 ? here.length - 1 : here.length).map((o) => o.id);
+    return [...new Set([...go, ...ids])].slice(0, S.MAX_SORTIE_OFFICERS);
+  };
   // The player's number for a port's navy (the ships manned if none).
   S.setNavyGoal = function (state, portId, n) {
     const f = state.forts && state.forts[portId];
@@ -250,13 +259,18 @@
     f.navyGoal = Math.max(0, Math.floor(n || 0));
     return { ok: true, msg: `${f.name} 수군 정원을 ${S.navyGoal(state, f).toLocaleString()}명으로 정했습니다. 매달 ${state.cities[f.home].name}에서 채우거나 돌려보냅니다.` };
   };
+  // The lands south of the 장강 whose men knew the water: where 누선 are
+  // built (S.SPECIAL.louchuan), and 예장 (시상, the 파양호) and 회계 (the
+  // coast), which built no 누선 but drilled navies all the same.
+  S.SOUTH_WATER = ["yuzhang", "kuaiji"];
+  S.southWater = (c) => !!c && ((S.specialLand && S.specialLand("louchuan", c)) || S.SOUTH_WATER.includes(c.id));
   // A port's navy at the start of a game: its ships part manned, drilled as
   // the waters it knows.
   S.startNavy = function (state, f) {
     const home = state.cities[f.home];
     if (!f.owner || !home) return;
     f.troops = Math.max(f.troops, Math.round((f.ships || 0) * S.NAVY.start));
-    const south = S.specialLand && S.specialLand("louchuan", home);
+    const south = S.southWater(home);
     f.train = S.clamp(home.train + (south ? S.NAVY.south : S.NAVY.north), 20, S.navyTop(state, f));
   };
   // Each month (js/forts.js): men over the goal go to the city, men short of

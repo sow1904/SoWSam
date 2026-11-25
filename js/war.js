@@ -674,11 +674,13 @@
       if (S.landingLink(way.path) && (!nav || S.navySortie(state, nav) < E.min)) return null;
       const men = nav ? S.navySortie(state, nav) : troops;
       const unit = nav ? S.garrisonUnit(nav) : S.pickAttackUnit(state, cap, t, troops);
-      const land = nav ? S.landingForecast(state, t.id, fid, team, men, nav.train, men) : null;
+      // A navy is led by the officers of its port first.
+      const go = nav ? S.navyTeam(state, nav, ids) : ids;
+      const land = nav ? S.landingForecast(state, t.id, fid, go.map((id) => state.officers[id]), men, nav.train, men) : null;
       if (land && !land.pass) return null;
-      const est = S.estimate(state, nav ? nav.id : capId, t.id, ids, land ? land.left : men, unit);
+      const est = S.estimate(state, nav ? nav.id : capId, t.id, go, land ? land.left : men, unit);
       const threat = t.owner ? S.sortieThreat(state, t.id) : null;
-      return { unit, est, pull: S.courtPull(state, fid, t), risk: threat ? threat.pct / 50 : 0 };
+      return { unit, est, go, pull: S.courtPull(state, fid, t), risk: threat ? threat.pct / 50 : 0 };
     });
     if (!best) return note("no target in reach");
     const w = f.weariness;
@@ -695,7 +697,7 @@
     // The council debates it first (js/council.js); a 도독 decides alone.
     const council = S.conveneWar && n === 1 ? S.conveneWar(state, fid, { foe: best.t.owner, target: best.t.id, aim, ratio: best.est.ratio, team: ids }) : null;
     if (council && !council.adopted) return note("council against");
-    const r = S.attack(state, capId, best.t.id, ids, troops, best.unit);
+    const r = S.attack(state, capId, best.t.id, best.go, troops, best.unit);
     note(r.ok ? "LAUNCH " + aim : "launch failed");
     if (!r.ok) return;
     if (council && S.councilLaunched) S.councilLaunched(state, council, r.march);

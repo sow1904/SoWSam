@@ -1034,15 +1034,17 @@
     if (t.owner === c.owner) return fail("자기 세력은 공격할 수 없습니다.");
     if (S.allied(state, c.owner, t.owner)) return fail(`${S.josa(S.forceName(state, t.owner), "과", "와")}는 동맹 중입니다. 먼저 동맹을 파기해야 합니다.`);
     if (!oids.length || oids.length > S.MAX_SORTIE_OFFICERS) return fail(`무장을 1~${S.MAX_SORTIE_OFFICERS}명 골라 주세요.`);
-    for (const id of oids) {
-      const [, , err] = act(state, id, cid);
-      if (err) return fail(err);
-    }
     // Over the river to an enemy port: the navy of the own port it leaves
     // from sails, as many as its ships carry; the city's soldiers stay
-    // (js/ships.js). The officers go with it.
+    // (js/ships.js). The officers go with it: those of the city, and those
+    // stationed at the port.
     const navy = S.navalPort ? S.navalPort(state, way.path, c.owner) : null;
     if (S.landingLink(way.path) && !navy) return fail("강 건너 적 항구로는 우리 항구의 수군만 건널 수 있습니다.");
+    for (const id of oids) {
+      const o = state.officers[id];
+      const [, , err] = act(state, id, navy && o && o.city === navy.id ? navy.id : cid);
+      if (err) return fail(err);
+    }
     const src = navy || c;
     let counts;
     if (navy) {
