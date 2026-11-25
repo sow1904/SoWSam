@@ -273,8 +273,25 @@
       `<image class="flag" href="assets/map4/icons/ui/flag_cloth.png" x="${left}" y="${top}" width="${fw}" height="${fh}" filter="url(#${tintId(fid)})"/>` +
       `<image class="flag" href="assets/map4/icons/ui/flag_pole.png" x="${left}" y="${top}" width="${fw}" height="${fh}"/></g>`;
   };
-  // Where 4안 puts some province names (the user's choice): [city a, city b
-  // (the midpoint; or a alone), then dx, dy from it or from the centre].
+  // Where each painting puts some province names (the user's choice): [city
+  // a, city b (the midpoint; or a alone; or a list of cities, their centre),
+  // then dx, dy from it or from the centre]. A name is about 50 wide.
+  const PROV_AT2 = {
+    liang: ["wuwei", null, 0, -70], // above 무위
+    yong: ["youfufeng", null, 0, -70], // above 우부풍
+    nanzhong: ["zangke", "yizhoujun"],
+    jingnan: ["wuling", "lingling"],
+    jingbei: ["nanyang", "xincheng"], // 남양 and 상용
+    sili: ["hongnong", null, 0, 70], // below 홍농
+    bing: ["xihe", "yanmen"],
+    you: ["guangyang", "bohai"],
+    ji: ["pingyuan", "weijun"], // 평원 and 업
+    qing: ["qiguo", "donglai"],
+    xu: ["donghai", "guangling"],
+    yu: ["runan", "jiujiang"],
+    yang: ["danyang", null, 0, 70], // below 단양
+    jiao: [null, null, -40, 40], // a little down and to the left
+  };
   const PROV_AT4 = {
     yong: [null, null, 0, -70], // above 우부풍
     jingbei: ["xincheng", "nanyang"],
@@ -286,8 +303,9 @@
     you: [null, null, 80, 0], // clear of 광양
     yang: ["danyang", null, 0, 70], // below 단양
     jingnan: ["wuling", "lingling"],
-    liang: ["wuwei", "jincheng"],
+    liang: ["wuwei", "jincheng", 50, 0], // a name's width to the right
     bing: ["xihe", "shangdang"],
+    nanzhong: [["yuexi", "zangke", "yizhoujun"]], // 월수, 장가, 익주군
   };
   const iconDir = () => (art4() ? "assets/map4/icons/" : "assets/");
   // Walls this low are a ruin: 낙양 in 191, or a city battered down in a siege.
@@ -381,17 +399,18 @@
       fade.addEventListener("transitionend", done);
       setTimeout(done, UI.SEASON_FADE_MS + 500); // in case the transition never ends (hidden tab)
     }
-    // Province names at the centre of their cities; on 4안 some where the
-    // user set them: between two cities, or moved from the centre.
+    // Province names at the centre of their cities; some where the user set
+    // them for each painting: between cities, or moved from the centre.
     let svg = "";
     for (const [pid, pname] of Object.entries(S.PROVINCES)) {
       const cs = S.provinceCities(state, pid);
       if (!cs.length) continue;
       let x = cs.reduce((s, c) => s + c.x, 0) / cs.length, y = cs.reduce((s, c) => s + c.y, 0) / cs.length;
-      const at = art4() && PROV_AT4[pid];
+      const at = (art4() ? PROV_AT4 : PROV_AT2)[pid];
       if (at) {
-        const [a, b, dx, dy] = at, A = a && state.cities[a], B = b && state.cities[b];
-        if (A && B) { x = (A.x + B.x) / 2; y = (A.y + B.y) / 2; } else if (A) { x = A.x; y = A.y; }
+        const [a, b, dx, dy] = at;
+        const pts = (Array.isArray(a) ? a : [a, b]).map((id) => id && state.cities[id]).filter(Boolean);
+        if (pts.length) { x = pts.reduce((s, c) => s + c.x, 0) / pts.length; y = pts.reduce((s, c) => s + c.y, 0) / pts.length; }
         x += dx || 0; y += dy || 0;
       }
       svg += `<text class="prov" x="${Math.round(x)}" y="${Math.round(y)}">${pname}</text>`;
