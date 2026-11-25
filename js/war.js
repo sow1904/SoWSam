@@ -593,6 +593,14 @@
     if (text && war.aim !== "border") S.addLog(state, text, war.foe === state.playerForce || fid === state.playerForce ? "warn" : "info");
   }
   // Is the war still worth it? Ends it if not.
+  // Wars a scenario starts in the middle of: [force, foe, aim] (the main
+  // army's war, 1군단).
+  S.initWars = function (state, scenario) {
+    for (const [fid, foe, aim] of scenario.wars || []) {
+      const rec = state.forces[fid] && state.forces[foe] && S.corpsRec(state, fid, 1);
+      if (rec) rec.war = { foe, aim: aim || "decisive", since: 0, joint: null };
+    }
+  };
   function keepWar(state, fid, n) {
     const f = state.forces[fid];
     const war = S.warOf(state, fid, n);

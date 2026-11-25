@@ -84,6 +84,7 @@
       year: scenario.year,
       month: scenario.month,
       start: { year: scenario.year, month: scenario.month },
+      truceMonths: scenario.truce, // the opening truce (S.TRUCE_MONTHS unless the scenario says)
       seed: seed == null ? (Date.now() & 0x7fffffff) : seed,
       playerForce,
       forces: {},
@@ -238,6 +239,7 @@
     S.initCapitals(state);
     if (S.initCorps) S.initCorps(state, scenario); // the scenario's corps (js/corps.js)
     if (S.initWill) S.initWill(state, scenario); // the scenario's 원정 의지 (js/will.js)
+    if (S.initWars) S.initWars(state, scenario); // wars already begun (js/war.js)
     if (S.consolidate) S.consolidate(state); // soldiers beyond each city's cap join the main army (js/war.js)
     if (S.initStanding) S.initStanding(state); // fame, merit, seats at court (js/standing.js)
     S.addLog(state, `${state.year}년 ${state.month}월, ${scenario.title} 시나리오가 시작되었습니다.`, "sys");
@@ -250,7 +252,7 @@
   // The first year is a truce: the AI only expands into vacant cities.
   S.TRUCE_MONTHS = 12;
   S.monthsElapsed = (state) => (state.year - state.start.year) * 12 + state.month - state.start.month;
-  S.inTruce = (state) => S.monthsElapsed(state) < S.TRUCE_MONTHS;
+  S.inTruce = (state) => S.monthsElapsed(state) < (state.truceMonths != null ? state.truceMonths : S.TRUCE_MONTHS);
 
   S.addLog = function (state, text, kind) {
     state.logN = (state.logN || 0) + 1;

@@ -1,11 +1,11 @@
 // Headless all-AI simulation for balance checks.
-// usage: node tools/sim.js [games=20] [years=30]   (SCENARIO=219 for the other scenario)
+// usage: node tools/sim.js [games=20] [years=30]   (SCENARIO=200 or 219 for the others)
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
 const root = path.join(__dirname, "..", "js");
-for (const f of ["data/map.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/roster.js", "data/homes.js", "data/ambition.js", "data/scenario191.js", "data/scenario219.js", "engine.js", "resources.js", "march.js", "units.js", "tech.js", "capital.js", "forts.js", "ships.js", "battle.js", "intel.js", "court.js", "houses.js", "diplomacy.js", "data/ties.js", "bonds.js", "gentry.js", "factions.js", "succession.js", "rebellion.js", "strife.js", "hanplot.js", "standing.js", "conduct.js", "ai.js", "war.js", "will.js", "council.js", "surrender.js", "persona.js", "seasons.js", "titles.js", "corps.js"]) {
+for (const f of ["data/map.js", "data/people.js", "data/abilities.js", "data/traits.js", "data/skills.js", "data/roster.js", "data/homes.js", "data/ambition.js", "data/scenario191.js", "data/scenario200.js", "data/scenario219.js", "engine.js", "resources.js", "march.js", "units.js", "tech.js", "capital.js", "forts.js", "ships.js", "battle.js", "intel.js", "court.js", "houses.js", "diplomacy.js", "data/ties.js", "bonds.js", "gentry.js", "factions.js", "succession.js", "rebellion.js", "strife.js", "hanplot.js", "standing.js", "conduct.js", "ai.js", "war.js", "will.js", "council.js", "surrender.js", "persona.js", "seasons.js", "titles.js", "corps.js"]) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), "utf8"), { filename: f });
 }
 const S = globalThis.SAM;
